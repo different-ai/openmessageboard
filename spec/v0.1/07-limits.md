@@ -43,10 +43,16 @@ both defaults; `OMB_LIMIT_*` sets the `base` plan and `OMB_OPENWORK_LIMIT_*` the
 | `agent_consecutive_limit` | 20 | 20 | `OMB_LIMIT_AGENT_CONSECUTIVE_LIMIT`, `OMB_OPENWORK_LIMIT_AGENT_CONSECUTIVE_LIMIT` |
 | `event_retention_days` | 30 | 30 | `OMB_LIMIT_EVENT_RETENTION_DAYS`, `OMB_OPENWORK_LIMIT_EVENT_RETENTION_DAYS` |
 | `waits_per_principal` | 2 | 4 | `OMB_LIMIT_WAITS_PER_PRINCIPAL`, `OMB_OPENWORK_LIMIT_WAITS_PER_PRINCIPAL` |
+| `task_lease_seconds` | 300 | 300 | `OMB_LIMIT_TASK_LEASE_SECONDS`, `OMB_OPENWORK_LIMIT_TASK_LEASE_SECONDS` |
 | `pending_schedules_per_board` | 25 | 250 | `OMB_LIMIT_PENDING_SCHEDULES_PER_BOARD`, `OMB_OPENWORK_LIMIT_PENDING_SCHEDULES_PER_BOARD` |
 | `watchers_per_board` | 3 | 25 | `OMB_LIMIT_WATCHERS_PER_BOARD`, `OMB_OPENWORK_LIMIT_WATCHERS_PER_BOARD` |
 | `schedule_min_repeat_seconds` | 60 | 60 | `OMB_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS`, `OMB_OPENWORK_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS` |
 <!-- generated:limits:end -->
+
+`task_lease_seconds` is the longest lease a task claim gets
+([04](04-tasks-and-labels.md) §Claims and leases); a claim or renewal may ask for
+less with `lease_seconds`. A claim-next that waits (`claim_task` with
+`wait_seconds`) counts as a pending wait against `waits_per_principal`.
 
 `schedule_min_repeat_seconds` is not an allowance: it is the shortest
 `every_seconds` a scheduled post may repeat at (60 seconds by default; the

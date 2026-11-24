@@ -105,18 +105,18 @@ addMessage({ id: "m4", board_id: "b_launch", thread_id: "t_ship", author_id: "p_
 addMessage({ id: "m5", board_id: "b_launch", thread_id: "t_ship", author_id: "p_slack", created_at: ago(90), body: "Support says two customers asked about the new export button. Is it in 2.4?", source: { platform: "slack", author_name: "Jun", url: "https://slack.example/archives/C0LAUNCH/p1732385000000200", external_id: "1732385000.000200" } });
 addMessage({ id: "m6", board_id: "b_launch", thread_id: "t_ship", author_id: "p_maya", reply_to: "m5", created_at: ago(30), body: "It is. @release-agent please add it to the notes.", mention_ids: ["p_release"] });
 
-addThread({ id: "t_changelog", board_id: "b_launch", title: "Update the changelog", kind: "task", labels: { state: "todo", area: "docs" }, task: { state: "open", assignee_id: null, claimed_at: null, completed_at: null }, created_by: "p_ada", created_at: ago(180), last_activity_at: ago(180) });
+addThread({ id: "t_changelog", board_id: "b_launch", title: "Update the changelog", kind: "task", labels: { state: "todo", area: "docs" }, task: { state: "ready", assignee_id: null, claimed_at: null, completed_at: null }, created_by: "p_ada", created_at: ago(180), last_activity_at: ago(180) });
 addMessage({ id: "m7", board_id: "b_launch", thread_id: "t_changelog", author_id: "p_ada", created_at: ago(180), body: "Collect merged PRs since 2.3 and write user-facing notes." });
 
-addThread({ id: "t_flaky", board_id: "b_launch", title: "Fix flaky upload test", kind: "task", labels: { state: "review", area: "ci" }, task: { state: "claimed", assignee_id: "p_release", claimed_at: ago(60), completed_at: null }, created_by: "p_maya", created_at: ago(400), last_activity_at: ago(45), links: [{ id: "l_gh1", platform: "github", external_ref: "example/app#1287", url: "https://github.example/example/app/issues/1287" }] });
+addThread({ id: "t_flaky", board_id: "b_launch", title: "Fix flaky upload test", kind: "task", labels: { state: "review", area: "ci" }, task: { state: "claimed", assignee_id: "p_release", claimed_at: ago(60), completed_at: null, lease_until: new Date(Date.now() + 4 * 60_000).toISOString() }, created_by: "p_maya", created_at: ago(400), last_activity_at: ago(45), links: [{ id: "l_gh1", platform: "github", external_ref: "example/app#1287", url: "https://github.example/example/app/issues/1287" }] });
 addMessage({ id: "m8", board_id: "b_launch", thread_id: "t_flaky", author_id: "p_maya", created_at: ago(400), body: "`upload.spec.ts` fails about 1 in 20 runs on Linux." });
 addMessage({ id: "m9", board_id: "b_launch", thread_id: "t_flaky", author_id: "p_release", created_at: ago(45), body: "Claimed. The temp directory is shared between workers; opening a fix." });
 
-addThread({ id: "t_certs", board_id: "b_launch", title: "Rotate staging certificates", kind: "task", labels: { area: "infra" }, task: { state: "done", assignee_id: "p_triage", claimed_at: ago(2000), completed_at: ago(1500) }, created_by: "p_ada", created_at: ago(2400), last_activity_at: ago(1500) });
+addThread({ id: "t_certs", board_id: "b_launch", title: "Rotate staging certificates", kind: "task", labels: { area: "infra" }, task: { state: "completed", assignee_id: "p_triage", claimed_at: ago(2000), completed_at: ago(1500) }, created_by: "p_ada", created_at: ago(2400), last_activity_at: ago(1500) });
 addMessage({ id: "m10", board_id: "b_launch", thread_id: "t_certs", author_id: "p_ada", created_at: ago(2400), body: "Certificates expire next week." });
 addMessage({ id: "m11", board_id: "b_launch", thread_id: "t_certs", author_id: "p_triage", created_at: ago(1500), body: "Done. New certificates are valid for 90 days." });
 
-addThread({ id: "t_tweet", board_id: "b_launch", title: "Draft the launch post", kind: "task", labels: { area: "marketing" }, task: { state: "cancelled", assignee_id: null, claimed_at: null, completed_at: ago(3000) }, created_by: "p_maya", created_at: ago(3500), last_activity_at: ago(3000) });
+addThread({ id: "t_tweet", board_id: "b_launch", title: "Draft the launch post", kind: "task", labels: { area: "marketing" }, task: { state: "canceled", assignee_id: null, claimed_at: null, completed_at: ago(3000), reason: "Folded into the release notes" }, created_by: "p_maya", created_at: ago(3500), last_activity_at: ago(3000) });
 addMessage({ id: "m12", board_id: "b_launch", thread_id: "t_tweet", author_id: "p_maya", created_at: ago(3500), body: "We'll fold this into the blog post instead." });
 
 addThread({ id: "t_sync", board_id: "b_launch", title: "Weekly sync notes", created_by: "p_theo", created_at: ago(5000), last_activity_at: ago(5000) });
@@ -208,7 +208,21 @@ function threadView(t, pid, origin) {
     kind: t.kind,
     labels: t.labels,
     task: t.task
-      ? { state: t.task.state, assignee: t.task.assignee_id ? ref(t.task.assignee_id) : null, claimed_at: t.task.claimed_at, completed_at: t.task.completed_at }
+      ? {
+          state: t.task.state,
+          owner: ref(t.created_by),
+          for: t.task.for_id ? ref(t.task.for_id) : null,
+          assignee: t.task.assignee_id ? ref(t.task.assignee_id) : null,
+          claimed_at: t.task.claimed_at,
+          lease_until: t.task.state === "claimed" ? (t.task.lease_until ?? null) : null,
+          completed_at: t.task.completed_at,
+          needs: [],
+          result: t.task.result ?? null,
+          failure_reason: t.task.state === "failed" ? (t.task.reason ?? null) : null,
+          blocked_reason: t.task.state === "blocked" ? (t.task.reason ?? null) : null,
+          blocked_kind: t.task.state === "blocked" ? (t.task.kind ?? null) : null,
+          canceled_reason: t.task.state === "canceled" ? (t.task.reason ?? null) : null,
+        }
       : null,
     created_by: ref(t.created_by),
     created_at: t.created_at,
@@ -522,7 +536,7 @@ route("POST", "/api/boards/:bid/threads", async ({ user, p, body, origin }) => {
     title: body.title.trim(),
     kind: body.task ? "task" : "discussion",
     labels: body.labels || {},
-    task: body.task ? { state: "open", assignee_id: null, claimed_at: null, completed_at: null } : null,
+    task: body.task ? { state: "ready", assignee_id: null, claimed_at: null, completed_at: null, for_id: body.for ?? null } : null,
     created_by: user.id,
     created_at: now(),
     last_activity_at: now(),
@@ -612,21 +626,47 @@ route("POST", "/api/threads/:tid/task", async ({ user, p, body, origin }) => {
   const owner = member.role === "owner";
   const s = t.task;
   await delay(200);
+  const manages = t.created_by === user.id || owner;
+  const held = () => {
+    if (s.state !== "claimed" || s.assignee_id !== user.id || s.token !== body.token) fail(409, "claim_lost", "This claim is over.");
+  };
+  const managed = () => {
+    if (!manages) fail(403, "task_not_owned", "Only the task's owner or the board owner can do that.");
+  };
   switch (body.action) {
     case "complete":
-    case "release":
-      if (s.state !== "claimed") fail(409, "task_not_claimable", "Only a claimed task can be completed or released.");
-      if (s.assignee_id !== user.id && !owner) fail(403, "forbidden", "Only the assignee or the board owner can do that.");
-      if (body.action === "complete") Object.assign(s, { state: "done", completed_at: now() });
-      else Object.assign(s, { state: "open", assignee_id: null, claimed_at: null });
+      held();
+      Object.assign(s, { state: "completed", completed_at: now(), token: null, result: body.result || null });
       break;
-    case "cancel":
-      if (t.created_by !== user.id && !owner) fail(403, "forbidden", "Only the creator or the board owner can cancel a task.");
-      Object.assign(s, { state: "cancelled", completed_at: now() });
+    case "release":
+      held();
+      Object.assign(s, { state: "ready", assignee_id: null, claimed_at: null, token: null });
+      break;
+    case "fail":
+      held();
+      Object.assign(s, { state: "failed", completed_at: now(), token: null, reason: body.reason });
+      break;
+    case "block":
+      if (body.token) held();
+      else managed();
+      Object.assign(s, { state: "blocked", assignee_id: null, claimed_at: null, token: null, reason: body.reason, kind: body.kind ?? null });
+      break;
+    case "unblock":
+      managed();
+      Object.assign(s, { state: "ready", reason: null, kind: null });
       break;
     case "reopen":
-      if (t.created_by !== user.id && !owner) fail(403, "forbidden", "Only the creator or the board owner can reopen a task.");
-      Object.assign(s, { state: "open", assignee_id: null, claimed_at: null, completed_at: null });
+      managed();
+      if (s.state !== "failed") fail(409, "conflict", "Only a failed task can be reopened.");
+      Object.assign(s, { state: "ready", assignee_id: null, claimed_at: null, completed_at: null, reason: null });
+      break;
+    case "cancel":
+      managed();
+      Object.assign(s, { state: "canceled", assignee_id: null, claimed_at: null, token: null, completed_at: now(), reason: body.reason });
+      break;
+    case "assign":
+      managed();
+      s.for_id = body.for ?? null;
       break;
     default:
       fail(400, "invalid_argument", "Unknown task action.");
@@ -643,19 +683,29 @@ route("POST", "/api/boards/:bid/tasks/claim", async ({ user, p, body, origin }) 
   if (body.thread_id) {
     t = threads.get(body.thread_id);
     if (!t || t.board_id !== p.bid || !t.task) fail(404, "not_found", "Task not found.");
+    if (t.task.state === "claimed" && t.task.assignee_id === user.id) return { thread: threadView(t, user.id, origin), claim: { epoch: t.task.epoch, token: t.task.token, until: t.task.lease_until } };
     if (t.task.state === "claimed") fail(409, "task_already_claimed", "Someone else claimed this task first.");
-    if (t.task.state !== "open") fail(409, "task_not_claimable", "Only open tasks can be claimed.");
+    if (t.task.state !== "ready") fail(409, "task_finished", "Only ready tasks can be claimed.");
   } else {
     t = [...threads.values()]
-      .filter((x) => x.board_id === p.bid && x.task?.state === "open")
+      .filter((x) => x.board_id === p.bid && x.task?.state === "ready" && (!x.task.for_id || x.task.for_id === user.id))
       .filter((x) => Object.entries(body.labels || {}).every(([k, v]) => x.labels[k] === v))
       .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
-    if (!t) fail(404, "no_task_available", "No open task matches.");
+    if (!t) fail(404, "no_task_available", "No ready task matches.");
   }
-  Object.assign(t.task, { state: "claimed", assignee_id: user.id, claimed_at: now() });
+  const claim = { epoch: (t.task.epoch ?? 0) + 1, token: id("tok"), until: new Date(Date.now() + 5 * 60_000).toISOString() };
+  Object.assign(t.task, { state: "claimed", assignee_id: user.id, claimed_at: now(), lease_until: claim.until, epoch: claim.epoch, token: claim.token });
   t.last_activity_at = now();
   emit(p.bid, "thread.updated", { thread_id: t.id, actor_id: user.id });
-  return { thread: threadView(t, user.id, origin) };
+  return { thread: threadView(t, user.id, origin), claim };
+});
+
+route("POST", "/api/threads/:tid/task/renew", ({ user, p, body, origin }) => {
+  const t = threadFor(p.tid, user.id, "contributor");
+  if (!t.task || t.task.state !== "claimed" || t.task.assignee_id !== user.id || t.task.token !== body.token) fail(409, "claim_lost", "This claim is over.");
+  t.task.lease_until = new Date(Date.now() + 5 * 60_000).toISOString();
+  emit(t.board_id, "thread.updated", { thread_id: t.id, actor_id: user.id });
+  return { thread: threadView(t, user.id, origin), claim: { epoch: t.task.epoch, token: t.task.token, until: t.task.lease_until } };
 });
 
 route("GET", "/api/inbox", ({ user, q }) => {
@@ -910,7 +960,7 @@ route("POST", "/api/import", ({ user, body, origin }) => {
   join_(b.id, user.id, "owner", { joined_at: now() });
   const tmap = new Map();
   for (const t of body.threads || []) {
-    const nt = { id: id("t"), board_id: b.id, title: t.title, kind: t.kind, labels: t.labels || {}, task: t.task_state ? { state: t.task_state, assignee_id: null, claimed_at: null, completed_at: null } : null, created_by: user.id, created_at: t.created_at, last_activity_at: t.created_at, links: [] };
+    const nt = { id: id("t"), board_id: b.id, title: t.title, kind: t.kind, labels: t.labels || {}, task: t.task_state ? { state: t.task_state === "claimed" ? "ready" : t.task_state, assignee_id: null, claimed_at: null, completed_at: null } : null, created_by: user.id, created_at: t.created_at, last_activity_at: t.created_at, links: [] };
     tmap.set(t.id, nt.id);
     addThread(nt);
   }

@@ -25,7 +25,8 @@ import { OmbError, invalid, notFound } from "../errors.js";
 import { requireMember } from "./access.js";
 import { decodeCursor, encodeCursor } from "./cursors.js";
 import type { Actor, EventRow, MessageRow } from "./model.js";
-import { CHANNEL_FILTER_PATTERN, MAX_CHANNEL_CHARS } from "@openmessageboard/protocol";
+import { CHANNEL_FILTER_PATTERN, MAX_CHANNEL_CHARS, TASK_STATE_LABEL } from "@openmessageboard/protocol";
+import { taskStateClause } from "./tasks.js";
 import { presentMessages } from "./present.js";
 import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 import { coveredPrincipalIds, findProfile } from "./profiles.js";
@@ -180,10 +181,19 @@ export function resolveFilter(ctx: AppContext, actor: Actor, boardId: string, in
   return f;
 }
 
-/** Thread labels. When messages carry labels of their own, match those here too (either one). */
+/**
+ * Thread labels; the reserved `board.task` key matches the task state (`open` for every unfinished state), like
+ * `list_threads`. When messages carry labels of their own, match those here too (either one).
+ */
 function labelSql(labels: [string, string[]][], params: unknown[], m: string, t: string): string {
   let sql = "";
   for (const [k, values] of labels) {
+    if (k === TASK_STATE_LABEL) {
+      // taskStateClause reads the thread alias `t`, which every caller here uses.
+      const parts = values.map((v) => taskStateClause(k, v, params)!.replace(/^ AND /, ""));
+      sql += ` AND ${m}.deleted_at IS NULL AND (${parts.join(" OR ")})`;
+      continue;
+    }
     // Keys are validated against LABEL_KEY_PATTERN, so they are safe inside the JSON path.
     sql += ` AND ${m}.deleted_at IS NULL AND json_extract(${t}.labels, '$."${k}"') IN (${values.map(() => "?").join(",")})`;
     params.push(...values);

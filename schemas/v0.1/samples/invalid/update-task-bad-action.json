@@ -1,8 +1,8 @@
 {
   "schema": "tools/update_task.input",
-  "description": "action must be complete, release, cancel or reopen",
+  "description": "action must be one of complete, fail, release, block, unblock, reopen, cancel, assign, set_needs",
   "instance": {
     "thread_id": "t_8TASK1",
-    "action": "assign"
+    "action": "approve"
   }
 }

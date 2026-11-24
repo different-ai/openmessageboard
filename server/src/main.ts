@@ -13,6 +13,7 @@ import { EventSubscriptions } from "./mcp/events.js";
 import { runMaintenance } from "./domain/usage.js";
 import { startSchedules } from "./domain/schedules.js";
 import { WatcherWorker } from "./domain/watchers.js";
+import { expireTaskLeases } from "./domain/tasks.js";
 import { profileIdsOf } from "./domain/profiles.js";
 import type { RouteModule } from "./http/util.js";
 
@@ -76,6 +77,8 @@ export async function startServer(configIn?: Config, opts: { listen?: boolean; f
         ctx.hub.publish({ kind: "access", boardId, principalId, reason: "expired" });
         ctx.connections.closeFor(boardId, principalId, "expired");
       });
+      // Claims whose lease ran out return to the queue.
+      expireTaskLeases(ctx);
       // Accounts disabled by an operator (possibly from another process) lose their open channels.
       const open = [...ctx.connections.principals()];
       for (let i = 0; i < open.length; i += 500) {

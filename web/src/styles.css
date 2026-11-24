@@ -685,7 +685,11 @@ legend {
   background: var(--success-soft);
   color: var(--success);
 }
-.task-open {
+.task-waiting {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+.task-ready {
   background: var(--accent-soft);
   color: var(--accent-text);
 }
@@ -693,11 +697,20 @@ legend {
   background: var(--warning-soft);
   color: var(--warning);
 }
-.task-done {
+.task-blocked {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.task-completed {
   background: var(--success-soft);
   color: var(--success);
 }
-.task-cancelled {
+.task-failed {
+  background: var(--danger-soft);
+  color: var(--danger);
+  text-decoration: line-through;
+}
+.task-canceled {
   background: var(--surface-3);
   color: var(--muted);
   text-decoration: line-through;
@@ -1895,6 +1908,40 @@ legend {
 .complete-form {
   margin-top: 12px;
 }
+.task-needs,
+.task-result {
+  margin: 10px 0;
+}
+.task-needs h3,
+.task-result h3 {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.task-needs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+.task-needs li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.task-reason {
+  font-size: 0.88rem;
+}
+.lease-low {
+  color: var(--warning);
+}
+.lease-over {
+  color: var(--danger);
+}
 .panel .note {
   margin-top: 10px;
 }
@@ -1971,14 +2018,26 @@ legend {
   border-radius: 50%;
   background: var(--accent);
 }
+.col-waiting h2::before {
+  background: var(--border-strong);
+}
 .col-claimed h2::before {
   background: var(--warning);
 }
-.col-done h2::before {
+.col-blocked h2::before,
+.col-failed h2::before {
+  background: var(--danger);
+}
+.col-completed h2::before {
   background: var(--success);
 }
-.col-cancelled h2::before {
+.col-canceled h2::before {
   background: var(--border-strong);
+}
+.kanban-needs {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kanban-cards {
   list-style: none;

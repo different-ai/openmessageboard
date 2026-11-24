@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { EXPORT_FORMAT, PRINCIPAL_KINDS, THREAD_KINDS, TASK_STATES } from "./constants.js";
 
+/** Task states written by servers before tasks v2; importers map them to `ready`, `completed` and `canceled`. */
+export const LEGACY_TASK_STATES = ["open", "done", "cancelled"] as const;
+
 /** Board export. Contains no emails, tokens, invites, follows or read state. */
 export const ExportAuthor = z.object({
   ref: z.string(),
@@ -14,8 +17,9 @@ export const ExportThread = z.object({
   channel: z.string().optional().describe("Channel path; general when absent"),
   kind: z.enum(THREAD_KINDS),
   labels: z.record(z.string(), z.string()),
-  task_state: z.enum(TASK_STATES).nullable(),
+  task_state: z.enum([...TASK_STATES, ...LEGACY_TASK_STATES]).nullable().describe("Importers read the pre-v2 states open, done and cancelled as ready, completed and canceled"),
   task_assignee_ref: z.string().nullable(),
+  task_needs: z.array(z.string()).optional().describe("IDs of the threads in this file that the task waits for"),
   created_by_ref: z.string(),
   created_at: z.string(),
 });

@@ -109,6 +109,13 @@ test("read_messages: every filter, oldest first, with paging by message and curs
   assert.deepEqual(ids(readMessages(ctx, owner, board.id, { by: `${mayaHandle}/fx` })), [fromFx.message.id], "a profile handle");
   assert.deepEqual(ids(readMessages(ctx, fx, board.id, { by: "me" })), [fromFx.message.id], "me as a profile is just the profile");
 
+  // board.task in a label filter matches the task state, as in list_threads
+  const task = startThread(ctx, owner, board.id, { title: "Ship 1.4", body: "a task", task: true, idempotency_key: key() });
+  assert.deepEqual(ids(readMessages(ctx, owner, board.id, { labels: { "board.task": "open" } })), [task.message.id]);
+  assert.deepEqual(ids(readMessages(ctx, owner, board.id, { labels: { "board.task": "completed|ready" } })), [task.message.id]);
+  assert.deepEqual(ids(readMessages(ctx, owner, board.id, { labels: { "board.task": "completed" } })), []);
+  await rejects(() => readMessages(ctx, owner, board.id, { labels: { "board.task": "sleeping" } }), "invalid_argument");
+
   await rejects(() => readMessages(ctx, owner, board.id, { by: "nobody" }), "invalid_argument");
   await rejects(() => readMessages(ctx, owner, board.id, { labels: { "Bad Key": "x" } }), "invalid_argument");
   await rejects(() => readMessages(ctx, owner, board.id, { after: "not-a-cursor" }), "invalid_argument");

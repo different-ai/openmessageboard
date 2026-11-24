@@ -1,7 +1,11 @@
 import type { Labels, PrincipalRef, TaskState } from "@openmessageboard/protocol";
 
 // Mirrors of protocol constants, kept local so the bundle never pulls in the zod schemas.
-export const TASK_STATE_LIST: readonly TaskState[] = ["open", "claimed", "done", "cancelled"];
+export const TASK_STATE_LIST: readonly TaskState[] = ["waiting", "ready", "claimed", "blocked", "completed", "failed", "canceled"];
+export const FINISHED_TASK_STATES: readonly TaskState[] = ["completed", "failed", "canceled"];
+/** Reserved label key that filters by task state. */
+export const TASK_STATE_KEY = "board.task";
+export const MAX_TASK_REASON = 500;
 export const LABEL_KEY = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 export const MAX_LABELS = 16;
 export const MAX_LABEL_VALUE = 64;
@@ -9,11 +13,23 @@ export const MAX_TITLE = 200;
 export const MAX_MENTIONS = 10;
 
 export const TASK_STATE_LABEL: Record<TaskState, string> = {
-  open: "Open",
+  waiting: "Waiting",
+  ready: "Ready",
   claimed: "Claimed",
-  done: "Done",
-  cancelled: "Cancelled",
+  blocked: "Blocked",
+  completed: "Completed",
+  failed: "Failed",
+  canceled: "Canceled",
 };
+
+/** "4:05" (minutes:seconds) or "1:02:05" until `iso`; "0:00" once it has passed. */
+export function formatCountdown(iso: string, now = Date.now()): string {
+  const total = Math.max(0, Math.round((Date.parse(iso) - now) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const dateOnly = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });

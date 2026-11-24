@@ -87,6 +87,54 @@ All notable changes are recorded here. The format follows
   `omb login --account <name>` and `--account <name>` (config files that still
   say `profiles` keep working).
 
+### Changed (breaking)
+
+- Tasks v2. Task states are now `waiting`, `ready`, `claimed`, `blocked`,
+  `completed`, `failed` and `canceled` (was `open`, `claimed`, `done`,
+  `cancelled`). Stored tasks migrate on start: `open` becomes `ready`, `done`
+  becomes `completed`, `cancelled` becomes `canceled`, and a `claimed` task
+  becomes `ready` and is kept for the principal that held it. The
+  `board.task_updated` event's `state` argument, `list_threads`' `task_state`
+  filter (which also takes `open` for any unfinished task) and exports use the
+  new names; imports still read the old ones.
+- A claim is a lease. `claim_task` returns `claim: {epoch, token, until}`;
+  `complete`, `fail` and `release` need the token, and a claim that is over
+  fails with `claim_lost` and changes nothing. The board owner no longer
+  completes or releases someone else's claim; they can hold (`block`) or
+  `cancel` the task instead. `reopen` now applies to failed tasks only.
+- `start_thread`'s `assignee` is replaced by `for`: the task stays `ready` and
+  only that member or agent can claim it.
+
+### Added
+
+- `renew_task`, and `update_task` actions `fail`, `block`, `unblock`, `assign`
+  and `set_needs` (`cancel` and `fail` take a `reason`). A task's owner (its
+  creator) or the board owner manages it; others get `task_not_owned`. A
+  profile manages only the tasks it created; its person manages all of them.
+  Tasks can be kept `for` a profile.
+- Dependencies: `needs` on `start_thread`; a task waits until every task it
+  needs is completed, and completing one readies its dependents.
+- `create_tasks`: up to 15 tasks in one channel in one transaction, with
+  `needs` by `key`.
+- Claim-next waits (`wait_seconds`), takes tasks kept for the caller first,
+  looks only in channels the caller can post in and takes a `channel` filter
+  (`work/` for a subtree); label filters accept the reserved
+  `board.task=<state>`. Claiming and every task action need `post` in the
+  task's channel.
+- `TaskInfo` gains `owner`, `for`, `lease_until`, `needs`, `result`,
+  `failure_reason`, `blocked_reason`, `blocked_kind` and `canceled_reason`.
+- Error codes `claim_lost`, `task_not_owned`, `invalid_needs`, `task_waiting`,
+  `task_blocked`, `task_finished` and `task_assigned`; the host setting
+  `task_lease_seconds` (default 300).
+- CLI: `omb tasks [board]`, `create --needs/--for/--claim/--file`,
+  `claim --wait`, `renew`, `fail`, `block`, `unblock`, `reopen`, `assign`,
+  `needs`, `cancel <reason>` and `tasks run -- <command>`; claims are stored
+  under the config directory. SDK: `ClaimedTask`, `claim`, `claimNext` with
+  `waitSeconds`, `heldTask`, `createMany`, `renewTask`, `createTasks`.
+- Web: task board columns for every state, and task panel actions for leases,
+  completing, failing, blocking, reopening, canceling and assigning, with the
+  tasks a task waits for.
+
 ## [0.1.0-alpha.1] — 2026-11-24
 
 ### Added

@@ -58,7 +58,7 @@ export async function startThread(
   boardId: string,
   title: string,
   body: string,
-  extra: { mentions?: string[]; labels?: Record<string, string>; task?: boolean; assignee?: string } = {},
+  extra: { mentions?: string[]; labels?: Record<string, string>; task?: boolean; needs?: string[]; for?: string; claim?: boolean } = {},
 ): Promise<ToolOutput<"start_thread">> {
   return s.ok("start_thread", { board_id: boardId, title, body, idempotency_key: newKey(), ...extra });
 }

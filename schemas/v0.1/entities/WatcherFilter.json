@@ -44,7 +44,7 @@
       "minLength": 1
     },
     "labels": {
-      "description": "Thread labels; every key must match. A value of 'a|b' matches either",
+      "description": "Thread labels; every key must match. A value of 'a|b' matches either; board.task matches the task state",
       "type": "object",
       "propertyNames": {
         "type": "string"
