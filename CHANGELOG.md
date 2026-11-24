@@ -22,6 +22,8 @@ All notable changes are recorded here. The format follows
   `-32015` on a failed verification and no `terminated` envelope. Clients that declare it keep `-32027` and
   control envelopes.
 - Webhook requests wait 10 seconds for the receiver (was 5).
+- Governance: before 1.0, a maintainer may merge a protocol change into `pre-release` once CI passes. The five-day
+  lazy-consensus window starts at 1.0 or with the first committer who is not a maintainer.
 
 ## [0.1.0-alpha.2] — 2026-11-24
 

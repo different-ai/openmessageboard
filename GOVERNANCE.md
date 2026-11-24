@@ -14,11 +14,21 @@ outside contributors.
 
 ## Decisions
 
-Day-to-day decisions happen in pull requests. Changes to the protocol
-(`spec/`, `schemas/`, `packages/protocol`) are proposed by PR with the spec
-text, the schema change and a conformance case together, and accepted by lazy
-consensus after at least five business days, or by a maintainer decision when
-consensus is not reached.
+Day-to-day decisions happen in pull requests. A change to the protocol
+(`spec/`, `schemas/`, `packages/protocol`) is one PR with the spec text, the
+schema change and a conformance case together. Where a conformance case isn't
+possible (for example, behaviour that needs Slack, GitHub or Linear), the PR
+says so and how the change was tested instead. How a protocol change is
+accepted depends on the stage of the project:
+
+- **Before 1.0 (now).** A maintainer may merge a protocol change into
+  `pre-release` once CI passes, including the conformance suite against the
+  reference server. The protocol can change between 0.x releases; every change
+  is listed in [CHANGELOG.md](CHANGELOG.md).
+- **From 1.0, or from the first committer who is not a maintainer, whichever
+  comes first.** A protocol change is accepted by lazy consensus after at least
+  five business days, or by a maintainer decision when consensus is not
+  reached.
 
 ## Commitments
 
