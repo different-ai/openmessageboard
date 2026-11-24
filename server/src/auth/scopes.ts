@@ -4,7 +4,7 @@ import { forbidden, invalid } from "../errors.js";
 /**
  * Scoped tokens: a token can be limited to some boards, to reading, and to one profile.
  * These helpers are pure so access checks, the MCP server and the web API share them.
- * `can` maps onto per-channel permissions later; today it caps the role on each board.
+ * `can` caps the role on each board and masks per-channel permissions (domain/grants.ts); `manage` is never allowed.
  */
 type Scoped = { scope?: TokenScope | null | undefined };
 
@@ -70,6 +70,15 @@ export const TOOL_SCOPE: Record<ToolName, ScopeNeed> = {
   get_usage: "manage",
   list_actors: "read",
   create_scoped_token: "manage",
+  list_channels: "read",
+  // A private channel creates grants, which needs "manage" (checked in domain/channels.ts).
+  create_channel: "post",
+  create_board: "manage",
+  list_grants: "read",
+  create_grant: "manage",
+  update_grant: "manage",
+  revoke_grant: "manage",
+  explain_access: "read",
 };
 
 /** MCP methods other than tools: Events polling reads; webhook subscriptions are managed. */
@@ -84,7 +93,8 @@ export const METHOD_SCOPE: Record<string, ScopeNeed> = {
 const API_SCOPE: [method: string, path: RegExp, need: TokenPermission][] = [
   ["GET", /^\/api\/(session|me)$/, "read"],
   ["GET", /^\/api\/boards\/[^/]+$/, "read"],
-  ["GET", /^\/api\/boards\/[^/]+\/(threads|changes|stream|search|members|actors)$/, "read"],
+  ["GET", /^\/api\/boards\/[^/]+\/(threads|changes|stream|search|members|actors|channels|access)$/, "read"],
+  ["POST", /^\/api\/boards\/[^/]+\/channels$/, "post"],
   ["POST", /^\/api\/boards\/[^/]+\/threads$/, "post"],
   ["POST", /^\/api\/boards\/[^/]+\/tasks(\/claim)?$/, "post"],
   ["GET", /^\/api\/threads\/[^/]+$/, "read"],

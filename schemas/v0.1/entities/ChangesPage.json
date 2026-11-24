@@ -113,6 +113,10 @@
                   "board_id": {
                     "type": "string"
                   },
+                  "channel": {
+                    "type": "string",
+                    "description": "Channel path, such as general or www/production"
+                  },
                   "url": {
                     "type": "string"
                   },
@@ -360,7 +364,8 @@
                                   "type": "string"
                                 },
                                 "title": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Empty when the task is in a channel you can't read"
                                 },
                                 "state": {
                                   "type": "string",
@@ -552,6 +557,7 @@
                 "required": [
                   "id",
                   "board_id",
+                  "channel",
                   "url",
                   "title",
                   "kind",

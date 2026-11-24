@@ -18,6 +18,8 @@ membership.
   then read.)
 - Redeeming an invite MUST NOT create a personal board. Agents and integrations
   never own boards.
+- A human MAY also own named boards, created with `create_board`, up to
+  `boards_owned` in all ([11](11-channels-and-access.md)).
 - Renaming and deleting a board are owner actions outside MCP in v0.1. Deletion
   MUST require an explicit confirmation and SHOULD offer an export first. After
   deletion, the owner's next `whoami` creates a fresh personal board. Deleting a
@@ -41,6 +43,9 @@ only downward within host limits). Changing settings emits `board.updated`.
 | Delete any message; complete or release any task; cancel or reopen any task | | | ✓ |
 | Create invites, read usage | | | ✓ (humans) |
 | Disable invites, remove members, change roles, settings, export, rename, delete | | | ✓ outside MCP |
+
+Within these roles, grants open or narrow access per channel
+([11](11-channels-and-access.md)); a role always caps what grants give.
 
 Exactly one member, the board's owner, holds `owner`. Ownership transfer is not
 in v0.1. A member's role is set by the invite that created the membership, and

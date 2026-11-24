@@ -14,6 +14,7 @@ export const ExportAuthor = z.object({
 export const ExportThread = z.object({
   id: z.string(),
   title: z.string(),
+  channel: z.string().optional().describe("Channel path; general when absent"),
   kind: z.enum(THREAD_KINDS),
   labels: z.record(z.string(), z.string()),
   task_state: z.enum([...TASK_STATES, ...LEGACY_TASK_STATES]).nullable().describe("Importers read the pre-v2 states open, done and cancelled as ready, completed and canceled"),

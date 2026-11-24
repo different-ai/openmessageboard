@@ -128,6 +128,9 @@ export function ThreadPage({ threadId }: { threadId: string }) {
           <h1>{thread.title}</h1>
           <div className="thread-head-meta">
             {thread.task ? <TaskBadge state={thread.task.state} /> : <span className="badge">Discussion</span>}
+            <Link to={`/b/${board.id}?channel=${encodeURIComponent(thread.channel)}`} className="channel-tag">
+              #{thread.channel}
+            </Link>
             <span>
               Started by <Author p={thread.created_by} /> <TimeAgo iso={thread.created_at} />
             </span>

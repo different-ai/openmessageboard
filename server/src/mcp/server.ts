@@ -9,6 +9,7 @@ import * as convo from "../domain/conversation.js";
 import * as tasks from "../domain/tasks.js";
 import * as changes from "../domain/changes.js";
 import * as usage from "../domain/usage.js";
+import * as channels from "../domain/channels.js";
 import { holderId, requireMember } from "../domain/access.js";
 import { listActors } from "../domain/profiles.js";
 import { createScopedToken } from "../domain/tokens.js";
@@ -24,7 +25,21 @@ To wait for a reply or mention, call wait_for_activity with a cursor (from as_of
 To work a task: claim_task, renew_task before the lease ends, then update_task (complete, fail, release or block) with the claim's token.`;
 
 /** Tools that never change state get readOnlyHint; their annotations help clients decide what needs approval. */
-const READ_ONLY: ReadonlySet<ToolName> = new Set(["whoami", "list_threads", "get_thread", "get_inbox", "get_changes", "wait_for_activity", "search_messages", "list_members", "get_usage", "list_actors"]);
+const READ_ONLY: ReadonlySet<ToolName> = new Set([
+  "whoami",
+  "list_threads",
+  "get_thread",
+  "get_inbox",
+  "get_changes",
+  "wait_for_activity",
+  "search_messages",
+  "list_members",
+  "get_usage",
+  "list_actors",
+  "list_channels",
+  "list_grants",
+  "explain_access",
+]);
 
 function actorOf(sctx: ServerContext): Actor {
   const actor = sctx.http?.authInfo?.extra?.actor as Actor | undefined;
@@ -77,7 +92,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     mark_read: (a, x) => changes.markRead(ctx, a, x),
     get_changes: (a, x) => changes.getChanges(ctx, a, x),
     wait_for_activity: (a, x, s) => changes.waitForActivity(ctx, a, x, s.mcpReq.signal),
-    search_messages: (a, x) => usage.searchMessages(ctx, a, x.board_id, x.query, x.limit),
+    search_messages: (a, x) => usage.searchMessages(ctx, a, x.board_id, x.query, x.limit, x.channel),
     list_members: (a, x) => ({ members: boards.listMembers(ctx, a, x.board_id) }),
     claim_task: (a, x, s) => tasks.claimTask(ctx, a, x, s.mcpReq.signal),
     renew_task: (a, x) => tasks.renewTask(ctx, a, x.thread_id, x),
@@ -89,6 +104,14 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     get_usage: (a, x) => usage.getUsage(ctx, a, x.board_id),
     list_actors: (a, x) => ({ actors: listActors(ctx, a, x.board_id) }),
     create_scoped_token: (a, x) => createScopedToken(ctx, a, x),
+    list_channels: (a, x) => channels.listChannels(ctx, a, x.board_id),
+    create_channel: (a, x) => channels.createChannel(ctx, a, x.board_id, x),
+    create_board: (a, x) => ({ board: boards.createNamedBoard(ctx, a, x.name) }),
+    list_grants: (a, x) => channels.listGrants(ctx, a, x.board_id),
+    create_grant: (a, x) => channels.createGrant(ctx, a, x.board_id, x),
+    update_grant: (a, x) => channels.updateGrant(ctx, a, x.grant_id, x),
+    revoke_grant: (a, x) => channels.revokeGrant(ctx, a, x.grant_id),
+    explain_access: (a, x) => channels.explainAccess(ctx, a, x.board_id, x.channel, x.principal_id),
   };
 
   const runTool = async (name: ToolName, args: unknown, sctx: ServerContext) => {
@@ -120,7 +143,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
         ...(outputIsObject ? { outputSchema: def.output as z.ZodObject } : {}),
         annotations: {
           readOnlyHint: READ_ONLY.has(name),
-          destructiveHint: name === "delete_message",
+          destructiveHint: name === "delete_message" || name === "revoke_grant",
           idempotentHint: READ_ONLY.has(name) || ["set_follow", "set_labels", "mark_read", "start_thread", "reply", "create_tasks"].includes(name),
           openWorldHint: false,
         },

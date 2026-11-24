@@ -12,6 +12,7 @@ import { getChanges, getInbox } from "../src/domain/changes.ts";
 import { actorFromPrincipal, getPrincipal } from "../src/domain/access.ts";
 import { migrate, openDatabase } from "../src/db/index.ts";
 import { ensureProfile, profileActor } from "../src/domain/profiles.ts";
+import { createGrant } from "../src/domain/channels.ts";
 import { OmbError } from "../src/errors.ts";
 import type { AppContext } from "../src/context.ts";
 import type { Actor } from "../src/domain/model.ts";
@@ -339,7 +340,7 @@ test("tasks v2 migration maps stored states and keeps every message", async () =
   const dir = join(dirname(fileURLToPath(import.meta.url)), "../src/db/migrations");
   db.exec("CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)");
   // Every migration before tasks v2, applied by hand, then migrate() applies tasks v2 (and anything after it).
-  for (const file of readdirSync(dir).filter((f) => /^\d{4}_[a-z0-9_]+\.ts$/.test(f) && f < "0006_tasks_v2.ts").sort()) {
+  for (const file of readdirSync(dir).filter((f) => /^\d{4}_[a-z0-9_]+\.ts$/.test(f) && f < "0007_tasks_v2.ts").sort()) {
     const m = (await import(pathToFileURL(join(dir, file)).href)) as { sql?: string; up?: (d: typeof db) => void };
     if (m.sql) db.exec(m.sql);
     m.up?.(db);
@@ -362,7 +363,7 @@ test("tasks v2 migration maps stored states and keeps every message", async () =
     db.prepare("INSERT INTO messages (id, board_id, thread_id, author_id, body, created_at) VALUES (?, 'b1', ?, 'p1', 'hello', ?)").run(`m_${id}`, id, now);
     db.prepare("INSERT INTO follows (principal_id, thread_id, created_at) VALUES ('p1', ?, ?)").run(id, now);
   }
-  assert.ok((await migrate(db)).includes("0006_tasks_v2"));
+  assert.ok((await migrate(db)).includes("0007_tasks_v2"));
   const rows = db.prepare("SELECT id, task_state, task_assignee_id, task_for_id FROM threads ORDER BY id").all();
   assert.deepEqual(rows, [
     { id: "t_cancelled", task_state: "canceled", task_assignee_id: null, task_for_id: null },
@@ -404,4 +405,35 @@ test("tasks: a profile manages only the tasks it created; its person manages any
   removeMember(ctx, owner, board.id, w1.id);
   assert.equal(getThread(ctx, owner, kept.thread.id).thread.task?.state, "ready", "removing a person ends their profiles' claims");
   void w2;
+});
+
+test("tasks: channels decide who can claim and settle; claim-next filters by channel; needs respect read access", async () => {
+  const { ctx, owner, board, w1, task } = await setup();
+  const inChannel = (who: Actor, channel: string, title: string, extra: { needs?: string[]; labels?: Record<string, string> } = {}) =>
+    startThread(ctx, who, board.id, { channel, title, body: title, task: true, idempotency_key: key(), ...extra });
+  const work = inChannel(owner, "work", "Work task");
+  await new Promise((r) => setTimeout(r, 5));
+  const ci = inChannel(owner, "work/ci", "CI task");
+  const ops = inChannel(owner, "ops", "Ops task");
+  assert.equal(work.thread.channel, "work");
+  createGrant(ctx, owner, board.id, { principals: [{ kind: "contributors" }], can: { "ops/": ["read"] } });
+  createGrant(ctx, owner, board.id, { principals: [{ kind: "everyone" }], can: { "secret/": "none" } });
+  createGrant(ctx, owner, board.id, { principals: [{ kind: "member", principal_id: owner.id }], can: { "secret/": "all" } });
+  await rejects(() => claimTask(ctx, w1, { thread_id: ops.thread.id }), "forbidden");
+  const first = await claimTask(ctx, w1, { board_id: board.id, channel: "work/" });
+  assert.equal(first.thread.id, work.thread.id, "a trailing slash claims from the subtree, oldest first");
+  const second = await claimTask(ctx, w1, { board_id: board.id, channel: "work/ci" });
+  assert.equal(second.thread.id, ci.thread.id);
+  await rejects(() => claimTask(ctx, w1, { board_id: board.id, channel: "ops" }), "no_task_available");
+  const plan = createTasks(ctx, owner, board.id, { channel: "work/ci", tasks: [{ title: "Lint", body: "lint" }] });
+  assert.equal(plan.threads[0]!.channel, "work/ci");
+  await rejects(() => createTasks(ctx, w1, board.id, { channel: "ops", tasks: [{ title: "No", body: "no" }] }), "forbidden");
+  await rejects(() => startThread(ctx, owner, board.id, { channel: "ops", title: "Kept", body: "x", task: true, for: w1.id, idempotency_key: key() }), "invalid_argument");
+
+  const secret = inChannel(owner, "secret", "Rotate the root key");
+  const dependent = inChannel(owner, "work", "Announce the rotation", { needs: [secret.thread.id] });
+  assert.equal(dependent.thread.task?.needs[0]?.title, "Rotate the root key", "the owner sees the prerequisite's title");
+  const seen = getThread(ctx, w1, dependent.thread.id).thread.task!;
+  assert.deepEqual(seen.needs, [{ thread_id: secret.thread.id, title: "", state: "ready" }], "a prerequisite in a channel you can't read keeps its ID and state, not its title");
+  await rejects(() => inChannel(w1, "work", "Mine", { needs: [secret.thread.id] }), "invalid_needs");
 });

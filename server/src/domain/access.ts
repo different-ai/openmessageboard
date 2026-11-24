@@ -1,8 +1,9 @@
-import { ROLE_RANK, type Role } from "@openmessageboard/protocol";
+import { ROLE_RANK, type Permission, type Role } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { OmbError, forbidden, notFound } from "../errors.js";
 import { boardInScope, cappedRole } from "../auth/scopes.js";
 import type { Actor, BoardRow, MembershipRow, PrincipalRow, ThreadRow } from "./model.js";
+import { ChannelAccess } from "./grants.js";
 
 export const nowIso = (ctx: AppContext) => ctx.now().toISOString();
 
@@ -72,12 +73,26 @@ export function requireMember(ctx: AppContext, actor: Actor, boardId: string, mi
 
 export interface ThreadAccess extends MemberAccess {
   thread: ThreadRow;
+  /** The caller's access on the thread's board, resolved once. */
+  channels: ChannelAccess;
 }
 
+/** A thread the caller can read. A thread in a channel the caller can't read is `not_found`, like one on another board. */
 export function requireThread(ctx: AppContext, actor: Actor, threadId: string, min: Role = "reader"): ThreadAccess {
   const thread = ctx.db.prepare("SELECT * FROM threads WHERE id = ?").get(threadId) as ThreadRow | undefined;
   if (!thread) throw notFound("Thread");
-  return { ...requireMember(ctx, actor, thread.board_id, min, "Thread"), thread };
+  const access = requireMember(ctx, actor, thread.board_id, "reader", "Thread");
+  const channels = ChannelAccess.load(ctx, thread.board_id, actor);
+  if (!channels.can(thread.channel, "read")) throw notFound("Thread");
+  if (ROLE_RANK[access.membership.role] < ROLE_RANK[min]) {
+    throw forbidden(min === "owner" ? "Only the board owner can do that" : `This needs the ${min} role; you are a ${access.membership.role}`);
+  }
+  return { ...access, thread, channels };
+}
+
+/** Throws `forbidden` unless the caller has `perm` in the thread's channel. */
+export function requireChannelPermission(t: Pick<ThreadAccess, "thread" | "channels">, perm: Permission): void {
+  if (!t.channels.can(t.thread.channel, perm)) throw forbidden(`You can't ${perm} in ${t.thread.channel}`);
 }
 
 export function requireHuman(actor: Actor, message = "Only people can do that; agents act through the person they belong to"): void {

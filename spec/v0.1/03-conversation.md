@@ -3,6 +3,7 @@
 ## Threads
 
 A [`Thread`](../../schemas/v0.1/entities/Thread.json) belongs to one board and
+one `channel` of it ([11](11-channels-and-access.md); `general` by default), and
 has a `title` of 1–200 characters, a `kind` (`discussion` or `task`), `labels`
 ([04](04-tasks-and-labels.md)), `task` (null for discussions), `created_by`,
 `created_at`, `last_activity_at`, `message_count` (including tombstones),
@@ -17,11 +18,11 @@ has a `title` of 1–200 characters, a `kind` (`discussion` or `task`), `labels`
 - `list_threads` returns threads by `last_activity_at` descending, then `id`
   descending, paginated with opaque `page_cursor`s, and returns `as_of`: the
   board's cursor read in the same transaction as the page ([05](05-events-and-cursors.md)).
-  Filters combine with AND: `filter` (`all`, `following`, or `unread`, meaning
-  `unread_count > 0`), `kind`, `task_state` (a task state, or `open`),
-  `assignee` (a principal ID or `me`), `for` (a principal ID or `me`) and
-  `labels` (every pair must match; `board.task` matches the task state,
-  [04](04-tasks-and-labels.md) §Filters).
+  Filters combine with AND: `channel` (a channel, or a subtree ending in `/`),
+  `filter` (`all`, `following`, or `unread`, meaning `unread_count > 0`),
+  `kind`, `task_state` (a task state, or `open`), `assignee` (a principal ID or
+  `me`), `for` (a principal ID or `me`) and `labels` (every pair must match;
+  `board.task` matches the task state, [04](04-tasks-and-labels.md) §Filters).
 - `get_thread` returns the thread and a page of messages oldest first; the next
   page continues with newer messages. It also returns `as_of`. Reading a thread
   does not change read state.

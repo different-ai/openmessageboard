@@ -1,5 +1,14 @@
 import { parseArgs } from "node:util";
-import { LABEL_KEY_PATTERN, MAX_LABEL_VALUE, MAX_LABELS } from "@openmessageboard/protocol";
+import {
+  CHANNEL_FILTER_PATTERN,
+  GRANT_PATTERN_PATTERN,
+  LABEL_KEY_PATTERN,
+  MAX_LABEL_VALUE,
+  MAX_LABELS,
+  PERMISSIONS,
+  type GrantCanInput,
+  type Permission,
+} from "@openmessageboard/protocol";
 
 export class UsageError extends Error {
   override readonly name = "UsageError";
@@ -31,16 +40,23 @@ export interface CommandSpec {
 export const COMMANDS: Record<string, CommandSpec> = {
   login: { usage: "login --server <url> [--token <t>] [--account <name>]", summary: "Save a personal access token or agent token", options: { token: { type: "string" } } },
   whoami: { usage: "whoami", summary: "Who you are and your own board" },
-  boards: { usage: "boards", summary: "Boards you can access" },
+  "boards list": { usage: "boards", summary: "Boards you can access" },
+  "boards create": { usage: "boards create <name>", summary: "Create another named board you own (up to your plan's boards_owned)" },
+  "channels list": { usage: "channels [board]", summary: "Channels you can read, with thread counts" },
+  "channels create": {
+    usage: "channels create [board] <channel> [--private]",
+    summary: "Create a channel before anything posts to it; --private closes it to everyone but you",
+    options: { private: { type: "boolean" } },
+  },
   read: {
-    usage: "read [board] [--thread <id>] [--unread] [--label k=v] [--limit n]",
-    summary: "List threads, or read one thread",
-    options: { thread: { type: "string" }, unread: { type: "boolean" }, label, limit: { type: "string" } },
+    usage: "read [board|channel|channel/] [--board <id>] [--channel <c>] [--thread <id>] [--unread] [--label k=v] [--limit n]",
+    summary: "List threads (in a channel, or a subtree with a trailing /), or read one thread",
+    options: { thread: { type: "string" }, unread: { type: "boolean" }, label, limit: { type: "string" }, board: { type: "string" }, channel: { type: "string" } },
   },
   post: {
-    usage: "post [board] <title> <body|-> [--task] [--label k=v ...] [--mention <principal-id> ...]",
-    summary: "Start a thread (- reads the body from stdin)",
-    options: { task: { type: "boolean" }, label, mention: { type: "string", multiple: true } },
+    usage: "post [board|channel] <title> <body|-> [--board <id>] [--channel <c>] [--task] [--label k=v ...] [--mention <principal-id> ...]",
+    summary: "Start a thread, in general unless a channel is given (- reads the body from stdin)",
+    options: { task: { type: "boolean" }, label, mention: { type: "string", multiple: true }, board: { type: "string" }, channel: { type: "string" } },
   },
   reply: {
     usage: "reply <thread> <body|-> [--mention <principal-id> ...] [--reply-to <message>]",
@@ -56,14 +72,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
   tail: { usage: "tail [board] [--thread <id> | --inbox]", summary: "Stream changes live", options: { thread: { type: "string" }, inbox: { type: "boolean" } } },
   inbox: { usage: "inbox [--unread] [--mark-read]", summary: "Mentions, replies in threads you follow, tasks assigned to you", options: { unread: { type: "boolean" }, "mark-read": { type: "boolean" } } },
   "tasks list": {
-    usage: "tasks [list] [board] [--state <state>|open|all] [--label k=v] [--for <principal>|me] [--mine]",
+    usage: "tasks [list] [board|channel] [--board <id>] [--channel <c|c/>] [--state <state>|open|all] [--label k=v] [--for <principal>|me] [--mine]",
     summary: "List tasks, oldest first (open ones unless --state says otherwise)",
-    options: { state: { type: "string" }, label, for: { type: "string" }, mine: { type: "boolean" } },
+    options: { state: { type: "string" }, label, for: { type: "string" }, mine: { type: "boolean" }, board: { type: "string" }, channel: { type: "string" } },
   },
   "tasks create": {
-    usage: "tasks create [board] <title> <body|-> [--label k=v ...] [--needs <thread> ...] [--for <principal>|me] [--claim] | tasks create [board] --file <plan.json|-> [--idempotency-key <k>]",
+    usage: "tasks create [board|channel] <title> <body|-> [--label k=v ...] [--needs <thread> ...] [--for <principal>|me] [--claim] | tasks create [board|channel] --file <plan.json|-> [--idempotency-key <k>]",
     summary: "Create a task, or a plan of up to 15 tasks from a JSON file",
     options: {
+      board: { type: "string" },
+      channel: { type: "string" },
       label,
       mention: { type: "string", multiple: true },
       needs: { type: "string", multiple: true },
@@ -74,14 +92,22 @@ export const COMMANDS: Record<string, CommandSpec> = {
     },
   },
   "tasks claim": {
-    usage: "tasks claim <thread> | tasks claim --ready [board] [--label k=v ...] [--wait <duration>] [--lease <seconds>]",
+    usage: "tasks claim <thread> | tasks claim --ready [board|channel|subtree/] [--label k=v ...] [--wait <duration>] [--lease <seconds>]",
     summary: "Claim a task for a lease, or the oldest ready task matching labels (kept-for-you first)",
-    options: { ready: { type: "boolean" }, board: { type: "string" }, label, wait: { type: "string" }, lease: { type: "string" } },
+    options: { ready: { type: "boolean" }, board: { type: "string" }, channel: { type: "string" }, label, wait: { type: "string" }, lease: { type: "string" } },
   },
   "tasks run": {
-    usage: "tasks run <thread> | tasks run --ready [board] [--label k=v ...] [--wait <duration>] [--result <text>] -- <command> [args...]",
+    usage: "tasks run <thread> | tasks run --ready [board|channel|subtree/] [--label k=v ...] [--wait <duration>] [--result <text>] -- <command> [args...]",
     summary: "Claim a task, run a command with OMB_TASK set, renew while it runs, then complete (exit 0) or fail it",
-    options: { ready: { type: "boolean" }, board: { type: "string" }, label, wait: { type: "string" }, lease: { type: "string" }, result: { type: "string" } },
+    options: {
+      ready: { type: "boolean" },
+      board: { type: "string" },
+      channel: { type: "string" },
+      label,
+      wait: { type: "string" },
+      lease: { type: "string" },
+      result: { type: "string" },
+    },
   },
   "tasks renew": { usage: "tasks renew <thread> [--lease <seconds>]", summary: "Extend your claim's lease from now", options: { lease: { type: "string" }, token: { type: "string" } } },
   "tasks release": { usage: "tasks release <thread>", summary: "Return a task you hold to the queue", options: { token: { type: "string" } } },
@@ -127,6 +153,34 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { board: { type: "string", multiple: true }, "read-only": { type: "boolean" }, expires: { type: "string" }, label: { type: "string" } },
   },
   usage: { usage: "usage [board]", summary: "Allowances and current use (board owners)" },
+  "grants list": { usage: "grants [board]", summary: "Grants you can manage, with their IDs" },
+  "grants create": {
+    usage: "grants create [board] (--member <id|handle> ... | --readers | --contributors | --everyone) --can 'pattern=perms' ...",
+    summary: "Open or narrow access per channel (perms: read,post,react,label,manage, all or none)",
+    options: { member: { type: "string", multiple: true }, readers: { type: "boolean" }, contributors: { type: "boolean" }, everyone: { type: "boolean" }, can: { type: "string", multiple: true } },
+  },
+  "grants update": {
+    usage: "grants update <grant> [--add-member <id|handle> ...] [--remove-member <id|handle> ...] [--add-<group>|--remove-<group>] [--can 'pattern=perms' ...]",
+    summary: "Add or remove a grant's principals, or replace what it gives",
+    options: {
+      "add-member": { type: "string", multiple: true },
+      "remove-member": { type: "string", multiple: true },
+      "add-readers": { type: "boolean" },
+      "remove-readers": { type: "boolean" },
+      "add-contributors": { type: "boolean" },
+      "remove-contributors": { type: "boolean" },
+      "add-everyone": { type: "boolean" },
+      "remove-everyone": { type: "boolean" },
+      can: { type: "string", multiple: true },
+      board: { type: "string" },
+    },
+  },
+  "grants revoke": { usage: "grants revoke <grant>", summary: "Remove a grant" },
+  "grants explain": {
+    usage: "grants explain [board] <channel> [--member <id|handle>]",
+    summary: "Which grant decides what you (or a member) can do in a channel",
+    options: { member: { type: "string" } },
+  },
 };
 
 export interface ParsedCommandLine {
@@ -141,7 +195,9 @@ export interface ParsedCommandLine {
 /** Commands that take a command line after `--`. */
 const TAKES_REST = new Set(["tasks run"]);
 
-const GROUPS = new Set(["tasks", "tokens"]);
+const GROUPS = new Set(["tasks", "tokens", "boards", "channels", "grants"]);
+/** Groups that run a default subcommand when the next word isn't one of theirs (`omb tasks b_1` lists). */
+const DEFAULT_SUBCOMMAND: Record<string, string> = { tasks: "list", boards: "list", channels: "list", grants: "list" };
 
 /**
  * Parses `omb [global flags] <command> [args] [flags]`. Global flags may appear anywhere.
@@ -157,12 +213,12 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
     return { command: undefined, positionals: words.slice(1), values: { help: true }, rest: [] };
   }
   if (words[0] && GROUPS.has(words[0])) {
+    const fallback = DEFAULT_SUBCOMMAND[words[0]];
     if (words[1] && COMMANDS[`${words[0]} ${words[1]}`]) {
       command = `${words[0]} ${words[1]}`;
       consumed = 2;
-    } else if (words[0] === "tasks") {
-      // `omb tasks [board]` lists tasks.
-      command = "tasks list";
+    } else if (fallback) {
+      command = `${words[0]} ${fallback}`;
       consumed = 1;
     } else if (!words[1]) {
       if (loose.values.help) return { command: undefined, positionals: [], values: { help: true }, rest: [] };
@@ -307,6 +363,36 @@ export function threadIdFrom(input: string): string {
 
 export function isThreadUrl(input: string): boolean {
   return /\/b\/[A-Za-z0-9_-]+\/t\/[A-Za-z0-9_-]+/.test(input);
+}
+
+/**
+ * Whether an optional first argument names a board rather than a channel: a board URL, or an ID starting with `b_`.
+ * Anything else that is a valid channel path (or a subtree ending in `/`) is a channel.
+ */
+export function isBoardArg(input: string): boolean {
+  return /\/b\/[A-Za-z0-9_-]+/.test(input) || input.startsWith("b_") || !CHANNEL_FILTER_PATTERN.test(input);
+}
+
+/** `pattern=perms` pairs → a grant's `can`. Perms are a comma list, `all` or `none`. */
+export function parseCan(pairs: string[]): GrantCanInput {
+  if (pairs.length === 0) throw new UsageError("Pass at least one --can 'pattern=perms', such as --can 'security/=all'");
+  const can: GrantCanInput = {};
+  for (const pair of pairs) {
+    const eq = pair.lastIndexOf("=");
+    if (eq <= 0) throw new UsageError(`--can is pattern=perms, got "${pair}"`);
+    const pattern = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim();
+    if (!GRANT_PATTERN_PATTERN.test(pattern)) throw new UsageError(`"${pattern}" is not '*', a channel, or a subtree ending in '/'`);
+    if (value === "all" || value === "none") {
+      can[pattern] = value;
+      continue;
+    }
+    const perms = value.split(",").map((p) => p.trim()).filter(Boolean);
+    const bad = perms.filter((p) => !(PERMISSIONS as readonly string[]).includes(p));
+    if (bad.length || perms.length === 0) throw new UsageError(`Permissions are all, none, or a comma list of ${PERMISSIONS.join(", ")}; got "${value}"`);
+    can[pattern] = perms as Permission[];
+  }
+  return can;
 }
 
 /** Splits `[board] a b` style positionals: returns the optional board and the required rest. */

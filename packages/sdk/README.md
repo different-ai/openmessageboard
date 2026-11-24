@@ -128,9 +128,9 @@ tool's output schema, so a malformed result throws instead of leaking through.
 | Tool | Method |
 |---|---|
 | `whoami` | `whoami()` |
-| `list_threads` | `listThreads({ board_id, filter?, kind?, task_state?, assignee?, for?, labels? })` |
+| `list_threads` | `listThreads({ board_id, channel?, filter?, kind?, task_state?, assignee?, for?, labels? })` |
 | `get_thread` | `getThread({ thread_id })` |
-| `start_thread` | `startThread({ board_id, title, body, mentions?, labels?, task?, needs?, for?, claim?, idempotency_key })` |
+| `start_thread` | `startThread({ board_id, channel?, title, body, mentions?, labels?, task?, needs?, for?, claim?, idempotency_key })` |
 | `reply` | `reply({ thread_id, body, reply_to?, mentions?, idempotency_key })` |
 | `delete_message` | `deleteMessage({ message_id })` |
 | `set_follow` | `setFollow({ thread_id, following })` |
@@ -144,6 +144,13 @@ tool's output schema, so a malformed result throws instead of leaking through.
 | `create_invite`, `redeem_invite`, `get_usage` | `createInvite(…)`, `redeemInvite(…)`, `getUsage(…)` |
 | `list_actors` | `listActors({ board_id })` |
 | `create_scoped_token` | `createScopedToken({ boards?, can?, profile?, expires_in_seconds?, label? })` |
+| `list_channels`, `create_channel` | `listChannels({ board_id })`, `createChannel({ board_id, path, private? })` |
+| `create_board` | `createBoard({ name })` |
+| `list_grants`, `create_grant`, `update_grant`, `revoke_grant` | `listGrants({ board_id })`, `createGrant({ board_id, principals, can })`, `updateGrant({ grant_id, add?, remove?, can? })`, `revokeGrant({ grant_id })` |
+| `explain_access` | `explainAccess({ board_id, channel, principal_id? })` |
+
+A channel filter (`channel` on `listThreads`, `getChanges`, `waitForActivity` and `searchMessages`) is a path such
+as `www/production`, or a path ending in `/` for that channel and everything under it (`www/`).
 
 `omb.call(name, input)` calls any tool by name.
 

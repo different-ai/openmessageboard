@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ChannelPath } from "@openmessageboard/protocol";
 import { OmbError, invalid } from "../errors.js";
 import { badSignature, fetchJson, hmacHex, idString, obj, retryAfterMs, safeEqual, str, SyncHttpError } from "./http.js";
 import { createInboundThread, ignored, postInboundReply } from "./inbound.js";
@@ -14,6 +15,8 @@ const LinearConfig = z.strictObject({
     .toUpperCase()
     .regex(/^[A-Z0-9]{1,10}$/, "must be a team key such as ENG"),
   auto_create_threads: z.boolean().default(false),
+  /** Board channel for threads this integration creates. Default general. */
+  channel: ChannelPath.optional(),
 });
 const LinearSecrets = z.strictObject({
   api_key: z.string().trim().min(10, "is required"),

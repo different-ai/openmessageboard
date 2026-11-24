@@ -6,3 +6,4 @@ export * from "./events.js";
 export * from "./api.js";
 export * from "./export.js";
 export * from "./uris.js";
+export * from "./channels.js";

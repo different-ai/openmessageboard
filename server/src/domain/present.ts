@@ -16,6 +16,7 @@ import {
 import type { AppContext } from "../context.js";
 import type { BoardRow, InboxRow, InviteRow, MembershipRow, MessageRow, PrincipalRow, ThreadRow } from "./model.js";
 import { boardLimits } from "./plans.js";
+import { ChannelAccess } from "./grants.js";
 
 /** Resolves principal references in bulk; agents carry their owner as `via`. */
 export function principalRefs(ctx: AppContext, ids: Iterable<string | null | undefined>): Map<string, PrincipalRef> {
@@ -90,7 +91,7 @@ export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: str
   const refs = principalRefs(ctx, rows.flatMap((t) => [t.created_by, t.task_assignee_id, t.task_for_id]));
   const ids = rows.map((t) => t.id);
   const ph = ids.map(() => "?").join(",");
-  const tasks = taskDetails(ctx, rows);
+  const tasks = taskDetails(ctx, rows, viewerId);
   const following = new Set<string>();
   const unread = new Map<string, number>();
   if (viewerId) {
@@ -121,6 +122,7 @@ export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: str
   return rows.map((t) => ({
     id: t.id,
     board_id: t.board_id,
+    channel: t.channel,
     url: threadUrl(ctx.config.publicUrl, t.board_id, t.id),
     title: t.title,
     kind: t.kind,
@@ -153,20 +155,33 @@ export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: str
   }));
 }
 
-/** Prerequisites and result bodies for the task rows among `rows`, in two queries. */
-function taskDetails(ctx: AppContext, rows: ThreadRow[]): { needs: Map<string, TaskNeed[]>; results: Map<string, string> } {
+/**
+ * Prerequisites and result bodies for the task rows among `rows`, in two queries. A prerequisite in another channel
+ * that the viewer can't read keeps its ID and state but not its title.
+ */
+function taskDetails(ctx: AppContext, rows: ThreadRow[], viewerId: string | null): { needs: Map<string, TaskNeed[]>; results: Map<string, string> } {
   const needs = new Map<string, TaskNeed[]>();
   const results = new Map<string, string>();
   const taskIds = rows.filter((t) => t.kind === "task").map((t) => t.id);
   if (taskIds.length) {
+    const channelOf = new Map(rows.map((t) => [t.id, t.channel]));
+    const viewer = viewerId ? (ctx.db.prepare("SELECT * FROM principals WHERE id = ?").get(viewerId) as PrincipalRow | undefined) : undefined;
+    const access = new Map<string, ChannelAccess>();
+    const readable = (boardId: string, channel: string): boolean => {
+      if (!viewer) return false;
+      let a = access.get(boardId);
+      if (!a) access.set(boardId, (a = ChannelAccess.load(ctx, boardId, { id: viewer.id, kind: viewer.kind, ownerId: viewer.owner_id, profile: viewer.profile_name ?? null })));
+      return a.can(channel, "read");
+    };
     for (const r of ctx.db
       .prepare(
-        `SELECT n.task_id, p.id, p.title, p.task_state FROM task_needs n JOIN threads p ON p.id = n.needs_id
+        `SELECT n.task_id, p.id, p.board_id, p.channel, p.title, p.task_state FROM task_needs n JOIN threads p ON p.id = n.needs_id
          WHERE n.task_id IN (${taskIds.map(() => "?").join(",")}) ORDER BY p.created_at, p.id`,
       )
-      .all(...taskIds) as { task_id: string; id: string; title: string; task_state: TaskState }[]) {
+      .all(...taskIds) as { task_id: string; id: string; board_id: string; channel: string; title: string; task_state: TaskState }[]) {
       const list = needs.get(r.task_id) ?? [];
-      list.push({ thread_id: r.id, title: r.title, state: r.task_state });
+      const shown = r.channel === channelOf.get(r.task_id) || readable(r.board_id, r.channel);
+      list.push({ thread_id: r.id, title: shown ? r.title : "", state: r.task_state });
       needs.set(r.task_id, list);
     }
   }

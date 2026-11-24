@@ -27,10 +27,10 @@ import {
 } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
-import { OmbError, invalid } from "../errors.js";
+import { OmbError, forbidden, invalid } from "../errors.js";
 import { newId, randomToken } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, getPrincipal, nowIso, requireMember, requireThread } from "./access.js";
+import { activeMembership, getPrincipal, nowIso, requireChannelPermission, requireMember, requireThread } from "./access.js";
 import { recordEvent } from "./boards.js";
 import {
   addInboxItem,
@@ -50,6 +50,8 @@ import {
 import type { Actor, BoardRow, MembershipRow, ThreadRow } from "./model.js";
 import { presentThread, presentThreads, refOf } from "./present.js";
 import { coveredPrincipalIds } from "./profiles.js";
+import { normalizeChannel } from "./channels.js";
+import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 import { boardLimits } from "./plans.js";
 
 type Emit = (e: HubEvent) => void;
@@ -121,14 +123,17 @@ function conflict(thread: ThreadRow, action: string): OmbError {
   return new OmbError("conflict", `Can't ${action} a ${thread.task_state} task`, { state: thread.task_state, action });
 }
 
-/** Resolves `for`: a member, agent or profile of the board who can claim (contributor or owner). */
-function resolveClaimant(ctx: AppContext, actor: Actor, boardId: string, value: string): string {
+/** Resolves `for`: a member, agent or profile of the board who can claim in the task's channel. */
+function resolveClaimant(ctx: AppContext, actor: Actor, boardId: string, value: string, channel: string): string {
   const id = value === "me" ? actor.id : value;
   const p = getPrincipal(ctx, id);
-  const m = p ? activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name }) : undefined;
-  if (!p || !m || p.disabled_at) throw invalid(`Principal ${id} is not a member of this board`, { principal_id: id });
+  const subject = p ? { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name } : null;
+  const m = subject ? activeMembership(ctx, boardId, subject) : undefined;
+  if (!p || !subject || !m || p.disabled_at) throw invalid(`Principal ${id} is not a member of this board`, { principal_id: id });
   if (p.kind === "integration") throw invalid("Tasks can't be kept for an integration", { principal_id: id });
   if (ROLE_RANK[m.role] < ROLE_RANK.contributor) throw invalid(`Principal ${id} is a reader and can't claim tasks`, { principal_id: id });
+  const access = ChannelAccess.load(ctx, boardId, subject);
+  if (!access.can(channel, "read") || !access.can(channel, "post")) throw invalid(`Principal ${id} can't post in ${channel}`, { principal_id: id, channel });
   return id;
 }
 
@@ -156,14 +161,17 @@ function unclaimedState(ctx: AppContext, taskId: string): "waiting" | "ready" {
   return needsPending(ctx, taskId) ? "waiting" : "ready";
 }
 
-/** Validates prerequisites: existing tasks on the same board, no self reference, no cycle through `selfId`. */
-function validateNeeds(ctx: AppContext, boardId: string, ids: string[], selfId: string | null): string[] {
+/**
+ * Validates prerequisites: existing tasks on the same board in channels the caller can read (others look unknown),
+ * no self reference, no cycle through `selfId`.
+ */
+function validateNeeds(ctx: AppContext, boardId: string, ids: string[], selfId: string | null, access: ChannelAccess): string[] {
   const unique = [...new Set(ids)];
   if (unique.length > MAX_TASK_NEEDS) throw new OmbError("invalid_needs", `A task can wait for up to ${MAX_TASK_NEEDS} tasks`, { limit: MAX_TASK_NEEDS });
   for (const id of unique) {
     if (id === selfId) throw new OmbError("invalid_needs", "A task can't wait for itself", { thread_id: id });
-    const row = ctx.db.prepare("SELECT board_id, kind FROM threads WHERE id = ?").get(id) as { board_id: string; kind: ThreadKind } | undefined;
-    if (!row || row.board_id !== boardId || row.kind !== "task") {
+    const row = ctx.db.prepare("SELECT board_id, kind, channel FROM threads WHERE id = ?").get(id) as { board_id: string; kind: ThreadKind; channel: string } | undefined;
+    if (!row || row.board_id !== boardId || row.kind !== "task" || !access.can(row.channel, "read")) {
       throw new OmbError("invalid_needs", `${id} is not a task on this board`, { thread_id: id });
     }
   }
@@ -194,20 +202,21 @@ function changed(ctx: AppContext, emit: Emit, thread: ThreadRow, actorId: string
 
 // ---------- creation ----------
 
-/** Validates the task fields of `start_thread`. Caller holds a transaction. */
+/** Validates the task fields of `start_thread` for a task in `channel`. Caller holds a transaction. */
 export function prepareTask(
   ctx: AppContext,
   actor: Actor,
   boardId: string,
   kind: ThreadKind,
   input: { needs?: string[] | undefined; for?: string | undefined; claim?: boolean | undefined },
+  channel: string,
 ): NewTask | null {
   if (kind !== "task") {
     if (input.needs !== undefined || input.for !== undefined || input.claim) throw invalid("needs, for and claim only apply to tasks");
     return null;
   }
-  const forId = input.for !== undefined ? resolveClaimant(ctx, actor, boardId, input.for) : null;
-  const needs = validateNeeds(ctx, boardId, input.needs ?? [], null);
+  const forId = input.for !== undefined ? resolveClaimant(ctx, actor, boardId, input.for, channel) : null;
+  const needs = validateNeeds(ctx, boardId, input.needs ?? [], null, ChannelAccess.load(ctx, boardId, actor));
   return { state: pendingAmong(ctx, needs) ? "waiting" : "ready", forId, needs };
 }
 
@@ -240,12 +249,12 @@ export interface PlanTask {
   for?: string | undefined;
 }
 
-/** `create_tasks`: up to 15 tasks in one transaction, with needs by key inside the plan. */
+/** `create_tasks`: up to 15 tasks in one channel in one transaction, with needs by key inside the plan. */
 export function createTasks(
   ctx: AppContext,
   actor: Actor,
   boardId: string,
-  input: { tasks: PlanTask[]; idempotency_key?: string | undefined },
+  input: { channel?: string | undefined; tasks: PlanTask[]; idempotency_key?: string | undefined },
 ): { threads: Thread[]; usage_warning?: AllowanceUsage[] } {
   checkWriteRate(ctx, actor, boardId, {});
   const result = tx(ctx, (emit) => {
@@ -254,6 +263,9 @@ export function createTasks(
     return idempotent(ctx, actor, key, { op: "create_tasks", boardId, ...payload }, () => {
       const tasks = input.tasks;
       if (tasks.length === 0 || tasks.length > MAX_PLAN_TASKS) throw invalid(`A plan has 1-${MAX_PLAN_TASKS} tasks`);
+      const channel = normalizeChannel(input.channel);
+      const access = ChannelAccess.load(ctx, board.id, actor);
+      if (!access.can(channel, "read") || !access.can(channel, "post")) throw forbidden(`You can't post in ${channel}`);
       const byKey = new Map<string, number>();
       tasks.forEach((t, i) => {
         if (t.key === undefined) return;
@@ -277,7 +289,7 @@ export function createTasks(
           }
         }
         internal.push([...new Set(inPlan)]);
-        external.push(validateNeeds(ctx, board.id, existing, null));
+        external.push(validateNeeds(ctx, board.id, existing, null, access));
         if (internal[i]!.length + external[i]!.length > MAX_TASK_NEEDS) {
           throw new OmbError("invalid_needs", `A task can wait for up to ${MAX_TASK_NEEDS} tasks`, { limit: MAX_TASK_NEEDS });
         }
@@ -297,7 +309,7 @@ export function createTasks(
         const bytes = validateBody(ctx, t.body, board.id);
         const labels = validateLabels(t.labels ?? {});
         rejectReservedLabels(Object.keys(labels));
-        const forId = t.for !== undefined ? resolveClaimant(ctx, actor, board.id, t.for) : null;
+        const forId = t.for !== undefined ? resolveClaimant(ctx, actor, board.id, t.for, channel) : null;
         const waiting = internal[i]!.length > 0 || pendingAmong(ctx, external[i]!);
         return { title, bytes, labels, forId, waiting };
       });
@@ -305,6 +317,7 @@ export function createTasks(
       prepared.forEach((p, i) => {
         const { message } = insertThread(ctx, emit, actor, board, {
           id: ids[i]!,
+          channel,
           title: p.title,
           body: tasks[i]!.body,
           bytes: p.bytes,
@@ -442,6 +455,7 @@ function claimRow(ctx: AppContext, emit: Emit, actor: Actor, thread: ThreadRow, 
 export interface ClaimTaskInput {
   thread_id?: string | undefined;
   board_id?: string | undefined;
+  channel?: string | undefined;
   labels?: Record<string, string> | undefined;
   wait_seconds?: number | undefined;
   lease_seconds?: number | undefined;
@@ -452,7 +466,10 @@ function claimOnce(ctx: AppContext, actor: Actor, input: ClaimTaskInput): { thre
     const threadId = input.thread_id;
     expireTaskLeases(ctx, { threadId });
     return tx(ctx, (emit) => {
-      const { thread } = requireThread(ctx, actor, threadId, "contributor");
+      const t = requireThread(ctx, actor, threadId, "contributor");
+      const { thread } = t;
+      requireTask(thread);
+      requireChannelPermission(t, "post");
       if (assertClaimable(ctx, actor, thread) === "held") return { thread: presentThread(ctx, thread, actor.id), claim: claimOf(thread) };
       const claim = claimRow(ctx, emit, actor, thread, input.lease_seconds);
       return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id), claim };
@@ -464,9 +481,12 @@ function claimOnce(ctx: AppContext, actor: Actor, input: ClaimTaskInput): { thre
   return tx(ctx, (emit) => {
     requireMember(ctx, actor, boardId, "contributor");
     const params: unknown[] = [boardId, actor.id];
-    // Tasks kept for the caller first, then unassigned ones; oldest first within each.
+    // Tasks kept for the caller first, then unassigned ones; oldest first within each. Only channels the caller can post in.
+    const access = ChannelAccess.load(ctx, boardId, actor);
     const sql =
       "SELECT t.* FROM threads t WHERE t.board_id = ? AND t.kind = 'task' AND t.task_state = 'ready' AND (t.task_for_id IS NULL OR t.task_for_id = ?)" +
+      readableSql("t.channel", access.allowedChannels(ctx, "read", "post"), params) +
+      channelFilterSql("t.channel", input.channel, params) +
       labelClauses(input.labels, params) +
       " ORDER BY (t.task_for_id IS NULL), t.created_at, t.id LIMIT 1";
     const next = ctx.db.prepare(sql).get(...params) as ThreadRow | undefined;
@@ -482,7 +502,7 @@ function claimOnce(ctx: AppContext, actor: Actor, input: ClaimTaskInput): { thre
  */
 export async function claimTask(ctx: AppContext, actor: Actor, input: ClaimTaskInput, signal?: AbortSignal): Promise<{ thread: Thread; claim: TaskClaim }> {
   if ((input.thread_id ? 1 : 0) + (input.board_id ? 1 : 0) !== 1) throw invalid("Pass exactly one of thread_id or board_id");
-  if (input.labels && !input.board_id) throw invalid("labels only apply with board_id");
+  if ((input.labels || input.channel) && !input.board_id) throw invalid("labels and channel only apply with board_id");
   if (input.wait_seconds !== undefined && !input.board_id) throw invalid("wait_seconds only applies with board_id");
   const waitMs = Math.min(Math.max(input.wait_seconds ?? 0, 0), WAIT_MAX_SECONDS) * 1000;
   try {
@@ -545,8 +565,10 @@ function verifyClaim(ctx: AppContext, actor: Actor, thread: ThreadRow, token: st
 /** `renew_task`: extends the caller's live claim from now. */
 export function renewTask(ctx: AppContext, actor: Actor, threadId: string, input: { token: string; lease_seconds?: number | undefined }): { thread: Thread; claim: TaskClaim } {
   return tx(ctx, (emit) => {
-    const { thread } = requireThread(ctx, actor, threadId, "contributor");
+    const t = requireThread(ctx, actor, threadId, "contributor");
+    const { thread } = t;
     requireTask(thread);
+    requireChannelPermission(t, "post");
     verifyClaim(ctx, actor, thread, input.token);
     const until = new Date(ctx.now().getTime() + leaseMs(ctx, thread.board_id, input.lease_seconds)).toISOString();
     ctx.db.prepare("UPDATE threads SET task_lease_until = ? WHERE id = ?").run(until, thread.id);
@@ -599,10 +621,12 @@ export function updateTask(ctx: AppContext, actor: Actor, threadId: string, inpu
   const boardId = (ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(threadId) as { board_id: string } | undefined)?.board_id;
   if (boardId) checkWriteRate(ctx, actor, boardId, {});
   return tx(ctx, (emit) => {
-    const { thread, membership } = requireThread(ctx, actor, threadId, "contributor");
+    const t = requireThread(ctx, actor, threadId, "contributor");
+    const { thread, membership } = t;
     const { idempotency_key: key, ...payload } = input;
     return idempotent(ctx, actor, key, { op: "update_task", threadId, ...payload }, () => {
       requireTask(thread);
+      requireChannelPermission(t, "post");
       const allowed = ACTION_FIELDS[input.action];
       if (!allowed) throw invalid("Unknown task action");
       for (const f of ["token", "result", "reason", "kind", "for", "needs"] as const) {
@@ -690,7 +714,7 @@ export function updateTask(ctx: AppContext, actor: Actor, threadId: string, inpu
           if (input.for === undefined) throw invalid("assign needs for: a principal ID, 'me', or null for anyone");
           requireTaskOwner(ctx, actor, thread, membership, "assign");
           if (finished) throw finishedError(thread);
-          const forId = input.for === null ? null : resolveClaimant(ctx, actor, thread.board_id, input.for);
+          const forId = input.for === null ? null : resolveClaimant(ctx, actor, thread.board_id, input.for, thread.channel);
           if (forId === thread.task_for_id) {
             noop = true;
             break;
@@ -710,7 +734,7 @@ export function updateTask(ctx: AppContext, actor: Actor, threadId: string, inpu
           if (state === "claimed") {
             throw new OmbError("task_already_claimed", "A claimed task's needs can't change", { assignee: thread.task_assignee_id ? refOf(ctx, thread.task_assignee_id) : null });
           }
-          const needs = validateNeeds(ctx, thread.board_id, input.needs, thread.id);
+          const needs = validateNeeds(ctx, thread.board_id, input.needs, thread.id, t.channels);
           const current = (ctx.db.prepare("SELECT needs_id FROM task_needs WHERE task_id = ?").all(thread.id) as { needs_id: string }[]).map((r) => r.needs_id);
           if (current.length === needs.length && needs.every((n) => current.includes(n))) {
             noop = true;

@@ -119,6 +119,19 @@ export const taskCases: CaseDef[] = [
       const c3 = await maya.ok("claim_task", { board_id: board, labels: { batch: run } });
       check(c3.thread.id === t3.thread.id, "a broader label filter claims the remaining ready task");
       await maya.fails("claim_task", { board_id: board, labels: { batch: run } }, "no_task_available");
+      const owner = await ctx.session("owner");
+      const inChannel = await owner.ok("start_thread", {
+        board_id: board,
+        channel: `conf-${ctx.runId}/queue`,
+        title: `Channel task ${ctx.runId}`,
+        body: "in a channel",
+        task: true,
+        labels: { batch: run },
+        idempotency_key: newKey(),
+      });
+      await maya.fails("claim_task", { board_id: board, channel: `conf-${ctx.runId}/other`, labels: { batch: run } }, "no_task_available");
+      const c4 = await maya.ok("claim_task", { board_id: board, channel: `conf-${ctx.runId}/`, labels: { batch: run } });
+      check(c4.thread.id === inChannel.thread.id, "claim-next with a channel subtree claims the task in that subtree (04 §Claiming)");
       await maya.fails("claim_task", { board_id: board, thread_id: t1.thread.id }, "invalid_argument");
       await maya.fails("claim_task", {}, "invalid_argument");
       await maya.fails("claim_task", { labels: { batch: run } }, "invalid_argument");

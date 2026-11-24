@@ -10,6 +10,12 @@
       "minLength": 1,
       "description": "Board ID"
     },
+    "channel": {
+      "description": "Channel for every task in the plan. Default general.",
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}$"
+    },
     "tasks": {
       "minItems": 1,
       "maxItems": 15,

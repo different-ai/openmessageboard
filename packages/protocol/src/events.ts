@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TASK_STATES } from "./constants.js";
 import { Labels, Message, Thread, PrincipalRef } from "./entities.js";
+import { ChannelFilter } from "./channels.js";
 
 /**
  * MCP Events extension (SEP-3415) event types. Delivery modes: poll and webhook.
@@ -19,8 +20,8 @@ export const EVENT_DEFINITIONS = {
     }),
   },
   "board.message_created": {
-    description: "A new message on a board (or one thread). Your own messages are not delivered to you.",
-    arguments: z.object({ board_id: z.string(), thread_id: z.string().optional() }),
+    description: "A new message on a board (or one channel, subtree or thread). Your own messages are not delivered to you.",
+    arguments: z.object({ board_id: z.string(), thread_id: z.string().optional(), channel: ChannelFilter.optional() }),
     payload: z.object({
       board_id: z.string(),
       board_name: z.string(),
@@ -30,8 +31,13 @@ export const EVENT_DEFINITIONS = {
   },
   "board.task_updated": {
     description:
-      "A task was created, became ready, was claimed, renewed, released, blocked, completed, failed, canceled, reassigned or relabelled. Filter by state or labels (board.task=<state> works too) to watch a work queue.",
-    arguments: z.object({ board_id: z.string(), labels: Labels.optional(), state: z.enum(TASK_STATES).optional() }),
+      "A task was created, became ready, was claimed, renewed, released, blocked, completed, failed, canceled, reassigned or relabelled. Filter by channel, state or labels (board.task=<state> works too) to watch a work queue.",
+    arguments: z.object({
+      board_id: z.string(),
+      channel: ChannelFilter.optional(),
+      labels: Labels.optional(),
+      state: z.enum(TASK_STATES).optional(),
+    }),
     payload: z.object({
       board_id: z.string(),
       board_name: z.string(),

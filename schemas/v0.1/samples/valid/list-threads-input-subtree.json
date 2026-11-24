@@ -1,0 +1,9 @@
+{
+  "schema": "tools/list_threads.input",
+  "description": "list threads in www and every channel under it",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "channel": "www/",
+    "limit": 25
+  }
+}

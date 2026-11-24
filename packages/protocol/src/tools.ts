@@ -34,6 +34,7 @@ import {
   BoardActor,
   TokenScope,
 } from "./entities.js";
+import { CHANNEL_TOOLS, CHANNEL_WRITE_TOOLS, ChannelFilter, ChannelPath } from "./channels.js";
 
 const id = (what: string) => z.string().min(1).describe(`${what} ID`);
 const idempotencyKey = z
@@ -57,20 +58,22 @@ const claimToken = z.string().min(1).max(200).describe("The token from the claim
 export const TOOLS = {
   whoami: {
     description:
-      "Who you are on this server, your own board (created on first use for people), every board you can access, and the server's limits.",
+      "Who you are on this server, your own board (created on first use for people), every board you own and can access, and the server's limits.",
     input: z.object({}),
     output: z.object({
       principal: Principal,
       owned_board: Board.nullable(),
+      owned_boards: z.array(Board).describe("Every board you own, your personal board first"),
       memberships: z.array(Membership),
       server: ServerInfo,
     }),
   },
   list_threads: {
     description:
-      "List threads on a board by most recent activity. Filter by following/unread, kind, task state (or open for any unfinished task), assignee, who a task is kept for, or labels (board.task=<state> matches the task state). Returns an as_of cursor for get_changes.",
+      "List threads on a board by most recent activity. Filter by channel (www/ for a subtree), following/unread, kind, task state (or open for any unfinished task), assignee, who a task is kept for, or labels (board.task=<state> matches the task state). Returns an as_of cursor for get_changes.",
     input: z.object({
       board_id: id("Board"),
+      channel: ChannelFilter.optional(),
       filter: z.enum(["all", "following", "unread"]).optional(),
       kind: z.enum(THREAD_KINDS).optional(),
       task_state: z.enum(TASK_STATE_FILTERS).optional().describe("A task state, or open for waiting, ready, claimed and blocked tasks"),
@@ -89,9 +92,10 @@ export const TOOLS = {
   },
   start_thread: {
     description:
-      "Start a thread on a board. Set task: true to make it a task that agents or people can claim; you own the tasks you create. A task can wait for other tasks (needs), be kept for one principal (for), and be claimed at once (claim).",
+      "Start a thread in a channel of a board (general by default; the first post creates the channel). Set task: true to make it a task that agents or people can claim; you own the tasks you create. A task can wait for other tasks (needs), be kept for one principal (for), and be claimed at once (claim).",
     input: z.object({
       board_id: id("Board"),
+      channel: ChannelPath.optional().describe("Channel path such as dev or www/production. Default general."),
       title: z.string().min(1).max(MAX_TITLE_CHARS),
       body: z.string().min(1).describe("Markdown, up to 16 KiB"),
       mentions,
@@ -138,7 +142,13 @@ export const TOOLS = {
   get_changes: {
     description:
       "Changes after a cursor, in order. Pass board_id for a board's changes or inbox: true for your inbox. Omit cursor to get the current position. If the result says cursor_expired, reload with list_threads.",
-    input: z.object({ board_id: z.string().optional(), inbox: z.boolean().optional(), cursor: z.string().optional(), limit: limit(100, 100) }),
+    input: z.object({
+      board_id: z.string().optional(),
+      inbox: z.boolean().optional(),
+      channel: ChannelFilter.optional().describe("Board changes only: thread and message changes in this channel or subtree"),
+      cursor: z.string().optional(),
+      limit: limit(100, 100),
+    }),
     output: z.union([ChangesPage, InboxChangesPage]),
   },
   wait_for_activity: {
@@ -147,14 +157,15 @@ export const TOOLS = {
       board_id: z.string().optional(),
       thread_id: z.string().optional(),
       inbox: z.boolean().optional(),
+      channel: ChannelFilter.optional().describe("Board waits only: wake for changes in this channel or subtree"),
       cursor: z.string().describe("Cursor from a previous result"),
       timeout_seconds: z.number().int().min(1).max(WAIT_MAX_SECONDS).optional(),
     }),
     output: z.union([ChangesPage, InboxChangesPage]),
   },
   search_messages: {
-    description: "Full-text search of messages on one board.",
-    input: z.object({ board_id: id("Board"), query: z.string().min(1).max(200), limit: limit(50, 20) }),
+    description: "Full-text search of messages on one board, optionally in one channel or subtree.",
+    input: z.object({ board_id: id("Board"), query: z.string().min(1).max(200), channel: ChannelFilter.optional(), limit: limit(50, 20) }),
     output: z.object({ results: z.array(z.object({ message: Message, thread_title: z.string(), snippet: z.string() })) }),
   },
   list_members: {
@@ -163,10 +174,11 @@ export const TOOLS = {
     output: z.object({ members: z.array(Member) }),
   },
   claim_task: {
-    description: `Claim a task for a lease. Pass thread_id to claim that task, or board_id (and optional labels) to claim the oldest ready task: tasks kept for you first, then unassigned ones. wait_seconds (up to ${WAIT_MAX_SECONDS}) waits for a task to become ready. Returns the claim's token: renew it with renew_task before the lease ends, and pass it to update_task to complete, fail, release or block.`,
+    description: `Claim a task for a lease. Pass thread_id to claim that task, or board_id (and optional channel and labels) to claim the oldest ready task you can post on: tasks kept for you first, then unassigned ones. wait_seconds (up to ${WAIT_MAX_SECONDS}) waits for a task to become ready. Returns the claim's token: renew it with renew_task before the lease ends, and pass it to update_task to complete, fail, release or block.`,
     input: z.object({
       thread_id: z.string().optional(),
       board_id: z.string().optional(),
+      channel: ChannelFilter.optional().describe("With board_id: only tasks in this channel, or a subtree such as work/"),
       labels: Labels.optional(),
       wait_seconds: z.number().int().min(1).max(WAIT_MAX_SECONDS).optional().describe("With board_id: wait this long for a matching task to become ready"),
       lease_seconds: leaseSeconds,
@@ -198,6 +210,7 @@ export const TOOLS = {
     description: `Create up to ${MAX_PLAN_TASKS} tasks in one write, all or none. A task's key names it for the others in the call, so needs can list {key} as well as thread IDs. Retrying with the same idempotency_key returns the same tasks.`,
     input: z.object({
       board_id: id("Board"),
+      channel: ChannelPath.optional().describe("Channel for every task in the plan. Default general."),
       tasks: z
         .array(
           z.object({
@@ -275,6 +288,7 @@ export const TOOLS = {
       scope: TokenScope,
     }),
   },
+  ...CHANNEL_TOOLS,
 } as const;
 
 export type ToolName = keyof typeof TOOLS;
@@ -297,4 +311,5 @@ export const WRITE_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>([
   "create_invite",
   "redeem_invite",
   "create_scoped_token",
+  ...CHANNEL_WRITE_TOOLS,
 ]);

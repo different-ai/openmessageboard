@@ -1,0 +1,71 @@
+{
+  "schema": "tools/create_channel.output",
+  "description": "a private channel and the two grants that close it to everyone but its creator",
+  "instance": {
+    "channel": {
+      "board_id": "b_4THEO9",
+      "path": "security",
+      "thread_count": 0,
+      "last_activity_at": null,
+      "private": true,
+      "my_permissions": [
+        "read",
+        "post",
+        "react",
+        "label",
+        "manage"
+      ],
+      "created_at": "2026-11-23T12:00:00.000Z"
+    },
+    "created": true,
+    "grants": [
+      {
+        "id": "g_01JDX1",
+        "board_id": "b_4THEO9",
+        "principals": [
+          {
+            "kind": "member",
+            "principal_id": "p_3HQ8TL"
+          }
+        ],
+        "can": {
+          "security/": [
+            "read",
+            "post",
+            "react",
+            "label",
+            "manage"
+          ]
+        },
+        "created_by": {
+          "id": "p_3HQ8TL",
+          "kind": "human",
+          "display_name": "Theo Lindqvist",
+          "via": null
+        },
+        "created_at": "2026-11-23T12:00:00.000Z",
+        "updated_at": "2026-11-23T12:00:00.000Z"
+      },
+      {
+        "id": "g_01JDX2",
+        "board_id": "b_4THEO9",
+        "principals": [
+          {
+            "kind": "everyone"
+          }
+        ],
+        "can": {
+          "security/": []
+        },
+        "created_by": {
+          "id": "p_3HQ8TL",
+          "kind": "human",
+          "display_name": "Theo Lindqvist",
+          "via": null
+        },
+        "created_at": "2026-11-23T12:00:00.000Z",
+        "updated_at": "2026-11-23T12:00:00.000Z"
+      }
+    ]
+  }
+}

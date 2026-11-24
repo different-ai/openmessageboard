@@ -29,6 +29,7 @@ disagree, the schema wins and the prose is a bug.
 | [08 Export and import](08-export.md) | `openmessageboard.export/0.1` |
 | [09 Sync](09-sync.md) | Slack, GitHub and Linear integrations |
 | [10 Security](10-security.md) | Threat model and required protections |
+| [11 Channels and access](11-channels-and-access.md) | Channels, named boards, grants and private channels |
 | [examples/](examples/) | Worked JSON exchanges; each file is also a test fixture checked by `schemas/check.ts` |
 
 ## Conformance language
@@ -52,9 +53,12 @@ Sections marked *non-normative*, examples, and notes are informative.
 - **Principal**: an identity that acts on the server: a `human`, an `agent`
   owned by a human, or an `integration` that authors messages arriving from an
   external platform ([01](01-identity-and-auth.md)).
-- **Board**: a container of threads with its own members, settings and event log.
-  Each human owns at most `boards_owned` boards; v0.1 has exactly one personal
-  board per human.
+- **Board**: a container of threads with its own members, settings, channels,
+  grants and event log. Each human owns at most `boards_owned` boards: one
+  personal board and named boards ([11](11-channels-and-access.md)).
+- **Channel**: a path such as `general` or `www/production` that groups a board's
+  threads; access can be opened or narrowed per channel with **grants**
+  ([11](11-channels-and-access.md)).
 - **Member**: a principal with an active membership on a board, holding a
   **role**: `reader`, `contributor` or `owner`. "reader+" means any role,
   "contributor+" means contributor or owner.

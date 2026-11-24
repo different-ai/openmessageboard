@@ -1,3 +1,4 @@
+import type { GrantPrincipal } from "@openmessageboard/protocol";
 import {
   OmbClient,
   isInboxItem,
@@ -12,7 +13,9 @@ import {
   UsageError,
   boardIdFrom,
   flag,
+  isBoardArg,
   isThreadUrl,
+  parseCan,
   list,
   parseDurationSeconds,
   parseLabels,
@@ -26,9 +29,12 @@ import {
 import { configPath, readConfig, resolveConnection, validateAccount, validateProfileName, writeConfig, type Config, type ResolvedConnection } from "./config.js";
 import {
   authorName,
+  formatAccess,
   formatActors,
   formatBoards,
   formatChange,
+  formatChannels,
+  formatGrants,
   formatInboxItem,
   formatLabels,
   formatMembers,
@@ -200,14 +206,38 @@ async function whoami(ctx: Context): Promise<void> {
   ctx.out(lines.join("\n"));
 }
 
-async function boards(ctx: Context): Promise<void> {
+async function boards(ctx: Context, args: string[]): Promise<void> {
+  need(args, 0, "boards");
   const me = await ctx.client().whoami();
   if (ctx.json) return ctx.printJson(me.memberships);
   ctx.out(formatBoards(me.memberships));
 }
 
+async function boardsCreate(ctx: Context, args: string[]): Promise<void> {
+  need(args, 1, "boards create <name>");
+  const res = await ctx.client().createBoard({ name: args[0]! });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Created board ${res.board.name} (${res.board.id}) ${res.board.url}`);
+}
+
+/** An optional leading board-or-channel argument, plus --board and --channel. */
+function boardAndChannel(first: string | undefined, values: Values): { board: string | undefined; channel: string | undefined } {
+  let board = str(values, "board");
+  let channel = str(values, "channel");
+  if (first !== undefined) {
+    if (isBoardArg(first)) {
+      if (board) throw new UsageError("Pass the board once: as the first argument or with --board");
+      board = first;
+    } else {
+      if (channel) throw new UsageError("Pass the channel once: as the first argument or with --channel");
+      channel = first;
+    }
+  }
+  return { board, channel };
+}
+
 async function read(ctx: Context, args: string[], values: Values): Promise<void> {
-  if (args.length > 1) throw new UsageError("Usage: omb read [board] [--thread <id>] [--unread] [--label k=v]");
+  if (args.length > 1) throw new UsageError("Usage: omb read [board|channel|channel/] [--thread <id>] [--unread] [--label k=v]");
   const threadArg = str(values, "thread") ?? (args[0] && isThreadUrl(args[0]) ? args[0] : undefined);
   const client = ctx.client();
   if (threadArg) {
@@ -218,8 +248,10 @@ async function read(ctx: Context, args: string[], values: Values): Promise<void>
     return ctx.out(parts.join("\n\n"));
   }
   const limitArg = str(values, "limit");
+  const { board, channel } = boardAndChannel(args[0], values);
   const res = await client.listThreads({
-    board_id: await ctx.board(args[0]),
+    board_id: await ctx.board(board),
+    ...(channel ? { channel } : {}),
     filter: flag(values, "unread") ? "unread" : undefined,
     labels: labelsOf(values),
     limit: limitArg ? parsePositiveInt(limitArg, "--limit") : undefined,
@@ -229,12 +261,14 @@ async function read(ctx: Context, args: string[], values: Values): Promise<void>
 }
 
 async function post(ctx: Context, args: string[], values: Values): Promise<void> {
-  const usage = "post [board] <title> <body|->";
-  const { board, rest } = splitOptionalBoard(args, 2, usage);
-  const [title, bodyArg] = rest as [string, string];
+  const usage = "post [board|channel] <title> <body|->";
+  if (args.length !== 2 && args.length !== 3) throw new UsageError(`Usage: omb ${usage}`);
+  const { board, channel } = boardAndChannel(args.length === 3 ? args[0] : undefined, values);
+  const [title, bodyArg] = args.slice(-2) as [string, string];
   const mentions = list(values, "mention");
   const res = await ctx.client().postIdempotent({
     board_id: await ctx.board(board),
+    ...(channel ? { channel } : {}),
     title,
     body: await ctx.body(bodyArg),
     ...(mentions.length ? { mentions } : {}),
@@ -242,7 +276,7 @@ async function post(ctx: Context, args: string[], values: Values): Promise<void>
     ...(flag(values, "task") ? { task: true } : {}),
   });
   if (ctx.json) return ctx.printJson(res);
-  ctx.out(`${res.thread.kind === "task" ? "Created task" : "Posted thread"} ${res.thread.id} ${res.thread.url}`);
+  ctx.out(`${res.thread.kind === "task" ? "Created task" : "Posted thread"} ${res.thread.id} in ${res.thread.channel} ${res.thread.url}`);
 }
 
 async function reply(ctx: Context, args: string[], values: Values): Promise<void> {
@@ -473,10 +507,112 @@ async function usage(ctx: Context, args: string[]): Promise<void> {
   ctx.out(formatUsage(res));
 }
 
+async function channelsList(ctx: Context, args: string[]): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb channels [board]");
+  const res = await ctx.client().listChannels({ board_id: await ctx.board(args[0]) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatChannels(res.channels, ctx.now()));
+}
+
+async function channelsCreate(ctx: Context, args: string[], values: Values): Promise<void> {
+  const { board, rest } = splitOptionalBoard(args, 1, "channels create [board] <channel> [--private]");
+  const res = await ctx.client().createChannel({ board_id: await ctx.board(board), path: rest[0]!, ...(flag(values, "private") ? { private: true } : {}) });
+  if (ctx.json) return ctx.printJson(res);
+  const lines = [`${res.created ? "Created" : "Already exists:"} ${res.channel.path}${res.channel.private ? " (private)" : ""}`];
+  if (res.grants.length) lines.push(`Grants: ${res.grants.map((g) => g.id).join(", ")}. Let others in with omb grants update ${res.grants[0]!.id} --add-member <id>.`);
+  ctx.out(lines.join("\n"));
+}
+
+/** Resolves member arguments (principal IDs or @handles) to principal IDs. */
+async function memberIds(ctx: Context, boardId: string, inputs: string[]): Promise<string[]> {
+  if (inputs.length === 0) return [];
+  const { members } = await ctx.client().listMembers({ board_id: boardId });
+  return inputs.map((input) => {
+    const handle = input.replace(/^@/, "");
+    const m = members.find((x) => x.principal.id === input) ?? members.find((x) => x.handle === handle);
+    if (!m) throw new UsageError(`No member ${input} on this board (see omb members)`);
+    return m.principal.id;
+  });
+}
+
+async function grantsList(ctx: Context, args: string[]): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb grants [board]");
+  const boardId = await ctx.board(args[0]);
+  const client = ctx.client();
+  const res = await client.listGrants({ board_id: boardId });
+  if (ctx.json) return ctx.printJson(res);
+  const members = res.grants.some((g) => g.principals.some((p) => p.kind === "member")) ? (await client.listMembers({ board_id: boardId })).members : [];
+  ctx.out(formatGrants(res.grants, members));
+}
+
+async function grantsCreate(ctx: Context, args: string[], values: Values): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb grants create [board] --member <id> ... --can 'pattern=perms'");
+  const boardId = await ctx.board(args[0]);
+  const principals: GrantPrincipal[] = (await memberIds(ctx, boardId, list(values, "member"))).map((principal_id) => ({ kind: "member", principal_id }));
+  for (const g of ["readers", "contributors", "everyone"] as const) if (flag(values, g)) principals.push({ kind: g });
+  if (principals.length === 0) throw new UsageError("Name who the grant is for: --member <id|handle>, --readers, --contributors or --everyone");
+  const res = await ctx.client().createGrant({ board_id: boardId, principals, can: parseCan(list(values, "can")) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Created grant ${res.grant.id}`);
+}
+
+async function grantsUpdate(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 1, "grants update <grant> [--add-member <id>] [--remove-member <id>] [--can 'pattern=perms']");
+  const addMembers = list(values, "add-member");
+  const removeMembers = list(values, "remove-member");
+  // Handles are resolved on the board (--board, or your default board); a removed member's ID is passed through.
+  const boardId = addMembers.length || removeMembers.length ? await ctx.board(str(values, "board")) : undefined;
+  const add: GrantPrincipal[] = boardId ? (await memberIds(ctx, boardId, addMembers)).map((principal_id) => ({ kind: "member", principal_id })) : [];
+  const remove: GrantPrincipal[] = [];
+  for (const m of removeMembers) {
+    const [id] = await memberIds(ctx, boardId!, [m]).catch(() => [m.replace(/^@/, "")]);
+    remove.push({ kind: "member", principal_id: id! });
+  }
+  for (const g of ["readers", "contributors", "everyone"] as const) {
+    if (flag(values, `add-${g}`)) add.push({ kind: g });
+    if (flag(values, `remove-${g}`)) remove.push({ kind: g });
+  }
+  const canPairs = list(values, "can");
+  if (!add.length && !remove.length && !canPairs.length) throw new UsageError("Nothing to change: pass --add-…, --remove-… or --can");
+  const res = await ctx.client().updateGrant({
+    grant_id: args[0]!,
+    ...(add.length ? { add } : {}),
+    ...(remove.length ? { remove } : {}),
+    ...(canPairs.length ? { can: parseCan(canPairs) } : {}),
+  });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Updated grant ${res.grant.id}`);
+}
+
+async function grantsRevoke(ctx: Context, args: string[]): Promise<void> {
+  need(args, 1, "grants revoke <grant>");
+  const res = await ctx.client().revokeGrant({ grant_id: args[0]! });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Revoked grant ${res.grant_id}`);
+}
+
+async function grantsExplain(ctx: Context, args: string[], values: Values): Promise<void> {
+  const { board, rest } = splitOptionalBoard(args, 1, "grants explain [board] <channel> [--member <id|handle>]");
+  const boardId = await ctx.board(board);
+  const member = str(values, "member");
+  const [principal_id] = member ? await memberIds(ctx, boardId, [member]) : [];
+  const res = await ctx.client().explainAccess({ board_id: boardId, channel: rest[0]!, ...(principal_id ? { principal_id } : {}) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatAccess(res));
+}
+
 export const RUNNERS: Record<string, Run> = {
   login,
   whoami,
-  boards,
+  "boards list": boards,
+  "boards create": boardsCreate,
+  "channels list": channelsList,
+  "channels create": channelsCreate,
+  "grants list": grantsList,
+  "grants create": grantsCreate,
+  "grants update": grantsUpdate,
+  "grants revoke": grantsRevoke,
+  "grants explain": grantsExplain,
   read,
   post,
   reply,

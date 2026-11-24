@@ -224,7 +224,8 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "Empty when the task is in a channel you can't read"
           },
           "state": {
             "type": "string",

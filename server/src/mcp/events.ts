@@ -12,6 +12,7 @@ import type { Actor, EventRow, InboxRow, MessageRow, ThreadRow } from "../domain
 import { presentInbox, presentMessages, presentThreads } from "../domain/present.js";
 import { labelsMatch } from "../domain/tasks.js";
 import { boardLimits, limitsFor } from "../domain/plans.js";
+import { AccessCache, ChannelAccess, channelMatches } from "../domain/grants.js";
 import { CallbackError, newWebhookId, postSigned, validateCallbackUrl, type CallbackPolicy } from "./webhook-http.js";
 
 export const EVENT_ERRORS = { NotFound: -32023, Forbidden: -32024, ResourceExhausted: -32025, Unsupported: -32026, CallbackEndpointError: -32027 } as const;
@@ -50,7 +51,7 @@ function parseArgs(name: string, args: unknown) {
   if (!(EVENT_NAMES as string[]).includes(name)) throw new EventsError(EVENT_ERRORS.NotFound, `Unknown event ${name}`);
   const parsed = EVENT_DEFINITIONS[name as EventName].arguments.safeParse(args ?? {});
   if (!parsed.success) throw new EventsError(-32602, `Invalid arguments: ${parsed.error.issues[0]?.message ?? "invalid"}`);
-  return parsed.data as { board_id?: string; thread_id?: string; labels?: Record<string, string>; state?: string };
+  return parsed.data as { board_id?: string; thread_id?: string; channel?: string; labels?: Record<string, string>; state?: string };
 }
 
 function cursorScope(name: EventName, actor: Actor, args: { board_id?: string }): { kind: "b" | "i"; id: string } {
@@ -67,8 +68,8 @@ function authorize(ctx: AppContext, actor: Actor, name: EventName, args: { board
   try {
     if (args.board_id) requireMember(ctx, actor, args.board_id);
     if (args.thread_id) {
-      const t = ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(args.thread_id) as { board_id: string } | undefined;
-      if (!t || t.board_id !== args.board_id) throw new OmbError("not_found", "Thread not found");
+      const t = ctx.db.prepare("SELECT board_id, channel FROM threads WHERE id = ?").get(args.thread_id) as { board_id: string; channel: string } | undefined;
+      if (!t || t.board_id !== args.board_id || !ChannelAccess.load(ctx, t.board_id, actor).can(t.channel, "read")) throw new OmbError("not_found", "Thread not found");
     }
   } catch (e) {
     if (e instanceof OmbError) throw new EventsError(EVENT_ERRORS.Forbidden, "Forbidden", { code: e.code === "access_ended" ? "access_ended" : "not_found", reason: e.message });
@@ -82,7 +83,7 @@ export function occurrencesAfter(
   ctx: AppContext,
   actor: Actor,
   name: EventName,
-  args: { board_id?: string; thread_id?: string; labels?: Record<string, string>; state?: string },
+  args: { board_id?: string; thread_id?: string; channel?: string; labels?: Record<string, string>; state?: string },
   afterSeq: number,
   max = 50,
   minTime?: string,
@@ -90,18 +91,20 @@ export function occurrencesAfter(
   const scope = cursorScope(name, actor, args);
   if (name === "inbox.item_created") {
     const params: unknown[] = [actor.id, afterSeq];
-    let sql = "SELECT * FROM inbox_items WHERE principal_id = ? AND seq > ?";
+    let sql = "SELECT i.*, t.channel FROM inbox_items i JOIN threads t ON t.id = i.thread_id WHERE i.principal_id = ? AND i.seq > ?";
     if (args.board_id) {
-      sql += " AND board_id = ?";
+      sql += " AND i.board_id = ?";
       params.push(args.board_id);
     }
     if (minTime) {
-      sql += " AND created_at >= ?";
+      sql += " AND i.created_at >= ?";
       params.push(minTime);
     }
-    const rows = ctx.db.prepare(sql + " ORDER BY seq LIMIT ?").all(...params, max + 1) as InboxRow[];
-    // A board-scoped token sees only items from its boards.
-    const page = rows.slice(0, max).filter((r) => boardInScope(actor, r.board_id));
+    const rows = ctx.db.prepare(sql + " ORDER BY i.seq LIMIT ?").all(...params, max + 1) as (InboxRow & { channel: string })[];
+    const scanned = rows.slice(0, max);
+    // Items from channels the principal can no longer read are skipped; the cursor still moves past them.
+    const access = new AccessCache(ctx, actor);
+    const page = scanned.filter((r) => access.canRead(r.board_id, r.channel));
     const items = presentInbox(ctx, page);
     return {
       events: items.map((it, i) => {
@@ -114,12 +117,14 @@ export function occurrencesAfter(
           cursor: encodeCursor(scope.kind, scope.id, page[i]!.seq),
         };
       }),
-      lastSeq: rows.length ? rows.slice(0, max)[Math.min(rows.length, max) - 1]!.seq : afterSeq,
+      lastSeq: scanned.length ? scanned[scanned.length - 1]!.seq : afterSeq,
       hasMore: rows.length > max,
     };
   }
   const boardId = args.board_id!;
   const board = getBoardRow(ctx, boardId);
+  const access = ChannelAccess.load(ctx, boardId, actor);
+  const visible = (channel: string | undefined) => !!channel && access.can(channel, "read") && (!args.channel || channelMatches(args.channel, channel));
   const types = name === "board.message_created" ? ["message.created", "thread.created"] : ["thread.created", "thread.updated"];
   const params: unknown[] = [boardId, afterSeq, ...types];
   let sql = `SELECT * FROM events WHERE board_id = ? AND seq > ? AND type IN (${types.map(() => "?").join(",")})`;
@@ -140,8 +145,8 @@ export function occurrencesAfter(
     if (name === "board.message_created") {
       if (r.actor_id === actor.id || !r.message_id) continue;
       const m = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(r.message_id) as MessageRow | undefined;
-      const t = r.thread_id ? (ctx.db.prepare("SELECT id, title FROM threads WHERE id = ?").get(r.thread_id) as { id: string; title: string } | undefined) : undefined;
-      if (!m || !t || m.deleted_at) continue;
+      const t = r.thread_id ? (ctx.db.prepare("SELECT id, title, channel FROM threads WHERE id = ?").get(r.thread_id) as { id: string; title: string; channel: string } | undefined) : undefined;
+      if (!m || !t || m.deleted_at || !visible(t.channel)) continue;
       out.push({
         eventId: m.id,
         name,
@@ -152,7 +157,7 @@ export function occurrencesAfter(
     } else {
       if (r.actor_id === actor.id) continue;
       const row = r.thread_id ? (ctx.db.prepare("SELECT * FROM threads WHERE id = ?").get(r.thread_id) as ThreadRow | undefined) : undefined;
-      if (!row || row.kind !== "task") continue;
+      if (!row || row.kind !== "task" || !visible(row.channel)) continue;
       const thread = presentThreads(ctx, [row], actor.id)[0]!;
       if (args.state && thread.task?.state !== args.state) continue;
       if (args.labels && !labelsMatch(thread, args.labels)) continue;
@@ -341,7 +346,7 @@ export class EventSubscriptions {
   /** Starts the delivery worker; returns a stop function. */
   start(): () => void {
     this.unsub = this.ctx.hub.subscribe((e) => {
-      if (e.kind === "board" || e.kind === "inbox") this.trigger();
+      if (e.kind === "board" || e.kind === "inbox" || e.kind === "grants") this.trigger();
       if (e.kind === "access" && e.reason !== "role_changed") this.terminateFor(e.boardId, e.principalId, e.reason === "disabled" ? "principal_disabled" : "access_ended");
       if (e.kind === "board_deleted") for (const s of this.ctx.db.prepare("SELECT * FROM event_subscriptions WHERE board_id = ? AND status = 'active'").all(e.boardId) as SubRow[]) this.queueTerminated(s, "board_deleted");
     });

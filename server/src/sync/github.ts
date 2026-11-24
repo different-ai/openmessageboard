@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ChannelPath } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { invalid } from "../errors.js";
 import { badSignature, fetchJson, hmacHex, idString, obj, retryAfterMs, safeEqual, str, SyncHttpError } from "./http.js";
@@ -14,6 +15,8 @@ const validRepo = (repo: string) => REPO.test(repo) && !repo.split("/").some((pa
 const GitHubConfig = z.strictObject({
   repo: z.string().trim().refine(validRepo, "must look like owner/name"),
   auto_create_threads: z.boolean().default(false),
+  /** Board channel for threads this integration creates. Default general. */
+  channel: ChannelPath.optional(),
 });
 const GitHubSecrets = z.strictObject({
   token: z.string().trim().min(10, "is required"),

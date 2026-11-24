@@ -52,7 +52,15 @@ may hold (`block` without a token), `unblock`, `reopen`, `cancel`, `assign` and
 created, whatever its person's role. Any other contributor gets
 `task_not_owned` with `details.owner`.
 Readers get `forbidden` for every task write; a principal that cannot read the
-board gets `not_found`.
+board, or the task's channel, gets `not_found`.
+
+### Channels
+
+A task lives in its thread's channel ([03](03-conversation.md)). Claiming,
+`renew_task` and every `update_task` action need the `post` permission in that
+channel (otherwise `forbidden`). `start_thread` and `create_tasks` take
+`channel` (default `general`) and need `post` there. A principal a task is kept
+`for` must be able to read and post in its channel.
 
 ### Transitions
 
@@ -132,8 +140,10 @@ A claim is a lease: the task is the claimer's until `lease_until`.
   - `waiting` → `task_waiting`; `blocked` → `task_blocked` (`details.reason`,
     `details.kind`); finished → `task_finished` (`details.state`); kept `for`
     someone else → `task_assigned` (`details.for`).
-- `board_id` and optional `labels`: claim the next `ready` task on the board
-  whose labels include every given pair: first the tasks kept `for` the caller,
+- `board_id` and optional `channel` and `labels`: claim the next `ready` task
+  on the board, in a channel where the caller can post, in `channel` (an exact
+  channel, or a subtree ending in `/` such as `work/`) when given, whose labels
+  include every given pair: first the tasks kept `for` the caller,
   then tasks with no `for`, each oldest first (by `created_at`, then `id`).
   Tasks kept for someone else are skipped. If none matches,
   `no_task_available`.
@@ -141,8 +151,8 @@ A claim is a lease: the task is the claimer's until `lease_until`.
     task, a release, a completed prerequisite, an unblock or a lease running
     out) and returns `no_task_available` only when the time passes.
 
-Passing both or neither of `thread_id` and `board_id`, `labels` without
-`board_id`, or `wait_seconds` with `thread_id` is `invalid_argument`.
+Passing both or neither of `thread_id` and `board_id`, `labels` or `channel`
+without `board_id`, or `wait_seconds` with `thread_id` is `invalid_argument`.
 
 Claims MUST be atomic: the check of `state = ready` and the update to `claimed`
 happen in one transaction (a conditional update), so that when two principals
@@ -176,9 +186,12 @@ manager, while the task is unclaimed and open; it replaces the whole list, and
   needs are now all completed.
 - A failed or canceled prerequisite readies nothing; its dependents keep
   waiting. Reopening a failed prerequisite does not change them either.
-- A need that is not a task on the board (an unknown ID, a discussion, a task
-  on another board), the task itself, or needs that would make tasks wait for
-  each other fail with `invalid_needs` and change nothing. A task waits for at
+- A need that is not a task on the board the caller can read (an unknown ID, a
+  discussion, a task on another board or in a channel the caller can't read),
+  the task itself, or needs that would make tasks wait for each other fail with
+  `invalid_needs` and change nothing.
+- `TaskInfo.needs` shows a prerequisite in a channel the viewer can't read with
+  its `thread_id` and `state` and an empty `title`. A task waits for at
   most 20 tasks (more is `invalid_argument`).
 
 ## Kept for one principal
@@ -198,9 +211,9 @@ transaction; `message` is the task's root message. A claim never creates a
 
 ## Plans
 
-`create_tasks` creates 1–15 tasks on one board in one transaction: all of them,
-or none. Each task takes `title`, `body`, and optionally `key`, `labels`,
-`needs` and `for`.
+`create_tasks` creates 1–15 tasks in one channel of a board (`channel`, default
+`general`) in one transaction: all of them, or none. Each task takes `title`,
+`body`, and optionally `key`, `labels`, `needs` and `for`.
 
 - `key` names a task for the others in the same call; `needs` entries are
   either thread IDs of existing tasks on the board or `{"key": "…"}`.

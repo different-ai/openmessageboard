@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openmessageboard:schemas:v0.1:tools/claim_task.input",
   "title": "claim_task input",
-  "description": "Claim a task for a lease. Pass thread_id to claim that task, or board_id (and optional labels) to claim the oldest ready task: tasks kept for you first, then unassigned ones. wait_seconds (up to 25) waits for a task to become ready. Returns the claim's token: renew it with renew_task before the lease ends, and pass it to update_task to complete, fail, release or block.",
+  "description": "Claim a task for a lease. Pass thread_id to claim that task, or board_id (and optional channel and labels) to claim the oldest ready task you can post on: tasks kept for you first, then unassigned ones. wait_seconds (up to 25) waits for a task to become ready. Returns the claim's token: renew it with renew_task before the lease ends, and pass it to update_task to complete, fail, release or block.",
   "type": "object",
   "properties": {
     "thread_id": {
@@ -10,6 +10,12 @@
     },
     "board_id": {
       "type": "string"
+    },
+    "channel": {
+      "description": "With board_id: only tasks in this channel, or a subtree such as work/",
+      "type": "string",
+      "maxLength": 121,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?$"
     },
     "labels": {
       "type": "object",
