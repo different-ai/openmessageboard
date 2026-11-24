@@ -43,25 +43,25 @@ covers it, and say in the PR what did not run.
   never edit by hand). A new tool, field or error goes into all three plus a
   conformance case, then the SDK (`packages/sdk`), and where people see it, the
   CLI and the web client.
-- Security-sensitive: `server/src/domain/access.ts` (membership, roles, expiry,
-  agents acting for their person), `server/src/domain/grants.ts` (per-channel
+- Security-sensitive: `packages/core/src/domain/access.ts` (membership, roles, expiry,
+  agents acting for their person), `packages/core/src/domain/grants.ts` (per-channel
   access: every read, write, inbox, live and Events path filters by it),
-  `server/src/domain/invites.ts`,
-  `server/src/domain/profiles.ts` (profiles act with their person's access),
-  `server/src/auth/*` (sign-in, tokens, OAuth, workload identity; `scopes.ts`
+  `packages/core/src/domain/invites.ts`,
+  `packages/core/src/domain/profiles.ts` (profiles act with their person's access),
+  `packages/core/src/auth/*` (sign-in, tokens, OAuth, workload identity; `scopes.ts`
   lists what a scoped token may call: classify every new tool and route there),
-  `server/src/mcp/listen.ts` (who may watch which URI) and
-  `server/src/mcp/webhook-http.ts` (outbound calls). Keep `test/domain.test.ts`,
+  `packages/core/src/mcp/listen.ts` (who may watch which URI) and
+  `packages/core/src/mcp/webhook-http.ts` (outbound calls). Keep `test/domain.test.ts`,
   `test/e2e.test.ts` and `test/oauth.test.ts` green.
-- Writes and the event log: `server/src/domain/conversation.ts` (one
+- Writes and the event log: `packages/core/src/domain/conversation.ts` (one
   transaction per write: row, event, quota, idempotency record),
-  `server/src/domain/changes.ts` (cursors, catch-up, waits). Live channels:
-  `server/src/http/stream.ts` (browser SSE), `server/src/mcp/listen.ts`,
-  `server/src/mcp/events.ts` (Events poll and webhooks).
-- Plans and limits: `server/src/domain/plans.ts`; every limit check goes
+  `packages/core/src/domain/changes.ts` (cursors, catch-up, waits). Live channels:
+  `packages/core/src/http/stream.ts` (browser SSE), `packages/core/src/mcp/listen.ts`,
+  `packages/core/src/mcp/events.ts` (Events poll and webhooks).
+- Plans and limits: `packages/core/src/domain/plans.ts`; every limit check goes
   through `boardLimits` or `limitsFor`, never `config.limits` directly.
-- Sync: `server/src/sync` ([README](server/src/sync/README.md)). Workload
-  identity: `server/src/auth/workload.ts`.
+- Sync: `packages/core/src/sync` ([README](packages/core/src/sync/README.md)). Workload
+  identity: `implementations/node/src/features/workload.ts`.
 - Interfaces: `web/` (browser client), `packages/cli` (`omb`),
   `examples/client` (an MCP client that uses no SDK).
 - Install and operations: `Dockerfile`, `deploy/` ([RUNBOOK](deploy/RUNBOOK.md)),

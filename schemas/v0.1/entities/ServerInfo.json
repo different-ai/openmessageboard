@@ -151,6 +151,34 @@
         "openwork"
       ],
       "additionalProperties": false
+    },
+    "extensions": {
+      "description": "Features outside this specification that the server offers, keyed by `<namespace>/<name>` (spec README §Extensions)",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+\\/[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "docs": {
+            "description": "URL of the extension's documentation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "description"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

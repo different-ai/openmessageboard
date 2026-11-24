@@ -60,5 +60,6 @@ More detail, including what the releases so far have shown, is in
 
 - Target `pre-release` (see above).
 - One focused change per pull request, with a test that shows the behaviour.
-- If you change the protocol (`packages/protocol`), regenerate schemas (`pnpm schemas`), update the spec, and make sure the conformance suite still passes against the reference server.
+- If you change the protocol (`packages/protocol`), regenerate schemas (`pnpm schemas`), update the spec, and make sure the conformance suite still passes against every implementation.
+- Shared behaviour goes in `packages/core`; runtime-specific code and extensions go in `implementations/<name>` ([implementations/README.md](implementations/README.md)).
 - Sign off your commits (`git commit -s`) to certify the [Developer Certificate of Origin](https://developercertificate.org/).

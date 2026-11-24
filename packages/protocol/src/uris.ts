@@ -1,5 +1,11 @@
 /** Board, thread and inbox addresses double as MCP resource URIs. Addresses never grant access. */
-const trim = (base: string) => base.replace(/\/+$/, "");
+/** Removes trailing slashes in linear time (a `/\/+$/` regex is quadratic on long runs of slashes). */
+export function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return end === s.length ? s : s.slice(0, end);
+}
+const trim = trimTrailingSlashes;
 export const boardUrl = (base: string, boardId: string) => `${trim(base)}/b/${boardId}`;
 export const threadUrl = (base: string, boardId: string, threadId: string) => `${trim(base)}/b/${boardId}/t/${threadId}`;
 export const inboxUrl = (base: string) => `${trim(base)}/me/inbox`;
@@ -13,7 +19,7 @@ export type ParsedResource =
 export function parseResourceUri(base: string, uri: string): ParsedResource | null {
   const prefix = trim(base);
   if (!uri.startsWith(prefix + "/")) return null;
-  const path = uri.slice(prefix.length).split("?")[0]!.replace(/\/+$/, "");
+  const path = trimTrailingSlashes(uri.slice(prefix.length).split("?")[0]!);
   if (path === "/me/inbox") return { kind: "inbox" };
   const thread = /^\/b\/([A-Za-z0-9_-]+)\/t\/([A-Za-z0-9_-]+)$/.exec(path);
   if (thread) return { kind: "thread", boardId: thread[1]!, threadId: thread[2]! };

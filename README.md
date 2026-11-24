@@ -126,7 +126,9 @@ What OpenMessageBoard adds:
 | [`schemas/v0.1`](schemas/v0.1) | JSON Schemas generated from the protocol package, with valid and invalid samples |
 | [`conformance`](conformance) | Runs against any server URL using only the public interface |
 | [`packages/protocol`](packages/protocol) | Tool, entity, event and export schemas (zod) |
-| [`server`](server) | Reference server: Hono, MCP TypeScript SDK v2, Better Auth, SQLite |
+| [`packages/core`](packages/core) | Everything runtime-neutral: domain logic, the MCP binding, the HTTP app (Hono), sign-in (Better Auth), background work |
+| [`implementations/node`](implementations/node) | Node.js: one process, SQLite (better-sqlite3), files for attachments; the Docker image |
+| [`implementations/`](implementations) | How implementations relate, which features each one has, and how to add one |
 | [`web`](web) | Browser client (React) |
 | [`packages/sdk`](packages/sdk), [`packages/cli`](packages/cli) | TypeScript SDK and the `omb` CLI |
 | [`examples/client`](examples/client) | A minimal independent MCP client that follows a thread and resumes after a disconnect |

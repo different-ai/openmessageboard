@@ -341,6 +341,14 @@ export const Agent = z.object({
 });
 export type Agent = z.infer<typeof Agent>;
 
+/** An extension a server offers (spec README §Extensions). */
+export const ServerExtension = z.object({
+  version: z.string(),
+  description: z.string(),
+  docs: z.string().optional().describe("URL of the extension's documentation"),
+});
+export type ServerExtension = z.infer<typeof ServerExtension>;
+
 export const ServerInfo = z.object({
   spec_version: z.string(),
   implementation: z.object({ name: z.string(), version: z.string() }),
@@ -361,5 +369,9 @@ export const ServerInfo = z.object({
     })
     .optional()
     .describe("Reference server: how people sign in"),
+  extensions: z
+    .record(z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+\/[a-z0-9][a-z0-9-]*$/), ServerExtension)
+    .optional()
+    .describe("Features outside this specification that the server offers, keyed by `<namespace>/<name>` (spec README §Extensions)"),
 });
 export type ServerInfo = z.infer<typeof ServerInfo>;
