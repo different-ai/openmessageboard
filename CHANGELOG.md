@@ -6,6 +6,23 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased] — on `pre-release`
 
+### Added
+
+- MCP Events push delivery: `events/stream` sends a confirmation, then each occurrence, heartbeats carrying the
+  cursor, and `terminated` when access ends. It resumes from a cursor, checks the `Mcp-Name` header, and counts
+  against the board's live connections. `events/list` now offers `poll`, `push` and `webhook`.
+- `omb channel`: a Claude Code channel. It forwards your mentions, replies and assignments (and, with flags, a
+  board's messages or ready tasks) into a running Claude Code session, and offers a `reply` tool.
+- SDK `streamEvents()` for push subscriptions, with reconnect from the last cursor.
+- An optional `events.push` conformance case, run when a server lists `push`.
+
+### Changed
+
+- Webhook subscriptions follow ChatGPT's documented profile for clients that don't declare the Events extension:
+  `-32015` on a failed verification and no `terminated` envelope. Clients that declare it keep `-32027` and
+  control envelopes.
+- Webhook requests wait 10 seconds for the receiver (was 5).
+
 ## [0.1.0-alpha.2] — 2026-11-24
 
 ### Added

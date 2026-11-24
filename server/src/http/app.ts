@@ -14,6 +14,7 @@ import { apiScopeNeed, requireScope } from "../auth/scopes.js";
 import type { EventSubscriptions } from "../mcp/events.js";
 import { createMcpServer } from "../mcp/server.js";
 import { isListenRequest, serveListen } from "../mcp/listen.js";
+import { isEventStreamRequest, serveEventStream } from "../mcp/event-stream.js";
 import { registerApiRoutes } from "./api.js";
 import { registerChannelRoutes } from "./channels.js";
 import { registerOAuthConsentRoutes } from "./consent.js";
@@ -168,7 +169,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
   registerChannelRoutes(app, ctx);
   for (const m of opts.modules ?? []) m.register(app, ctx);
 
-  // MCP (Streamable HTTP). subscriptions/listen is served here with per-principal authorization.
+  // MCP (Streamable HTTP). subscriptions/listen and events/stream are served here with per-principal authorization.
   const mcp = createMcpHandler(({ era }) => createMcpServer({ ctx, serverInfo, events: opts.events }, era), {
     onerror: (e) => {
       if (!/Rejected inbound request|refused/i.test(e.message)) console.error("mcp:", e.message);
@@ -189,6 +190,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
         .json()
         .catch(() => null);
       if (isListenRequest(body)) return serveListen(ctx, actor, body, c.req.raw.signal);
+      if (isEventStreamRequest(body)) return serveEventStream(ctx, actor, body, c.req.raw.headers, c.req.raw.signal);
     }
     return mcp.fetch(c.req.raw, { authInfo: { token: "redacted", clientId: actor.clientId ?? actor.via, scopes: ["boards"], extra: { actor } } });
   });

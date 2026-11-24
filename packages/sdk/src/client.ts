@@ -25,6 +25,7 @@ import {
 import type { z } from "zod";
 import { staticToken, type TokenProvider } from "./auth.js";
 import { discoverServer, normalizeServer } from "./discovery.js";
+import { streamEvents, type EventStreamHandle, type StreamEventsOptions } from "./events.js";
 import { OmbError, errorFromBody, isOmbError, toOmbError } from "./errors.js";
 import { ClaimedTask, type PlanTask } from "./tasks.js";
 import { waitForChanges, type WaitForChangesOptions, type WaitResult } from "./wait.js";
@@ -212,6 +213,17 @@ export class OmbClient {
       throw toOmbError(err);
     });
     return client.getProtocolEra();
+  }
+
+  /**
+   * Subscribes to an MCP Events push stream (`events/stream`): `inbox.item_created`, `board.message_created` or
+   * `board.task_updated`. Reconnects with the last cursor until closed or until the server ends the subscription.
+   */
+  streamEvents(options: StreamEventsOptions): EventStreamHandle {
+    return streamEvents(
+      { mcpUrl: this.mcpUrl, server: this.server, tokenProvider: this.#tokenProvider, fetch: this.#fetch, profile: this.profile, clientInfo: this.#clientInfo },
+      options,
+    );
   }
 
   /** Closes the connection and every open listen stream. The client reconnects on the next call. */

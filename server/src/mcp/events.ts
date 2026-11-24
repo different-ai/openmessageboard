@@ -1,5 +1,5 @@
 import { timingSafeEqual, randomBytes } from "node:crypto";
-import { EVENT_DEFINITIONS, EVENT_NAMES, threadUrl, type EventName } from "@openmessageboard/protocol";
+import { EVENT_DEFINITIONS, EVENT_NAMES, EVENTS_EXTENSION_ID, threadUrl, type EventName } from "@openmessageboard/protocol";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { OmbError } from "../errors.js";
@@ -15,7 +15,26 @@ import { boardLimits, limitsFor } from "../domain/plans.js";
 import { AccessCache, ChannelAccess, channelMatches } from "../domain/grants.js";
 import { CallbackError, newWebhookId, postSigned, validateCallbackUrl, type CallbackPolicy } from "./webhook-http.js";
 
-export const EVENT_ERRORS = { NotFound: -32023, Forbidden: -32024, ResourceExhausted: -32025, Unsupported: -32026, CallbackEndpointError: -32027 } as const;
+export const EVENT_ERRORS = { NotFound: -32023, Forbidden: -32024, ResourceExhausted: -32025, Unsupported: -32026, CallbackEndpointError: -32027, HeaderMismatch: -32020 } as const;
+
+/** ChatGPT's documented code for a callback that failed verification (its profile predates `-32027`). */
+export const COMPAT_CALLBACK_ERROR = -32015;
+
+/** Webhook requests (verification and deliveries) wait this long for the receiver. */
+export const WEBHOOK_TIMEOUT_MS = 10_000;
+
+/**
+ * Which Events dialect a client speaks. A client that declares the extension in its per-request capabilities gets
+ * SEP-3415 behavior; any other webhook client gets ChatGPT's documented profile (`-32015`, no control envelopes),
+ * which is also what a 2025-era client that predates per-request capabilities can handle.
+ */
+export type EventsDialect = "standard" | "compat";
+
+export function eventsDialect(params: unknown): EventsDialect {
+  const meta = (params as { _meta?: Record<string, unknown> } | undefined)?._meta;
+  const caps = meta?.["io.modelcontextprotocol/clientCapabilities"] as { extensions?: Record<string, unknown> } | undefined;
+  return caps?.extensions && typeof caps.extensions === "object" && EVENTS_EXTENSION_ID in caps.extensions ? "standard" : "compat";
+}
 
 export class EventsError extends Error {
   constructor(public readonly code: number, message: string, public readonly data?: Record<string, unknown>) {
@@ -40,31 +59,31 @@ export function listEventDefinitions() {
     events: EVENT_NAMES.map((name) => ({
       name,
       description: EVENT_DEFINITIONS[name].description,
-      delivery: ["poll", "webhook"],
+      delivery: ["poll", "push", "webhook"],
       inputSchema: z.toJSONSchema(EVENT_DEFINITIONS[name].arguments),
       payloadSchema: z.toJSONSchema(EVENT_DEFINITIONS[name].payload),
     })),
   };
 }
 
-function parseArgs(name: string, args: unknown) {
+export function parseArgs(name: string, args: unknown) {
   if (!(EVENT_NAMES as string[]).includes(name)) throw new EventsError(EVENT_ERRORS.NotFound, `Unknown event ${name}`);
   const parsed = EVENT_DEFINITIONS[name as EventName].arguments.safeParse(args ?? {});
   if (!parsed.success) throw new EventsError(-32602, `Invalid arguments: ${parsed.error.issues[0]?.message ?? "invalid"}`);
   return parsed.data as { board_id?: string; thread_id?: string; channel?: string; labels?: Record<string, string>; state?: string };
 }
 
-function cursorScope(name: EventName, actor: Actor, args: { board_id?: string }): { kind: "b" | "i"; id: string } {
+export function cursorScope(name: EventName, actor: Actor, args: { board_id?: string }): { kind: "b" | "i"; id: string } {
   return name === "inbox.item_created" ? { kind: "i", id: actor.id } : { kind: "b", id: args.board_id! };
 }
 
-function currentSeq(ctx: AppContext, scope: { kind: "b" | "i"; id: string }): number {
+export function currentSeq(ctx: AppContext, scope: { kind: "b" | "i"; id: string }): number {
   return scope.kind === "i"
     ? (ctx.db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM inbox_items WHERE principal_id = ?").get(scope.id) as { s: number }).s
     : (ctx.db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM events").get() as { s: number }).s;
 }
 
-function authorize(ctx: AppContext, actor: Actor, name: EventName, args: { board_id?: string; thread_id?: string }) {
+export function authorize(ctx: AppContext, actor: Actor, name: EventName, args: { board_id?: string; thread_id?: string }) {
   try {
     if (args.board_id) requireMember(ctx, actor, args.board_id);
     if (args.thread_id) {
@@ -175,7 +194,7 @@ export function occurrencesAfter(
   return { events: out, lastSeq, hasMore: rows.length > scanned.length || out.length >= max };
 }
 
-function decodeEventCursor(ctx: AppContext, cursor: string | null | undefined, scope: { kind: "b" | "i"; id: string }): { seq: number; truncated: boolean } {
+export function decodeEventCursor(ctx: AppContext, cursor: string | null | undefined, scope: { kind: "b" | "i"; id: string }): { seq: number; truncated: boolean } {
   if (cursor === null || cursor === undefined) return { seq: currentSeq(ctx, scope), truncated: false };
   let s: number;
   try {
@@ -283,7 +302,8 @@ export class EventSubscriptions {
       }
     }
     const id = existing?.id ?? newId("sub");
-    await this.verifyEndpoint(actor, url, p.data.delivery.secret, id);
+    const dialect = eventsDialect(raw);
+    await this.verifyEndpoint(actor, url, p.data.delivery.secret, id, dialect);
     const scope = cursorScope(name, actor, args);
     const { seq, truncated } = decodeEventCursor(ctx, p.data.cursor, scope);
     const ttl = p.data.ttlMs === null ? MAX_TTL_MS : Math.min(p.data.ttlMs ?? DEFAULT_TTL_MS, MAX_TTL_MS);
@@ -291,12 +311,12 @@ export class EventSubscriptions {
     const now = nowIso(ctx);
     ctx.db
       .prepare(
-        `INSERT INTO event_subscriptions (id, principal_id, board_id, name, arguments, args_key, url, secret_enc, cursor_seq, expires_at, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        `INSERT INTO event_subscriptions (id, principal_id, board_id, name, arguments, args_key, url, secret_enc, cursor_seq, expires_at, status, dialect, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
          ON CONFLICT(principal_id, url, name, args_key) DO UPDATE SET secret_enc = excluded.secret_enc, cursor_seq = excluded.cursor_seq,
-           expires_at = excluded.expires_at, status = 'active', terminated_reason = NULL, updated_at = excluded.updated_at`,
+           expires_at = excluded.expires_at, status = 'active', terminated_reason = NULL, dialect = excluded.dialect, updated_at = excluded.updated_at`,
       )
-      .run(id, actor.id, args.board_id ?? null, name, JSON.stringify(args), key, url.href, encrypt(ctx.config.secret, p.data.delivery.secret), seq, refreshBefore, now, now);
+      .run(id, actor.id, args.board_id ?? null, name, JSON.stringify(args), key, url.href, encrypt(ctx.config.secret, p.data.delivery.secret), seq, refreshBefore, dialect, now, now);
     this.trigger();
     return { id, refreshBefore, cursor: encodeCursor(scope.kind, scope.id, seq), truncated };
   }
@@ -316,16 +336,17 @@ export class EventSubscriptions {
     return {};
   }
 
-  private async verifyEndpoint(actor: Actor, url: URL, secret: string, subscriptionId: string): Promise<void> {
+  private async verifyEndpoint(actor: Actor, url: URL, secret: string, subscriptionId: string, dialect: EventsDialect): Promise<void> {
+    const callbackError = dialect === "standard" ? EVENT_ERRORS.CallbackEndpointError : COMPAT_CALLBACK_ERROR;
     const cached = this.ctx.db.prepare("SELECT verified_at FROM webhook_verifications WHERE principal_id = ? AND url = ?").get(actor.id, url.href) as { verified_at: string } | undefined;
     if (cached && this.ctx.now().getTime() - Date.parse(cached.verified_at) < VERIFY_CACHE_MS) return;
     const challenge = randomBytes(24).toString("base64url");
     let res;
     try {
-      res = await postSigned(url, JSON.stringify({ type: "verification", challenge }), { webhookId: newWebhookId(), secret, subscriptionId }, this.policy);
+      res = await postSigned(url, JSON.stringify({ type: "verification", challenge }), { webhookId: newWebhookId(), secret, subscriptionId }, this.policy, WEBHOOK_TIMEOUT_MS);
     } catch (e) {
       const reason = e instanceof CallbackError ? e.reason : "unreachable";
-      throw new EventsError(EVENT_ERRORS.CallbackEndpointError, "The callback endpoint could not be verified", { reason });
+      throw new EventsError(callbackError, "The callback endpoint could not be verified", { reason });
     }
     let echoed = "";
     try {
@@ -336,7 +357,7 @@ export class EventSubscriptions {
     const a = Buffer.from(echoed);
     const b = Buffer.from(challenge);
     if (res.status < 200 || res.status >= 300 || a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new EventsError(EVENT_ERRORS.CallbackEndpointError, "The callback endpoint did not echo the verification challenge", { reason: "challenge_failed" });
+      throw new EventsError(callbackError, "The callback endpoint did not echo the verification challenge", { reason: "challenge_failed" });
     }
     this.ctx.db
       .prepare("INSERT INTO webhook_verifications (principal_id, url, verified_at) VALUES (?, ?, ?) ON CONFLICT(principal_id, url) DO UPDATE SET verified_at = excluded.verified_at")
@@ -371,6 +392,8 @@ export class EventSubscriptions {
   private queueTerminated(s: SubRow, reason: string): void {
     const now = nowIso(this.ctx);
     this.ctx.db.prepare("UPDATE event_subscriptions SET status = 'terminated', terminated_reason = ?, updated_at = ? WHERE id = ?").run(reason, now, s.id);
+    // ChatGPT's profile has no control envelopes: its subscription just stops receiving events.
+    if (s.dialect === "compat") return;
     const payload = JSON.stringify({ type: "terminated", error: { code: EVENT_ERRORS.Forbidden, message: "Forbidden", data: { reason } } });
     this.ctx.db
       .prepare("INSERT OR IGNORE INTO webhook_deliveries (id, subscription_id, webhook_id, event_id, payload, next_attempt_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)")
@@ -439,7 +462,13 @@ export class EventSubscriptions {
         let status: "delivered" | "failed" | "pending" = "pending";
         let error: string | null = null;
         try {
-          const res = await postSigned(new URL(d.url), d.payload, { webhookId: d.webhook_id, secret: decrypt(ctx.config.secret, d.secret_enc), subscriptionId: d.subscription_id }, this.policy);
+          const res = await postSigned(
+            new URL(d.url),
+            d.payload,
+            { webhookId: d.webhook_id, secret: decrypt(ctx.config.secret, d.secret_enc), subscriptionId: d.subscription_id },
+            this.policy,
+            WEBHOOK_TIMEOUT_MS,
+          );
           if (res.status >= 200 && res.status < 300) status = "delivered";
           else if (res.status === 410 || res.status === 413) {
             status = "failed";
@@ -472,6 +501,7 @@ interface SubRow {
   cursor_seq: number;
   expires_at: string | null;
   status: string;
+  dialect: EventsDialect;
 }
 
 interface DeliveryRow {

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { runChannel, type ChannelSubscription } from "./channel.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { EVENT_TYPES, MESSAGE_SOURCES, type EventType, type GrantPrincipal, type MessageSourceName } from "@openmessageboard/protocol";
@@ -1000,6 +1001,31 @@ async function grantsExplain(ctx: Context, args: string[], values: Values): Prom
   ctx.out(formatAccess(res));
 }
 
+async function channel(ctx: Context, args: string[], values: Values): Promise<number> {
+  if (args.length) throw new UsageError("Usage: omb channel [--board <id> ...] [--messages] [--tasks [--channel <c>] [--label k=v ...]]");
+  const boards = (Array.isArray(values.board) ? values.board : typeof values.board === "string" ? [values.board] : []).map(boardIdFrom);
+  if ((flag(values, "messages") || flag(values, "tasks")) && boards.length === 0) throw new UsageError("--messages and --tasks need --board <id>");
+  if ((str(values, "channel") || labelsOf(values)) && !flag(values, "tasks")) throw new UsageError("--channel and --label narrow --tasks");
+  const subscriptions: ChannelSubscription[] = [];
+  if (boards.length === 0) subscriptions.push({ name: "inbox.item_created", arguments: {} });
+  for (const board_id of boards) {
+    subscriptions.push({ name: "inbox.item_created", arguments: { board_id } });
+    if (flag(values, "messages")) subscriptions.push({ name: "board.message_created", arguments: { board_id } });
+    if (flag(values, "tasks")) {
+      const labels = labelsOf(values);
+      const channelName = str(values, "channel");
+      subscriptions.push({ name: "board.task_updated", arguments: { board_id, state: "ready", ...(channelName ? { channel: channelName } : {}), ...(labels ? { labels } : {}) } });
+    }
+  }
+  const heartbeat = Number(ctx.io.env.OMB_CHANNEL_HEARTBEAT_MS);
+  const { signal, dispose } = interruptSignal(ctx);
+  try {
+    return await runChannel({ client: ctx.client(), io: ctx.io, version: CLI_VERSION, subscriptions, signal, ...(heartbeat > 0 ? { heartbeatMs: heartbeat } : {}) });
+  } finally {
+    dispose();
+  }
+}
+
 export const RUNNERS: Record<string, Run> = {
   login,
   whoami,
@@ -1025,6 +1051,7 @@ export const RUNNERS: Record<string, Run> = {
   wait,
   tail,
   inbox,
+  channel,
   ...TASK_RUNNERS,
   label,
   invite,

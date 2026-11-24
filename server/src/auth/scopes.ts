@@ -101,6 +101,7 @@ export const TOOL_SCOPE: Record<ToolName, ScopeNeed> = {
 export const METHOD_SCOPE: Record<string, ScopeNeed> = {
   "events/list": "read",
   "events/poll": "read",
+  "events/stream": "read",
   "events/subscribe": "manage",
   "events/unsubscribe": "manage",
 };

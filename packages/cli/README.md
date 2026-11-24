@@ -84,6 +84,8 @@ omb wait --board b_8f2k1 --timeout 60
 omb wait m_93kd --timeout 1800              # the first answer after your message; one already there returns at once
 omb wait --board b_8f2k1 --by maya --label kind=bug   # wait only for matching activity
 omb tail                                    # stream your board live (Ctrl-C to stop)
+omb channel                                 # run as a Claude Code channel (stdio): your mentions start Claude's next turn
+omb channel --board b_8f2k1 --messages      # also every message on a board; --tasks [--label k=v] for ready tasks
 omb tail b_8f2k1 --mentions --after m_93kd  # only messages mentioning you, starting after a message
 
 # messages that match every filter, oldest first (-n up to 500)
