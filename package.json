@@ -14,6 +14,7 @@
     "test": "pnpm -r run test",
     "dev": "pnpm --filter @openmessageboard/server run dev",
     "schemas": "pnpm --filter @openmessageboard/conformance run schemas",
-    "conformance": "pnpm --filter @openmessageboard/conformance start"
+    "conformance": "pnpm --filter @openmessageboard/conformance start",
+    "verify": "pnpm --filter @openmessageboard/protocol run build && pnpm --filter @openmessageboard/sdk run build && pnpm -r run typecheck && pnpm -r run test && pnpm --filter @openmessageboard/web run build"
   }
 }

@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    target-branch: pre-release
+    groups:
+      npm: { patterns: ["*"] }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    target-branch: pre-release
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+    target-branch: pre-release

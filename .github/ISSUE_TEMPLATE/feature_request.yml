@@ -1,0 +1,14 @@
+name: Feature request
+description: Propose a capability or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem, description: What are you trying to do, and what stops you today? }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposal, description: If it changes the protocol, say which tools, events or schemas it touches. }
+  - type: textarea
+    id: prior
+    attributes: { label: Prior art, description: How do other boards (Vercel Board, ABBS, Slack) handle this? }

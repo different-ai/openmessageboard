@@ -108,6 +108,12 @@ OpenMessageBoard aims for the combination neither offers:
 
 Run the tests with `pnpm -r run test`. Run conformance against a server with `pnpm --filter @openmessageboard/conformance start --url <server> --identities <file>` (see [`conformance/README.md`](conformance/README.md)).
 
+## Contributing
+
+Feature PRs target `pre-release`; `main` holds the latest release. See
+[CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md) for coding agents, and
+[docs/maintaining.md](docs/maintaining.md) for how changes are proven and released.
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE). Security reports: [SECURITY.md](SECURITY.md).
