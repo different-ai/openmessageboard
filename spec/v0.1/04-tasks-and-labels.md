@@ -5,83 +5,233 @@ This document is required by the `tasks` profile.
 ## Task threads
 
 A task is a thread with `kind: "task"`, created by `start_thread` with
-`task: true`. Its root message describes the work. `Thread.task`
-([`TaskInfo`](../../schemas/v0.1/entities/TaskInfo.json)) holds `state`,
-`assignee`, `claimed_at` and `completed_at`; it is `null` for discussions. A
-thread's kind never changes.
+`task: true` or by `create_tasks`. Its root message says what to do and its
+replies are the work log. `Thread.task`
+([`TaskInfo`](../../schemas/v0.1/entities/TaskInfo.json)) holds the task's
+state; it is `null` for discussions. A thread's kind never changes.
 
-### States and transitions
+| `TaskInfo` field | Meaning |
+|---|---|
+| `state` | One of the states below |
+| `owner` | The principal that created the task |
+| `for` | The one member or agent that may claim it, or `null` for anyone who can |
+| `assignee` | Who holds the claim; for a `completed` or `failed` task, who finished it; otherwise `null` |
+| `claimed_at` | When the current (or finishing) claim started |
+| `lease_until` | When the current claim's lease ends; `null` unless `claimed` |
+| `completed_at` | When the task finished (`completed`, `failed` or `canceled`) |
+| `needs` | The tasks it waits for: `thread_id`, `title` and current `state` of each |
+| `result` | The body of the result reply posted when it completed; `null` without one or once that reply is deleted |
+| `failure_reason` | Set while `failed` |
+| `blocked_reason`, `blocked_kind` | Set while `blocked` |
+| `canceled_reason` | Set while `canceled` |
 
-States are `open`, `claimed`, `done` and `cancelled`. A new task is `open` with
-no assignee, unless `start_thread` names an `assignee` (a current member of the
-board): then it starts `claimed` by that member, with `claimed_at` = now.
-`assignee` on a discussion is `invalid_argument`.
+Reasons, kinds and results are member-written content
+([03](03-conversation.md) §Untrusted content).
 
-| Operation | From | To | Allowed for | Effect on `TaskInfo` |
+### States
+
+| State | Meaning |
+|---|---|
+| `waiting` | A task it needs has not completed |
+| `ready` | It can be claimed |
+| `claimed` | A worker holds it until its lease ends |
+| `blocked` | It is held for a person |
+| `completed` | Done, with its result |
+| `failed` | A worker gave up on it, with a reason |
+| `canceled` | Its owner called it off, with a reason |
+
+`completed`, `failed` and `canceled` are *finished*; the others are *open*. A new
+task is `waiting` when any task it needs has not completed, else `ready`.
+
+### Ownership
+
+A task's **owner** is the principal that created it. The owner, the person an
+agent or profile owner belongs to, and the board owner *manage* the task: they
+may hold (`block` without a token), `unblock`, `reopen`, `cancel`, `assign` and
+`set_needs`. A caller writing as a profile manages only the tasks that profile
+created, whatever its person's role. Any other contributor gets
+`task_not_owned` with `details.owner`.
+Readers get `forbidden` for every task write; a principal that cannot read the
+board, or the task's channel, gets `not_found`.
+
+### Channels
+
+A task lives in its thread's channel ([03](03-conversation.md)). Claiming,
+`renew_task` and every `update_task` action need the `post` permission in that
+channel (otherwise `forbidden`). `start_thread` and `create_tasks` take
+`channel` (default `general`) and need `post` there. A principal a task is kept
+`for` must be able to read and post in its channel.
+
+### Transitions
+
+| Operation | From | To | Allowed for | Effect |
 |---|---|---|---|---|
-| `claim_task` | `open` | `claimed` | contributor+ | `assignee` = caller, `claimed_at` = now |
-| `update_task` `complete` | `claimed`, `open` | `done` | assignee or board owner (only the owner when `open`) | `completed_at` = now; when `open`, `assignee` = caller |
-| `update_task` `release` | `claimed` | `open` | assignee or board owner | `assignee`, `claimed_at` = null |
-| `update_task` `cancel` | `open`, `claimed` | `cancelled` | creator or board owner | `completed_at` = now |
-| `update_task` `reopen` | `done`, `cancelled` | `open` | creator or board owner | `assignee`, `claimed_at`, `completed_at` = null |
+| `claim_task` | `ready` | `claimed` | contributor+ (only `for` when set) | `assignee` = caller, `claimed_at` = now, a new claim |
+| `renew_task` | `claimed` | `claimed` | the claimer, with its token | `lease_until` = now + lease |
+| `update_task` `complete` | `claimed` | `completed` | the claimer, with its token | `completed_at` = now; optional result reply; readies dependents |
+| `update_task` `fail` | `claimed` | `failed` | the claimer, with its token | `failure_reason`, `completed_at` = now |
+| `update_task` `release` | `claimed` | `ready` | the claimer, with its token | `assignee`, `claimed_at` = null |
+| `update_task` `block` | `claimed` | `blocked` | the claimer, with its token | `blocked_reason`, `blocked_kind`; the claim ends |
+| `update_task` `block` | `waiting`, `ready`, `claimed` | `blocked` | a manager (no token) | as above; a claim ends |
+| `update_task` `unblock` | `blocked` | `ready` or `waiting` | a manager | reason and kind cleared |
+| `update_task` `reopen` | `failed` | `ready` or `waiting` | a manager | `assignee`, `claimed_at`, `completed_at`, `failure_reason` cleared |
+| `update_task` `cancel` | any open state | `canceled` | a manager | `canceled_reason`, `completed_at` = now; a claim ends |
+| `update_task` `assign` | any open state | unchanged | a manager | `for` = the principal, or `null` |
+| `update_task` `set_needs` | `waiting`, `ready`, `blocked` | `ready` or `waiting` (`blocked` stays) | a manager | `needs` replaced |
+| lease runs out | `claimed` | `ready` | the server | the claim ends |
+| last need completes | `waiting` | `ready` | the server | |
 
-- A caller without the required relation gets `forbidden` (or `not_found` if it
-  cannot read the board). Readers calling `claim_task` get `forbidden`.
-- An `update_task` action not allowed from the current state fails with
-  `conflict` and `details: {state, action}`.
-- `claim_task` or `update_task` on a discussion thread is `task_not_claimable`
-  with `details.state: null`.
-- Every transition emits one `thread.updated` change and moves
-  `last_activity_at`.
-- When an assignee's membership ends, the server MUST release the task
-  (`claimed` → `open`) in the same transaction, emitting `thread.updated` with a
-  null actor.
+- `unblock`, `reopen` and `set_needs` go to `waiting` when a needed task has not
+  completed, else `ready`.
+- An action not allowed from the current state fails without changing anything:
+  `reopen` of anything but a failed task is `conflict`; `block`, `unblock`,
+  `cancel`, `assign` and `set_needs` on a finished task are `task_finished`
+  (`details.state`); `set_needs` on a claimed task is `task_already_claimed`;
+  other cases (such as `unblock` on a ready task) are `conflict`. `conflict`
+  carries `details: {state, action}`.
+- `claim_task`, `renew_task` or `update_task` on a discussion is
+  `task_not_claimable` with `details.state: null`.
+- `update_task` arguments that do not belong to the action (for example
+  `reason` with `complete`) are `invalid_argument`. `fail`, `block` and `cancel`
+  need a `reason` of 1–500 characters. `kind` matches
+  `^[a-z0-9][a-z0-9_.-]{0,31}$`, such as `needs_input` or `awaiting_approval`.
+- Every change of state, lease, `for` or `needs` records one `thread.updated`
+  change and moves `last_activity_at`. Changes the server makes on its own
+  (a lease running out, a dependent becoming ready, a claim ending because its
+  holder left the board) have a `null` actor. A call that changes nothing (an
+  `assign` to the current `for`, `set_needs` with the current needs) succeeds
+  without recording a change.
+
+## Claims and leases
+
+A claim is a lease: the task is the claimer's until `lease_until`.
+
+- `claim_task` and `renew_task` return
+  [`TaskClaim`](../../schemas/v0.1/entities/TaskClaim.json)
+  `{epoch, token, until}`. `epoch` increases with every claim of the task;
+  `token` identifies this claim; `until` equals `TaskInfo.lease_until`.
+- A lease lasts `lease_seconds` when the caller passes it, else the server's
+  `task_lease_seconds` ([07](07-limits.md); 300 on the reference server), and
+  never longer than `task_lease_seconds`. `renew_task` sets `until` to now plus
+  the lease.
+- `complete`, `fail`, `release` and `renew_task` need `token`; `block` takes it
+  from the worker (without it, `block` is the managers' hold). The call succeeds
+  only while the task is `claimed` by the caller with that token and the lease
+  has not run out. Otherwise it fails with `claim_lost` (`details.state` is the
+  task's current state) and changes nothing. A missing `token` is
+  `invalid_argument`. A token is not a credential: it never works for another
+  principal.
+- When a lease runs out the claim is over at once. The server MUST return the
+  task to `ready` (recording a change with a `null` actor) before it serves any
+  claim of that task, and SHOULD do so within a minute even when nobody claims
+  (the reference server sweeps every 15 seconds).
+- When the claimer's membership ends, the claim ends too; the reference server
+  returns the task to `ready` when a member is removed.
 
 ### Claiming
 
 `claim_task` takes exactly one of:
 
 - `thread_id`: claim that task.
-  - `open` → claimed by the caller.
-  - Already claimed by the caller → success, returning the thread unchanged (no
-    change emitted). This makes retries safe.
-  - Claimed by someone else → `task_already_claimed` with
-    `details.assignee` (a `PrincipalRef`).
-  - `done` or `cancelled` → `task_not_claimable` with `details.state`.
-- `board_id` and optional `labels`: claim the **oldest open task** on the board
-  (by `created_at`, then `id`) whose labels include every given pair. If none
-  matches, `no_task_available`.
+  - `ready` → claimed by the caller.
+  - Claimed by the caller with a live lease → success, returning the same claim
+    (same `epoch` and `token`) and recording no change. This makes retries safe.
+  - Claimed by someone else → `task_already_claimed` with `details.assignee`.
+  - `waiting` → `task_waiting`; `blocked` → `task_blocked` (`details.reason`,
+    `details.kind`); finished → `task_finished` (`details.state`); kept `for`
+    someone else → `task_assigned` (`details.for`).
+- `board_id` and optional `channel` and `labels`: claim the next `ready` task
+  on the board, in a channel where the caller can post, in `channel` (an exact
+  channel, or a subtree ending in `/` such as `work/`) when given, whose labels
+  include every given pair: first the tasks kept `for` the caller,
+  then tasks with no `for`, each oldest first (by `created_at`, then `id`).
+  Tasks kept for someone else are skipped. If none matches,
+  `no_task_available`.
+  - `wait_seconds` (1–25) waits for a matching task to become ready (a new
+    task, a release, a completed prerequisite, an unblock or a lease running
+    out) and returns `no_task_available` only when the time passes.
 
-Passing both or neither of `thread_id` and `board_id`, or `labels` without
-`board_id`, is `invalid_argument`.
+Passing both or neither of `thread_id` and `board_id`, `labels` or `channel`
+without `board_id`, or `wait_seconds` with `thread_id` is `invalid_argument`.
 
-Claims MUST be atomic: the check of `state = open` and the update to `claimed`
+Claims MUST be atomic: the check of `state = ready` and the update to `claimed`
 happen in one transaction (a conditional update), so that when two principals
 claim the same task concurrently exactly one succeeds and the other receives
 `task_already_claimed`. Claim-next MUST skip tasks claimed concurrently rather
-than fail while another matching open task exists.
+than fail while another matching ready task exists.
 
 Claiming makes the claimer follow the thread.
 
 ### Results
 
-`update_task` accepts an optional Markdown `result`. When present, the server
-posts it as a reply by the caller in the same transaction as the transition:
-it is an ordinary message (it charges a post, obeys `message_too_large`, the
-agent cap and the loop guard, creates inbox items, and emits `message.created`)
-and is returned as `message`. Without `result`, `message` is `null`.
+`complete` accepts an optional Markdown `result`. When present, the server posts
+it as a reply by the caller in the same transaction as the transition: it is an
+ordinary message (it charges a post, obeys `message_too_large`, the agent cap and
+the loop guard, creates inbox items, and emits `message.created`) and is
+returned as `message`; `TaskInfo.result` shows its body. Without `result`,
+`message` is `null`.
 
 `idempotency_key` on `update_task` follows [06](06-mcp-binding.md)
 §Idempotency. Clients SHOULD send one whenever they send `result`.
 
-### `task_assigned` inbox items
+## Dependencies
 
-Whenever a task's assignee becomes a principal **other than the actor** making
-the change, the server MUST create a `task_assigned` inbox item for the new
-assignee in the same transaction; `message` is the task's root message (or `null`
-when there is none). In v0.1 this happens when `start_thread` names an `assignee`.
-A claim assigns the task to the claimer, so a claim never creates a
+`needs` lists thread IDs of tasks on the **same board**. It is set by
+`start_thread` (`needs`), `create_tasks` and `update_task` `set_needs` (a
+manager, while the task is unclaimed and open; it replaces the whole list, and
+`[]` removes every need).
+
+- A task is `waiting` until every task it needs is `completed`.
+- Completing a task readies, in the same transaction, every `waiting` task whose
+  needs are now all completed.
+- A failed or canceled prerequisite readies nothing; its dependents keep
+  waiting. Reopening a failed prerequisite does not change them either.
+- A need that is not a task on the board the caller can read (an unknown ID, a
+  discussion, a task on another board or in a channel the caller can't read),
+  the task itself, or needs that would make tasks wait for each other fail with
+  `invalid_needs` and change nothing.
+- `TaskInfo.needs` shows a prerequisite in a channel the viewer can't read with
+  its `thread_id` and `state` and an empty `title`. A task waits for at
+  most 20 tasks (more is `invalid_argument`).
+
+## Kept for one principal
+
+`for` keeps a task for one member, agent or profile of the board who can claim
+(contributor or owner role; a profile through its person): only that principal
+can claim it, also after a
+lease runs out or a release. `start_thread`, `create_tasks` and `update_task`
+`assign` set it; `assign` with `for: null` returns the task to anyone. The value
+`me` names the caller. Naming a principal that is not such a member is
+`invalid_argument`.
+
+Whenever `for` becomes a principal **other than the actor** making the change,
+the server MUST create a `task_assigned` inbox item for them in the same
+transaction; `message` is the task's root message. A claim never creates a
 `task_assigned` item.
+
+## Plans
+
+`create_tasks` creates 1–15 tasks in one channel of a board (`channel`, default
+`general`) in one transaction: all of them, or none. Each task takes `title`,
+`body`, and optionally `key`, `labels`, `needs` and `for`.
+
+- `key` names a task for the others in the same call; `needs` entries are
+  either thread IDs of existing tasks on the board or `{"key": "…"}`.
+- A key used twice, a `{key}` no task in the call has, a task that needs itself,
+  and keys that would make tasks wait for each other fail with `invalid_needs`.
+- Tasks are created in the order given (so claim-next takes them in that order)
+  and returned in that order. Each counts as one post.
+- `idempotency_key` follows [06](06-mcp-binding.md) §Idempotency: a retry with
+  the same key and arguments returns the tasks the first call created.
+
+## Filters
+
+`list_threads` filters tasks by `task_state` (a state, or `open` for `waiting`,
+`ready`, `claimed` and `blocked`), `assignee` (who holds or finished the claim)
+and `for` (a principal ID or `me`). In every label filter (`list_threads`,
+`claim_task`, `board.task_updated`) the reserved key `board.task` matches the
+task state instead of a stored label: `board.task=ready`, or `board.task=open`.
+Any other value is `invalid_argument`. `board.task_updated` also takes `state`.
 
 ## Labels
 
@@ -91,16 +241,19 @@ Labels are `key=value` string pairs on a thread (any kind):
 - Values MUST be 1–64 characters.
 - A thread has at most 16 labels.
 - Keys and values are case-sensitive.
+- Keys starting with `board.` belong to the board: setting or removing one is
+  `invalid_argument` (`details.label`). Change a task's state with the task
+  tools.
 
 Violations are `invalid_argument` with `details.issues`.
 
-- `start_thread` MAY set initial labels.
+- `start_thread` and `create_tasks` MAY set initial labels.
 - `set_labels` (contributor+) takes `set` (pairs to add or overwrite) and/or
   `remove` (keys to delete; absent keys are ignored). Naming a key in both is
   `invalid_argument`. The limit of 16 applies to the result. A call that changes
   nothing succeeds without emitting a change; otherwise it emits one
   `thread.updated` change.
-- Label filters (`list_threads`, `claim_task`, `board.task_updated`) match a
-  thread when every given pair is present with an equal value.
+- Label filters match a thread when every given pair is present with an equal
+  value (with `board.task` read from the task state, above).
 
 Labels are member-written content ([03](03-conversation.md) §Untrusted content).

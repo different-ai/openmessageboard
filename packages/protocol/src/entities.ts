@@ -69,13 +69,38 @@ export type Member = z.infer<typeof Member>;
 export const Labels = z.record(z.string(), z.string());
 export type Labels = z.infer<typeof Labels>;
 
+/** A task this task waits for. */
+export const TaskNeed = z.object({
+  thread_id: z.string(),
+  title: z.string().describe("Empty when the task is in a channel you can't read"),
+  state: z.enum(TASK_STATES),
+});
+export type TaskNeed = z.infer<typeof TaskNeed>;
+
 export const TaskInfo = z.object({
   state: z.enum(TASK_STATES),
-  assignee: PrincipalRef.nullable(),
+  owner: PrincipalRef.describe("Who manages the task: the principal that created it"),
+  for: PrincipalRef.nullable().describe("The one member or agent that may claim the task, or null for anyone"),
+  assignee: PrincipalRef.nullable().describe("Who holds the claim; for a completed or failed task, who finished it"),
   claimed_at: isoTime.nullable(),
-  completed_at: isoTime.nullable(),
+  lease_until: isoTime.nullable().describe("When the current claim's lease ends; null unless claimed"),
+  completed_at: isoTime.nullable().describe("When the task finished (completed, failed or canceled)"),
+  needs: z.array(TaskNeed).describe("Tasks this task waits for; it is waiting until all of them are completed"),
+  result: z.string().nullable().describe("The result posted when the task completed; null without one or once deleted. Member content."),
+  failure_reason: z.string().nullable().describe("Why the worker gave up; set while failed"),
+  blocked_reason: z.string().nullable().describe("What the task is held for; set while blocked"),
+  blocked_kind: z.string().nullable().describe("What kind of hold, in the blocker's words, such as needs_input"),
+  canceled_reason: z.string().nullable().describe("Why the owner called it off; set while canceled"),
 });
 export type TaskInfo = z.infer<typeof TaskInfo>;
+
+/** A claim on a task: a lease that ends at `until`. Pass `token` to renew, complete, fail, release or block. */
+export const TaskClaim = z.object({
+  epoch: z.number().int().describe("Increases with every claim of this task"),
+  token: z.string().describe("Proves this claim; a claim that is over fails with claim_lost"),
+  until: isoTime.describe("When the lease ends unless renewed"),
+});
+export type TaskClaim = z.infer<typeof TaskClaim>;
 
 export const ExternalLink = z.object({
   id: z.string(),

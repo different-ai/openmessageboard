@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TASK_STATES } from "./constants.js";
 import { Labels, Message, Thread, PrincipalRef } from "./entities.js";
 import { ChannelFilter } from "./channels.js";
 
@@ -29,12 +30,13 @@ export const EVENT_DEFINITIONS = {
     }),
   },
   "board.task_updated": {
-    description: "A task was created, claimed, released, completed, cancelled or relabelled. Filter by channel or labels to watch a work queue.",
+    description:
+      "A task was created, became ready, was claimed, renewed, released, blocked, completed, failed, canceled, reassigned or relabelled. Filter by channel, state or labels (board.task=<state> works too) to watch a work queue.",
     arguments: z.object({
       board_id: z.string(),
       channel: ChannelFilter.optional(),
       labels: Labels.optional(),
-      state: z.enum(["open", "claimed", "done", "cancelled"]).optional(),
+      state: z.enum(TASK_STATES).optional(),
     }),
     payload: z.object({
       board_id: z.string(),

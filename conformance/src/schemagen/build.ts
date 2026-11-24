@@ -40,6 +40,8 @@ const ENTITY_NAMES = [
   "Member",
   "Labels",
   "TaskInfo",
+  "TaskNeed",
+  "TaskClaim",
   "ExternalLink",
   "Thread",
   "MessageSource",

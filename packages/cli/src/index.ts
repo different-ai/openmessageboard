@@ -10,5 +10,9 @@ const code = await main(process.argv.slice(2), {
     process.on("SIGINT", handler);
     return () => process.off("SIGINT", handler);
   },
+  onSignal: (signal, handler) => {
+    process.on(signal, handler);
+    return () => process.off(signal, handler);
+  },
 });
 process.exitCode = code;

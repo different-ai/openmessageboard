@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { MAX_IDEMPOTENCY_KEY, MAX_TITLE_CHARS, MAX_MENTIONS, SYNC_PLATFORMS, TASK_ACTIONS, ROLES, MAX_TOKEN_BOARDS, TOKEN_PERMISSIONS } from "./constants.js";
+import { MAX_IDEMPOTENCY_KEY, MAX_TITLE_CHARS, MAX_MENTIONS, SYNC_PLATFORMS, ROLES, MAX_TOKEN_BOARDS, TOKEN_PERMISSIONS } from "./constants.js";
 import { Labels, BoardSettings, TokenScope } from "./entities.js";
+import { TOOLS } from "./tools.js";
 import { ChannelPath, GrantCanInput, GrantPrincipal, MAX_GRANT_PRINCIPALS } from "./channels.js";
 
 /**
@@ -25,7 +26,9 @@ export const API_ROUTES = {
   follow: "PUT /api/threads/:threadId/follow",
   labels: "POST /api/threads/:threadId/labels",
   updateTask: "POST /api/threads/:threadId/task",
+  renewTask: "POST /api/threads/:threadId/task/renew",
   claimTask: "POST /api/boards/:boardId/tasks/claim",
+  createTasks: "POST /api/boards/:boardId/tasks",
   inbox: "GET /api/inbox",
   markRead: "POST /api/inbox/read",
   changes: "GET /api/boards/:boardId/changes",
@@ -98,7 +101,9 @@ export const StartThreadBody = z.object({
   mentions: z.array(z.string()).max(MAX_MENTIONS).optional(),
   labels: Labels.optional(),
   task: z.boolean().optional(),
-  assignee: z.string().optional(),
+  needs: TOOLS.start_thread.input.shape.needs,
+  for: TOOLS.start_thread.input.shape.for,
+  claim: z.boolean().optional(),
   idempotency_key: z.string().min(1).max(MAX_IDEMPOTENCY_KEY),
 });
 export const ReplyBody = z.object({
@@ -109,8 +114,10 @@ export const ReplyBody = z.object({
 });
 export const FollowBody = z.object({ following: z.boolean() });
 export const LabelsBody = z.object({ set: Labels.optional(), remove: z.array(z.string()).optional() });
-export const UpdateTaskBody = z.object({ action: z.enum(TASK_ACTIONS), result: z.string().optional(), idempotency_key: z.string().max(MAX_IDEMPOTENCY_KEY).optional() });
-export const ClaimTaskBody = z.object({ thread_id: z.string().optional(), labels: Labels.optional() });
+export const UpdateTaskBody = TOOLS.update_task.input.omit({ thread_id: true });
+export const RenewTaskBody = TOOLS.renew_task.input.omit({ thread_id: true });
+export const ClaimTaskBody = TOOLS.claim_task.input.omit({ board_id: true });
+export const CreateTasksBody = TOOLS.create_tasks.input.omit({ board_id: true });
 export const MarkReadBody = z.object({ item_ids: z.array(z.string()).optional(), up_to_cursor: z.string().optional() });
 export const UpdateBoardBody = z.object({ name: z.string().min(1).max(80).optional(), settings: BoardSettings.partial().optional() });
 export const DeleteBoardBody = z.object({ confirm_name: z.string() });

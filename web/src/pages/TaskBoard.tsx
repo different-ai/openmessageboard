@@ -1,21 +1,26 @@
 import type { Change, Labels, TaskState, Thread } from "@openmessageboard/protocol";
 import { useCallback, useEffect, useState } from "react";
 import { api, isApiError } from "../api";
+import { saveClaim } from "../claims";
 import { useBoard, useBoardChanges } from "../board";
-import { parseLabels, TASK_STATE_LABEL, TASK_STATE_LIST } from "../format";
+import { parseLabels, TASK_STATE_KEY, TASK_STATE_LABEL, TASK_STATE_LIST } from "../format";
 import { Link, navigate, useLocation, useTitle } from "../router";
 import { Author, ErrorNote, LabelChips, Loading, TimeAgo, useToast } from "../ui";
 import { LabelFilter } from "./BoardThreads";
 
 type Columns = Record<TaskState, Thread[]>;
-const emptyColumns = (): Columns => ({ open: [], claimed: [], done: [], cancelled: [] });
+const emptyColumns = (): Columns => ({ waiting: [], ready: [], claimed: [], blocked: [], completed: [], failed: [], canceled: [] });
+const OPEN = new Set<TaskState>(["waiting", "ready", "claimed", "blocked"]);
 
+/** Label filters match the thread's labels; the reserved board.task key matches the task state. */
 function matches(t: Thread, labels: Labels) {
-  return t.kind === "task" && !!t.task && Object.entries(labels).every(([k, v]) => t.labels[k] === v);
+  if (t.kind !== "task" || !t.task) return false;
+  const state = t.task.state;
+  return Object.entries(labels).every(([k, v]) => (k === TASK_STATE_KEY ? (v === "open" ? OPEN.has(state) : state === v) : t.labels[k] === v));
 }
 
 export function TaskBoard() {
-  const { board, live, canWrite } = useBoard();
+  const { board, live, canWrite, meId } = useBoard();
   const { search } = useLocation();
   const labels = parseLabels(new URLSearchParams(search).getAll("label").join(",")).labels;
   const labelKey = JSON.stringify(labels);
@@ -88,10 +93,11 @@ export function TaskBoard() {
     setClaiming(true);
     try {
       const res = await api.claimTask(board.id, { labels: Object.keys(labels).length ? labels : undefined });
+      saveClaim(res.thread.id, meId, res.claim);
       toast(`You claimed “${res.thread.title}”.`, "success");
       navigate(`/b/${board.id}/t/${res.thread.id}`);
     } catch (e) {
-      if (isApiError(e, "no_task_available")) toast("No open tasks match right now.", "info");
+      if (isApiError(e, "no_task_available")) toast("No ready tasks match right now.", "info");
       else setError(e);
     } finally {
       setClaiming(false);
@@ -136,9 +142,23 @@ export function TaskBoard() {
                         {t.title}
                       </Link>
                       <div className="kanban-meta">
-                        {t.task?.assignee ? <Author p={t.task.assignee} /> : <span className="muted">Unassigned</span>}
+                        {t.task?.assignee ? (
+                          <Author p={t.task.assignee} />
+                        ) : t.task?.for ? (
+                          <span>
+                            For <Author p={t.task.for} showKind={false} />
+                          </span>
+                        ) : (
+                          <span className="muted">Unassigned</span>
+                        )}
                         <TimeAgo iso={t.last_activity_at} />
                       </div>
+                      {t.task && t.task.needs.some((n) => n.state !== "completed") && (
+                        <div className="kanban-needs muted small">
+                          Waits for {t.task.needs.filter((n) => n.state !== "completed").map((n) => n.title).join(", ")}
+                        </div>
+                      )}
+                      {t.task?.blocked_reason && <div className="kanban-needs muted small">Held: {t.task.blocked_reason}</div>}
                       <LabelChips labels={t.labels} />
                     </li>
                   ))}

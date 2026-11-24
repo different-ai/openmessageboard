@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import { describe, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import type { Change, Message, Thread, Usage } from "@openmessageboard/sdk";
 import { UsageError, boardIdFrom, helpText, isBoardArg, parseCan, parseCommandLine, parseDurationSeconds, parseLabels, parseTime, splitOptionalBoard, threadIdFrom } from "../src/args.ts";
+import { forgetClaim, loadClaim, saveClaim } from "../src/claims.ts";
+import { parsePlan } from "../src/tasks.ts";
 import { configPath, readConfig, resolveConnection, writeConfig } from "../src/config.ts";
 import { authorName, formatAccess, formatChange, formatChannels, formatGrants, formatMessage, formatTable, formatTasks, formatUsage, relativeTime } from "../src/format.ts";
 import type { Io } from "../src/io.ts";
 import { main } from "../src/main.ts";
+import { FakeServer, ToolError } from "../../sdk/test/fake-server.ts";
 
 const NOW = new Date("2026-11-23T12:00:00Z");
 const maya = { id: "p_maya", kind: "human" as const, display_name: "Maya", via: null };
@@ -31,7 +35,7 @@ function message(over: Partial<Message> = {}): Message {
   };
 }
 
-function task(id: string, state: "open" | "claimed" | "done", title: string, labels: Record<string, string> = {}): Thread {
+function task(id: string, state: "ready" | "claimed" | "completed" | "waiting", title: string, labels: Record<string, string> = {}): Thread {
   return {
     id,
     board_id: "b_1",
@@ -40,7 +44,21 @@ function task(id: string, state: "open" | "claimed" | "done", title: string, lab
     title,
     kind: "task",
     labels,
-    task: { state, assignee: state === "open" ? null : agent, claimed_at: null, completed_at: null },
+    task: {
+      state,
+      owner: maya,
+      for: null,
+      assignee: state === "ready" || state === "waiting" ? null : agent,
+      claimed_at: null,
+      lease_until: state === "claimed" ? "2026-11-23T12:04:00Z" : null,
+      completed_at: null,
+      needs: state === "waiting" ? [{ thread_id: "t_1", title: "Fix", state: "ready" }] : [],
+      result: null,
+      failure_reason: null,
+      blocked_reason: null,
+      blocked_kind: null,
+      canceled_reason: null,
+    },
     created_by: maya,
     created_at: "2026-11-23T10:00:00Z",
     last_activity_at: "2026-11-23T10:00:00Z",
@@ -124,6 +142,30 @@ describe("argument parsing", () => {
     assert.equal(done.command, "tasks complete");
     assert.deepEqual(done.positionals, ["t_9"]);
     assert.equal(done.values.result, "-");
+    const bare = parseCommandLine(["tasks", "b_1", "--state", "all"]);
+    assert.equal(bare.command, "tasks list");
+    assert.deepEqual(bare.positionals, ["b_1"]);
+    assert.equal(parseCommandLine(["tasks"]).command, "tasks list");
+    const run = parseCommandLine(["tasks", "run", "--ready", "--label", "step=test", "--wait", "10m", "--", "npm", "test", "--", "--watch=false"]);
+    assert.equal(run.command, "tasks run");
+    assert.deepEqual(run.positionals, []);
+    assert.deepEqual(run.rest, ["npm", "test", "--", "--watch=false"]);
+    assert.equal(run.values.wait, "10m");
+    const reply = parseCommandLine(["reply", "t_1", "--", "-1 looks wrong"]);
+    assert.deepEqual(reply.positionals, ["t_1", "-1 looks wrong"], "only tasks run splits at --");
+  });
+
+  it("parses wait durations and plans", () => {
+    assert.equal(parseDurationSeconds("10m", "--wait"), 600);
+    assert.equal(parseDurationSeconds("90", "--wait"), 90);
+    assert.equal(parseDurationSeconds("1h", "--wait"), 3600);
+    assert.throws(() => parseDurationSeconds("soon", "--wait"), UsageError);
+    const plan = parsePlan(JSON.stringify([{ key: "fix", title: "Fix", body: "fix it" }, { title: "Review", body: "review", needs: [{ key: "fix" }, "t_9"], for: "p_rel" }]));
+    assert.equal(plan.length, 2);
+    assert.throws(() => parsePlan(JSON.stringify([{ title: "Fix", body: "x", need: [{ key: "a" }] }])), /unknown key "need"/);
+    assert.throws(() => parsePlan(JSON.stringify([{ title: "Fix" }])), /needs a body/);
+    assert.throws(() => parsePlan(JSON.stringify(Array.from({ length: 16 }, (_, i) => ({ title: `T${i}`, body: "x" })))), /1-15 tasks/);
+    assert.throws(() => parsePlan("{"), /not valid JSON/);
   });
 
   it("parses wait and invite flags", () => {
@@ -140,7 +182,6 @@ describe("argument parsing", () => {
   it("rejects unknown commands and flags", () => {
     assert.throws(() => parseCommandLine(["frobnicate"]), UsageError);
     assert.throws(() => parseCommandLine(["read", "--nope"]), UsageError);
-    assert.throws(() => parseCommandLine(["tasks"]), /Missing subcommand/);
     assert.throws(() => parseCommandLine(["reply", "--task"]), UsageError, "--task belongs to post");
   });
 
@@ -148,7 +189,7 @@ describe("argument parsing", () => {
     assert.equal(parseCommandLine(["help"]).values.help, true);
     assert.equal(parseCommandLine(["tasks", "claim", "-h"]).values.help, true);
     assert.match(helpText(), /tasks claim/);
-    assert.match(helpText("tasks claim"), /Usage: omb tasks claim \[<thread>\] \[--ready\]/);
+    assert.match(helpText("tasks claim"), /Usage: omb tasks claim <thread> \| tasks claim --ready/);
   });
 
   it("parses labels with the protocol's key rules", () => {
@@ -176,6 +217,25 @@ describe("argument parsing", () => {
     assert.deepEqual(splitOptionalBoard(["Title", "Body"], 2, "post"), { board: undefined, rest: ["Title", "Body"] });
     assert.deepEqual(splitOptionalBoard(["b_1", "Title", "Body"], 2, "post"), { board: "b_1", rest: ["Title", "Body"] });
     assert.throws(() => splitOptionalBoard(["Title"], 2, "post"), UsageError);
+  });
+});
+
+describe("claims", () => {
+  it("stores a claim per task and server, mode 0600", () => {
+    const path = configPath({ XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), "omb-claims-")) });
+    const claim = { epoch: 2, token: "tok", until: "2026-11-23T12:05:00Z" };
+    const server = "https://board.example.com";
+    saveClaim(path, server, "account:default/fixer-1", "t_1", claim);
+    assert.deepEqual(loadClaim(path, server, "account:default/fixer-1", "t_1"), { server, thread_id: "t_1", holder: "account:default/fixer-1", ...claim });
+    assert.equal(loadClaim(path, "https://other.example.com", "account:default/fixer-1", "t_1"), undefined, "a claim belongs to its server");
+    assert.equal(loadClaim(path, server, "account:default/fixer-2", "t_1"), undefined, "a claim belongs to the profile that made it");
+    assert.equal(statSync(join(path, "..", "claims", "t_1.json")).mode & 0o777, 0o600);
+    saveClaim(path, server, "env/", "../escape", claim);
+    assert.equal(loadClaim(path, server, "env/", "../escape"), undefined, "unsafe IDs are never used as file names");
+    forgetClaim(path, server, "account:default/fixer-2", "t_1");
+    assert.ok(loadClaim(path, server, "account:default/fixer-1", "t_1"), "another holder can't remove the claim");
+    forgetClaim(path, server, "account:default/fixer-1", "t_1");
+    assert.equal(loadClaim(path, server, "account:default/fixer-1", "t_1"), undefined);
   });
 });
 
@@ -291,13 +351,14 @@ describe("formatting", () => {
   });
 
   it("formats tasks as a compact table", () => {
-    const out = formatTasks([task("t_1", "open", "Fix login crash", { area: "ios" }), task("t_22", "claimed", "Write release notes")]);
+    const out = formatTasks([task("t_1", "ready", "Fix login crash", { area: "ios" }), task("t_22", "claimed", "Write release notes"), task("t_3", "waiting", "Ship")], NOW);
     assert.equal(
       out,
       [
-        "ID    STATE    ASSIGNEE                  LABELS    TITLE",
-        "t_1   open     -                         area=ios  Fix login crash",
-        "t_22  claimed  release-agent (via Maya)  -         Write release notes",
+        "ID    STATE       WHO                       NEEDS   LABELS    TITLE",
+        "t_1   ready       -                         -       area=ios  Fix login crash",
+        "t_22  claimed 4m  release-agent (via Maya)  -       -         Write release notes",
+        "t_3   waiting     -                         1 open  -         Ship",
       ].join("\n"),
     );
     assert.equal(formatTasks([]), "No tasks.");
@@ -384,5 +445,100 @@ describe("main (no network)", () => {
     const a = io({ OMB_SERVER: "https://board.example.com" });
     assert.equal(await main(["whoami", "--json"], a.value), 1);
     assert.equal(JSON.parse(a.err.join("")).error.code, "unauthenticated");
+  });
+});
+
+describe("tasks run (against the SDK's fake server)", () => {
+  let fake: FakeServer;
+  let thread: Thread;
+  let settled: Record<string, unknown>[];
+  let renewals = 0;
+  let leaseMs = 60_000;
+  let renewFails = false;
+  before(async () => {
+    fake = await new FakeServer().start();
+    thread = fake.addThread("Run the tests", undefined, "npm test", { task: true }).thread;
+    fake.tools.claim_task = () => ({ thread, claim: { epoch: 1, token: "tok-run", until: new Date(Date.now() + leaseMs).toISOString() } });
+    fake.tools.renew_task = (args) => {
+      renewals++;
+      assert.equal(args.token, "tok-run");
+      if (renewFails) throw new ToolError("claim_lost", "This claim is over", { state: "ready" });
+      return { thread, claim: { epoch: 1, token: "tok-run", until: new Date(Date.now() + leaseMs).toISOString() } };
+    };
+    fake.tools.update_task = (args) => {
+      settled.push(args);
+      return { thread, message: null };
+    };
+  });
+  after(() => fake.stop());
+
+  function io(signals: Map<string, () => void> = new Map()) {
+    const out: string[] = [];
+    const err: string[] = [];
+    const value: Io = {
+      stdout: { write: (s: string) => out.push(s) },
+      stderr: { write: (s: string) => err.push(s) },
+      stdin: Readable.from([""]) as unknown as Io["stdin"],
+      env: { XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), "omb-run-")), OMB_SERVER: fake.url, OMB_TOKEN: "good-token" },
+      onSignal: (sig, handler) => {
+        signals.set(sig, handler);
+        return () => signals.delete(sig);
+      },
+      spawn: (cmd, args, env) => spawn(cmd, args, { stdio: "ignore", env }),
+    };
+    return { value, out, err };
+  }
+  const node = (code: string) => ["--", process.execPath, "-e", code];
+
+  it("completes the task when the command exits 0, with OMB_TASK set and the claim forgotten", async () => {
+    settled = [];
+    leaseMs = 60_000;
+    const a = io();
+    const code = await main(["tasks", "run", thread.id, "--result", "tests pass", ...node(`process.exit(process.env.OMB_TASK === ${JSON.stringify(thread.id)} ? 0 : 9)`)], a.value);
+    assert.equal(code, 0, a.err.join(""));
+    assert.deepEqual(settled.map((s) => [s.action, s.token, s.result]), [["complete", "tok-run", "tests pass"]]);
+    assert.match(a.out.join(""), new RegExp(`Completed ${thread.id}`));
+    assert.equal(loadClaim(configPath(a.value.env), fake.url, "env/", thread.id), undefined);
+  });
+
+  it("fails the task with the exit code otherwise", async () => {
+    settled = [];
+    const a = io();
+    assert.equal(await main(["tasks", "run", thread.id, ...node("process.exit(3)")], a.value), 3);
+    assert.deepEqual(settled.map((s) => [s.action, s.reason]), [["fail", "the command exited with code 3"]]);
+  });
+
+  it("renews at a third of the lease and stops the command when the claim is lost", async () => {
+    settled = [];
+    renewals = 0;
+    leaseMs = 1500;
+    renewFails = true;
+    const a = io();
+    const started = Date.now();
+    assert.equal(await main(["tasks", "run", thread.id, ...node("setTimeout(() => {}, 20000)")], a.value), 1);
+    assert.ok(Date.now() - started < 5000, "the command was stopped");
+    assert.equal(renewals, 1);
+    assert.deepEqual(settled, [], "a lost claim settles nothing");
+    assert.match(a.err.join(""), /claim_lost/);
+    renewFails = false;
+  });
+
+  it("releases the task on SIGTERM and exits 143", async () => {
+    settled = [];
+    leaseMs = 60_000;
+    const signals = new Map<string, () => void>();
+    const a = io(signals);
+    const running = main(["tasks", "run", thread.id, ...node("process.on('SIGTERM', () => process.exit(0)); setTimeout(() => {}, 20000)")], a.value);
+    for (let i = 0; i < 100 && !signals.has("SIGTERM"); i++) await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 200));
+    signals.get("SIGTERM")!();
+    assert.equal(await running, 143);
+    assert.deepEqual(settled.map((s) => s.action), ["release"]);
+  });
+
+  it("asks for the command after --", async () => {
+    const a = io();
+    assert.equal(await main(["tasks", "run", thread.id], a.value), 1);
+    assert.match(a.err.join(""), /Pass the command after --/);
   });
 });
