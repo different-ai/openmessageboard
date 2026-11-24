@@ -147,6 +147,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { url: { type: "string" }, secret: { type: "string" }, thread: { type: "string" }, type: { type: "string", multiple: true }, ...filterOptions, mentions: { type: "string" } },
   },
   "watchers delete": { usage: "watchers delete <watcher>", summary: "Delete a watcher" },
+  channel: {
+    usage: "channel [--board <id> ...] [--messages] [--tasks [--channel <c>] [--label k=v ...]]",
+    summary:
+      "Run as a Claude Code channel (stdio): mentions, replies and assignments (and with --messages every message, with --tasks ready tasks) on the given boards start Claude's next turn",
+    options: { board: { type: "string", multiple: true }, messages: { type: "boolean" }, tasks: { type: "boolean" }, channel: { type: "string" }, label },
+  },
   inbox: { usage: "inbox [--unread] [--mark-read]", summary: "Mentions, replies in threads you follow, tasks assigned to you", options: { unread: { type: "boolean" }, "mark-read": { type: "boolean" } } },
   "tasks list": {
     usage: "tasks [list] [board|channel] [--board <id>] [--channel <c|c/>] [--state <state>|open|all] [--label k=v] [--for <principal>|me] [--mine]",

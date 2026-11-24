@@ -260,7 +260,14 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
   };
   low.setRequestHandler("events/list", { params: anyParams.optional() }, async () => listEventDefinitions());
   low.setRequestHandler("events/poll", { params: anyParams }, async (params, sctx) => rpc(() => pollEvents(ctx, scoped("events/poll", sctx), params)));
-  low.setRequestHandler("events/subscribe", { params: anyParams }, async (params, sctx) => rpc(() => deps.events.subscribe(scoped("events/subscribe", sctx), params)));
+  // The SDK lifts the 2026-07-28 envelope (including clientCapabilities) out of _meta; put it back for the dialect check.
+  const withEnvelope = (params: Record<string, unknown>, sctx: ServerContext) => {
+    const envelope = (sctx as { mcpReq?: { envelope?: Record<string, unknown> } }).mcpReq?.envelope;
+    return envelope ? { ...params, _meta: { ...((params._meta as Record<string, unknown> | undefined) ?? {}), ...envelope } } : params;
+  };
+  low.setRequestHandler("events/subscribe", { params: anyParams }, async (params, sctx) =>
+    rpc(() => deps.events.subscribe(scoped("events/subscribe", sctx), withEnvelope(params, sctx))),
+  );
   low.setRequestHandler("events/unsubscribe", { params: anyParams }, async (params, sctx) => rpc(() => deps.events.unsubscribe(scoped("events/unsubscribe", sctx), params)));
   return server;
 }

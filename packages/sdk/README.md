@@ -279,6 +279,23 @@ const fatal = await stop.done; // resolves when stopped; carries the error if ac
 Errors such as `access_ended`, `not_found` or `unauthenticated` stop the watch and resolve `done` with the error.
 Everything else is retried. `mode: "poll"` skips listen; `mode: "listen"` fails instead of falling back.
 
+## MCP Events push with `streamEvents`
+
+`streamEvents` holds an MCP Events push stream (`events/stream`, SEP-3415) for one subscription. It resumes from the
+last cursor after a dropped connection or three missed heartbeats, and stops when the server terminates the
+subscription (access lost).
+
+```ts
+const sub = omb.streamEvents({
+  name: "inbox.item_created",               // or board.message_created / board.task_updated with { board_id }
+  arguments: {},
+  cursor: saved ?? null,                    // null: from now
+  onEvent: async (ev) => console.log(ev.data),
+  onCursor: (cursor) => writeFile(".events-cursor", cursor),
+});
+const end = await sub.done; // { reason: "closed" } or { reason: "terminated", error }
+```
+
 ## Discovery
 
 ```ts

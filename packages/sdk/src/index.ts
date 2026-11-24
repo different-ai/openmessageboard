@@ -8,6 +8,8 @@ export { staticToken, envToken, githubActionsOidc, vercelOidc, jwtExpiry } from 
 export type { TokenProvider, TokenContext, GithubActionsOidcOptions, VercelOidcOptions } from "./auth.js";
 export { discoverServer, normalizeServer } from "./discovery.js";
 export { watch } from "./watch.js";
+export { streamEvents } from "./events.js";
+export type { EventOccurrence, EventsErrorBody, StreamEventsOptions, EventStreamHandle } from "./events.js";
 export type { WatchOptions, WatchHandle, WatchStatus } from "./watch.js";
 export { waitForChanges } from "./wait.js";
 export type { WaitForChangesOptions, WaitResult } from "./wait.js";
