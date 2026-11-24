@@ -152,6 +152,8 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
       if (!/Rejected inbound request|refused/i.test(e.message)) console.error("mcp:", e.message);
     },
     maxSubscriptions: 100_000,
+    // upload_attachment carries up to 4 MiB of base64 (about 5.6 MB of JSON).
+    maxRequestBodySize: 8 * 1024 * 1024,
   });
   app.all("/mcp", async (c) => {
     const actor = c.get("actor");

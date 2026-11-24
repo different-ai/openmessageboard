@@ -7,6 +7,13 @@ import { getMembership, nowIso, requireMember, requireThread } from "./access.js
 import { decodeCursor, decodePage, encodeCursor, encodePage } from "./cursors.js";
 import type { Actor, EventRow, InboxRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
 import { presentInbox, presentMember, presentMessages, presentThreads, principalRefs } from "./present.js";
+import { validateLabels } from "./conversation.js";
+import { messageLabelFilter } from "./messages.js";
+
+/** Read filters on board changes. `labels` matches a change's message or its thread's root; other changes are left out. */
+export interface ChangeFilters {
+  labels?: Record<string, string> | undefined;
+}
 
 function purgedUpto(ctx: AppContext): number {
   return Number((ctx.db.prepare("SELECT value FROM meta WHERE key = 'events_purged_upto'").get() as { value: string }).value);
@@ -36,6 +43,7 @@ export function presentChanges(ctx: AppContext, rows: EventRow[], viewerId: stri
     presentMessages(
       ctx,
       messageIds.length ? (ctx.db.prepare(`SELECT * FROM messages WHERE id IN (${messageIds.map(() => "?").join(",")})`).all(...messageIds) as MessageRow[]) : [],
+      viewerId,
     ).map((m) => [m.id, m]),
   );
   const refs = principalRefs(ctx, rows.flatMap((r) => [r.actor_id, r.subject_id]));
@@ -62,7 +70,15 @@ export function presentChanges(ctx: AppContext, rows: EventRow[], viewerId: stri
   });
 }
 
-export function boardChanges(ctx: AppContext, actor: Actor, boardId: string, cursor: string | undefined, limit = 100, threadId?: string): ChangesPage {
+export function boardChanges(
+  ctx: AppContext,
+  actor: Actor,
+  boardId: string,
+  cursor: string | undefined,
+  limit = 100,
+  threadId?: string,
+  filters: ChangeFilters = {},
+): ChangesPage {
   return read(ctx, () => {
     requireMember(ctx, actor, boardId);
     const n = Math.min(Math.max(limit, 1), 100);
@@ -74,12 +90,16 @@ export function boardChanges(ctx: AppContext, actor: Actor, boardId: string, cur
       });
     }
     const params: unknown[] = [boardId, s];
-    let sql = "SELECT * FROM events WHERE board_id = ? AND seq > ?";
+    const labels = validateLabels(filters.labels ?? {});
+    let sql = Object.keys(labels).length
+      ? "SELECT e.* FROM events e LEFT JOIN messages lm ON lm.id = e.message_id LEFT JOIN threads lt ON lt.id = e.thread_id WHERE e.board_id = ? AND e.seq > ? AND e.thread_id IS NOT NULL"
+      : "SELECT e.* FROM events e WHERE e.board_id = ? AND e.seq > ?";
     if (threadId) {
-      sql += " AND thread_id = ?";
+      sql += " AND e.thread_id = ?";
       params.push(threadId);
     }
-    sql += " ORDER BY seq LIMIT ?";
+    sql += messageLabelFilter(labels, params, "lm", "lt");
+    sql += " ORDER BY e.seq LIMIT ?";
     params.push(n + 1);
     const rows = ctx.db.prepare(sql).all(...params) as EventRow[];
     const more = rows.length > n;
@@ -106,43 +126,78 @@ export function inboxChanges(ctx: AppContext, actor: Actor, cursor: string | und
 export function getChanges(
   ctx: AppContext,
   actor: Actor,
-  input: { board_id?: string | undefined; inbox?: boolean | undefined; cursor?: string | undefined; limit?: number | undefined },
+  input: { board_id?: string | undefined; inbox?: boolean | undefined; cursor?: string | undefined; limit?: number | undefined; labels?: Record<string, string> | undefined },
 ): ChangesPage | InboxChangesPage {
   if (input.inbox && input.board_id) throw invalid("Pass board_id or inbox: true, not both");
+  if (input.inbox && input.labels) throw invalid("labels filters board changes, not the inbox");
   if (input.inbox) return inboxChanges(ctx, actor, input.cursor, input.limit);
   if (!input.board_id) throw invalid("Pass board_id or inbox: true");
-  return boardChanges(ctx, actor, input.board_id, input.cursor, input.limit);
+  return boardChanges(ctx, actor, input.board_id, input.cursor, input.limit, undefined, { labels: input.labels });
 }
 
 /** Long-poll: returns as soon as there are changes after the cursor, or empty after the timeout. */
 export async function waitForActivity(
   ctx: AppContext,
   actor: Actor,
-  input: { board_id?: string | undefined; thread_id?: string | undefined; inbox?: boolean | undefined; cursor: string; timeout_seconds?: number | undefined },
+  input: {
+    board_id?: string | undefined;
+    thread_id?: string | undefined;
+    inbox?: boolean | undefined;
+    cursor: string;
+    timeout_seconds?: number | undefined;
+    labels?: Record<string, string> | undefined;
+  },
   signal?: AbortSignal,
 ): Promise<ChangesPage | InboxChangesPage> {
   const timeoutMs = Math.min(Math.max(input.timeout_seconds ?? 20, 1), WAIT_MAX_SECONDS) * 1000;
+  if (input.inbox && input.labels) throw invalid("labels filters board changes, not the inbox");
   let boardId = input.board_id;
   if (input.thread_id) {
     const { thread } = requireThread(ctx, actor, input.thread_id);
     if (boardId && boardId !== thread.board_id) throw invalid("thread_id is not on that board");
     boardId = thread.board_id;
   }
+  // A filtered wait keeps waiting past changes that don't match, moving its cursor along.
+  let cursor = input.cursor;
   const fetch = (): ChangesPage | InboxChangesPage =>
-    input.inbox ? inboxChanges(ctx, actor, input.cursor) : boardChanges(ctx, actor, boardId ?? "", input.cursor, 100, input.thread_id);
+    input.inbox ? inboxChanges(ctx, actor, cursor) : boardChanges(ctx, actor, boardId ?? "", cursor, 100, input.thread_id, { labels: input.labels });
   if (!input.inbox && !boardId) throw invalid("Pass board_id, thread_id or inbox: true");
   const first = fetch();
   if (("changes" in first ? first.changes.length : first.items.length) > 0) return first;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const woke = await waitOnce(ctx, actor, input, boardId, Math.max(0, deadline - Date.now()), signal);
+    const page = fetch();
+    const count = "changes" in page ? page.changes.length : page.items.length;
+    if (count > 0 || !input.labels || !woke || signal?.aborted || Date.now() >= deadline) return page;
+    cursor = page.cursor;
+  }
+}
+
+/** Blocks until a matching hub event, the timeout, or abort. Returns true when an event woke it. */
+async function waitOnce(
+  ctx: AppContext,
+  actor: Actor,
+  input: { thread_id?: string | undefined; inbox?: boolean | undefined },
+  boardId: string | undefined,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  let woke = false;
   const conn = ctx.connections.register({ principalId: actor.id, kind: "wait", boards: new Set(boardId ? [boardId] : []), close: () => wake() });
   let wake: () => void = () => {};
   try {
     await new Promise<void>((resolve) => {
       const timer = setTimeout(done, timeoutMs);
       const unsub = ctx.hub.subscribe((e: HubEvent) => {
-        if (input.inbox && e.kind === "inbox" && e.principalId === actor.id) done();
-        else if (!input.inbox && e.kind === "board" && e.boardId === boardId && (!input.thread_id || e.threadId === input.thread_id)) done();
-        else if ((e.kind === "access" && e.principalId === actor.id && e.boardId === boardId) || (e.kind === "board_deleted" && e.boardId === boardId)) done();
+        if (input.inbox && e.kind === "inbox" && e.principalId === actor.id) wakeUp();
+        else if (!input.inbox && e.kind === "board" && e.boardId === boardId && (!input.thread_id || e.threadId === input.thread_id)) wakeUp();
+        else if ((e.kind === "access" && e.principalId === actor.id && e.boardId === boardId) || (e.kind === "board_deleted" && e.boardId === boardId)) wakeUp();
       });
+      function wakeUp() {
+        woke = true;
+        done();
+      }
       const onAbort = () => done();
       signal?.addEventListener("abort", onAbort, { once: true });
       wake = done;
@@ -156,7 +211,7 @@ export async function waitForActivity(
   } finally {
     ctx.connections.unregister(conn);
   }
-  return fetch();
+  return woke;
 }
 
 // ---------- inbox ----------

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EXPORT_FORMAT, PRINCIPAL_KINDS, THREAD_KINDS, TASK_STATES } from "./constants.js";
 
-/** Board export. Contains no emails, tokens, invites, follows or read state. */
+/** Board export. Contains no emails, tokens, invites, follows, read state, reactions or attachment contents. */
 export const ExportAuthor = z.object({
   ref: z.string(),
   kind: z.enum(PRINCIPAL_KINDS),
@@ -28,6 +28,13 @@ export const ExportMessage = z.object({
   mention_refs: z.array(z.string()),
   source: z.object({ platform: z.string(), author_name: z.string(), url: z.string().nullable(), external_id: z.string() }).nullable(),
   created_at: z.string(),
+  edited_at: z.string().nullable().optional(),
+  labels: z.record(z.string(), z.string()).optional(),
+  blocks: z.array(z.object({ schema: z.string(), version: z.number().int(), data: z.record(z.string(), z.unknown()) })).optional(),
+  attachments: z
+    .array(z.object({ id: z.string(), name: z.string(), type: z.string(), size: z.number().int() }))
+    .optional()
+    .describe("Metadata only; files are not part of the export"),
 });
 export const ExportFile = z.object({
   format: z.literal(EXPORT_FORMAT),

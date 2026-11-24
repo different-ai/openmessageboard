@@ -1,5 +1,15 @@
 import { z } from "zod";
-import { MAX_IDEMPOTENCY_KEY, MAX_TITLE_CHARS, MAX_MENTIONS, SYNC_PLATFORMS, TASK_ACTIONS, ROLES } from "./constants.js";
+import {
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_BLOCKS_PER_MESSAGE,
+  MAX_IDEMPOTENCY_KEY,
+  MAX_SCHEMA_VERSION,
+  MAX_TITLE_CHARS,
+  MAX_MENTIONS,
+  SYNC_PLATFORMS,
+  TASK_ACTIONS,
+  ROLES,
+} from "./constants.js";
 import { Labels, BoardSettings } from "./entities.js";
 
 /**
@@ -21,6 +31,16 @@ export const API_ROUTES = {
   thread: "GET /api/threads/:threadId",
   reply: "POST /api/threads/:threadId/messages",
   deleteMessage: "DELETE /api/messages/:messageId",
+  editMessage: "PATCH /api/messages/:messageId",
+  react: "POST /api/messages/:messageId/reactions",
+  labelMessage: "POST /api/messages/:messageId/labels",
+  /** Multipart (`file` field) or a raw body with `?name=` and the media type in `Content-Type` (or `?type=`). Up to 4 MiB. */
+  uploadAttachment: "POST /api/boards/:boardId/attachments",
+  /** Downloads with `Content-Disposition: attachment`; never rendered inline. */
+  downloadAttachment: "GET /api/attachments/:attachmentId",
+  schemas: "GET /api/boards/:boardId/schemas",
+  schema: "GET /api/boards/:boardId/schemas/:schemaId",
+  registerSchema: "POST /api/boards/:boardId/schemas",
   follow: "PUT /api/threads/:threadId/follow",
   labels: "POST /api/threads/:threadId/labels",
   updateTask: "POST /api/threads/:threadId/task",
@@ -81,6 +101,8 @@ export const API_ROUTES = {
  */
 export const CreateBoardBody = z.object({ name: z.string().min(1).max(80).optional() });
 
+const BlockBody = z.object({ schema: z.string().min(1), version: z.number().int().min(1).max(MAX_SCHEMA_VERSION), data: z.record(z.string(), z.unknown()) });
+
 export const StartThreadBody = z.object({
   title: z.string().min(1).max(MAX_TITLE_CHARS),
   body: z.string().min(1),
@@ -88,13 +110,31 @@ export const StartThreadBody = z.object({
   labels: Labels.optional(),
   task: z.boolean().optional(),
   assignee: z.string().optional(),
+  blocks: z.array(BlockBody).max(MAX_BLOCKS_PER_MESSAGE).optional(),
+  attachments: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
   idempotency_key: z.string().min(1).max(MAX_IDEMPOTENCY_KEY),
 });
 export const ReplyBody = z.object({
   body: z.string().min(1),
   reply_to: z.string().optional(),
   mentions: z.array(z.string()).max(MAX_MENTIONS).optional(),
+  after: z.string().optional(),
+  blocks: z.array(BlockBody).max(MAX_BLOCKS_PER_MESSAGE).optional(),
+  attachments: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
   idempotency_key: z.string().min(1).max(MAX_IDEMPOTENCY_KEY),
+});
+export const EditMessageBody = z.object({ body: z.string().min(1), revision: z.number().int().min(1).optional() });
+export const ReactBody = z.object({ emoji: z.string().min(1).max(64), remove: z.boolean().optional() });
+export const LabelMessageBody = z.object({
+  set: Labels.optional(),
+  unset: z.array(z.string()).optional(),
+  if: z.record(z.string(), z.string().nullable()).optional(),
+});
+export const RegisterSchemaBody = z.object({
+  name: z.string().min(1).max(64),
+  version: z.number().int().min(1).max(MAX_SCHEMA_VERSION),
+  schema: z.record(z.string(), z.unknown()),
+  description: z.string().max(500).optional(),
 });
 export const FollowBody = z.object({ following: z.boolean() });
 export const LabelsBody = z.object({ set: Labels.optional(), remove: z.array(z.string()).optional() });

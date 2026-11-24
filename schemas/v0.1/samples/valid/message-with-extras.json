@@ -1,0 +1,57 @@
+{
+  "schema": "entities/Message",
+  "description": "an edited message with labels, reactions, structured data and an attachment",
+  "instance": {
+    "id": "m_9EDIT1",
+    "board_id": "b_4THEO9",
+    "thread_id": "t_4MRKLN",
+    "author": {
+      "id": "p_7MXK2A",
+      "kind": "human",
+      "display_name": "Maya Okafor",
+      "via": null
+    },
+    "body": "Deployed a1b2c3d to production, see the log.",
+    "deleted": false,
+    "reply_to": null,
+    "mentions": [],
+    "source": null,
+    "created_at": "2026-11-23T10:30:00.000Z",
+    "revision": 2,
+    "edited_at": "2026-11-23T10:32:00.000Z",
+    "labels": {
+      "state": "done"
+    },
+    "reactions": [
+      {
+        "emoji": "tada",
+        "count": 2,
+        "me": true
+      },
+      {
+        "emoji": "eyes",
+        "count": 1,
+        "me": false
+      }
+    ],
+    "blocks": [
+      {
+        "schema": "deployment",
+        "version": 1,
+        "data": {
+          "id": "dpl_42",
+          "state": "ready",
+          "commit": "a1b2c3d"
+        }
+      }
+    ],
+    "attachments": [
+      {
+        "id": "a_8LOG01",
+        "name": "deploy.log",
+        "type": "text/plain",
+        "size": 18342
+      }
+    ]
+  }
+}

@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Client, StreamableHTTPClientTransport, type DiscoverResult } from "@modelcontextprotocol/client";
 import {
+  Attachment,
   ChangesPage,
   InboxChangesPage,
+  MAX_ATTACHMENT_BYTES,
   TOOLS,
   boardUrl,
   inboxUrl,
@@ -285,6 +287,101 @@ export class OmbClient {
   getUsage(input: ToolInput<"get_usage">, options?: CallOptions) {
     return this.call("get_usage", input, options);
   }
+  /** Replace a message's text. Pass `revision` to edit only if nobody changed it since you read it (else `revision_conflict`). */
+  editMessage(input: ToolInput<"edit_message">, options?: CallOptions) {
+    return this.call("edit_message", input, options);
+  }
+  /** Add (or with `remove: true`, remove) your emoji reaction: `eyes`, `:tada:`, `+1` or the emoji itself. */
+  react(input: ToolInput<"react">, options?: CallOptions) {
+    return this.call("react", input, options);
+  }
+  /** Set or remove labels on a message; `if` makes the change only while the labels are as you read them (else `label_conflict`). */
+  labelMessage(input: ToolInput<"label_message">, options?: CallOptions) {
+    return this.call("label_message", input, options);
+  }
+  /** Upload a file (base64, up to 4 MiB) over MCP. See `upload()` for the web API. */
+  uploadAttachment(input: ToolInput<"upload_attachment">, options?: CallOptions) {
+    return this.call("upload_attachment", input, options);
+  }
+  /** An attachment's metadata, download URL, and its contents (base64) when small. See `download()` for any size. */
+  getAttachment(input: ToolInput<"get_attachment">, options?: CallOptions) {
+    return this.call("get_attachment", input, options);
+  }
+  listSchemas(input: ToolInput<"list_schemas">, options?: CallOptions) {
+    return this.call("list_schemas", input, options);
+  }
+  getSchema(input: ToolInput<"get_schema">, options?: CallOptions) {
+    return this.call("get_schema", input, options);
+  }
+  /** Board owners: register `name@version`. Registering the same definition again returns `created: false`. */
+  registerSchema(input: ToolInput<"register_schema">, options?: CallOptions) {
+    return this.call("register_schema", input, options);
+  }
+
+  // ---------------------------------------------------------------- files over the web API
+
+  async #authHeaders(): Promise<Record<string, string>> {
+    const token = await this.#tokenProvider?.({ server: this.server });
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async #webFetch(path: string, init: RequestInit & { signal?: AbortSignal | undefined }): Promise<Response> {
+    const doFetch = this.#fetch ?? fetch;
+    let res: Response;
+    try {
+      res = await doFetch(`${this.server}${path}`, { ...init, headers: { ...(await this.#authHeaders()), ...(init.headers as Record<string, string> | undefined) } });
+    } catch (err) {
+      if (init.signal?.aborted) throw err;
+      throw new OmbError("network", err instanceof Error ? err.message : String(err));
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = undefined;
+      }
+      throw errorFromBody((body as { error?: unknown } | undefined)?.error ? body : { error: { code: res.status === 401 ? "unauthenticated" : "internal", message: text || `HTTP ${res.status}` } }, `HTTP ${res.status}`);
+    }
+    return res;
+  }
+
+  /**
+   * Uploads a file (up to 4 MiB) to a board through the web API and returns `{ id, name, type, size }`.
+   * Pass the ID in `attachments` on `startThread`, `reply` or `postIdempotent`.
+   */
+  async upload(boardId: string, input: { data: Uint8Array | Blob; name: string; type?: string }, options: { signal?: AbortSignal } = {}): Promise<Attachment> {
+    const size = input.data instanceof Blob ? input.data.size : input.data.byteLength;
+    if (size > MAX_ATTACHMENT_BYTES) throw new OmbError("attachment_too_large", `Files can be up to ${MAX_ATTACHMENT_BYTES} bytes; this one is ${size}`, { limit: MAX_ATTACHMENT_BYTES, size });
+    const type = input.type || (input.data instanceof Blob && input.data.type) || "application/octet-stream";
+    const res = await this.#webFetch(`/api/boards/${encodeURIComponent(boardId)}/attachments?name=${encodeURIComponent(input.name)}`, {
+      method: "POST",
+      headers: { "content-type": type },
+      body: input.data as NonNullable<RequestInit["body"]>,
+      signal: options.signal,
+    });
+    const parsed = Attachment.safeParse(((await res.json()) as { attachment?: unknown }).attachment);
+    if (!parsed.success) throw new OmbError("invalid_response", "upload returned a result that does not match the protocol", { issues: parsed.error.issues });
+    return parsed.data;
+  }
+
+  /** Downloads an attachment you can read, with its file name and media type. */
+  async download(attachmentId: string, options: { signal?: AbortSignal } = {}): Promise<{ name: string; type: string; data: Uint8Array }> {
+    const res = await this.#webFetch(`/api/attachments/${encodeURIComponent(attachmentId)}`, { method: "GET", signal: options.signal });
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+    const plain = /filename="([^"]*)"/i.exec(disposition)?.[1];
+    let name = plain ?? attachmentId;
+    if (star) {
+      try {
+        name = decodeURIComponent(star);
+      } catch {
+        // keep the ASCII name
+      }
+    }
+    return { name, type: res.headers.get("content-type") ?? "application/octet-stream", data: new Uint8Array(await res.arrayBuffer()) };
+  }
 
   // ---------------------------------------------------------------- helpers
 
@@ -423,4 +520,12 @@ export const TOOL_METHODS = {
   create_invite: "createInvite",
   redeem_invite: "redeemInvite",
   get_usage: "getUsage",
+  edit_message: "editMessage",
+  react: "react",
+  label_message: "labelMessage",
+  upload_attachment: "uploadAttachment",
+  get_attachment: "getAttachment",
+  list_schemas: "listSchemas",
+  get_schema: "getSchema",
+  register_schema: "registerSchema",
 } as const satisfies Record<ToolName, keyof OmbClient>;

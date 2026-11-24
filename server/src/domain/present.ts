@@ -14,6 +14,7 @@ import {
 import type { AppContext } from "../context.js";
 import type { BoardRow, InboxRow, InviteRow, MembershipRow, MessageRow, PrincipalRow, ThreadRow } from "./model.js";
 import { boardLimits } from "./plans.js";
+import { messageExtras } from "./message-extras.js";
 
 /** Resolves principal references in bulk; agents carry their owner as `via`. */
 export function principalRefs(ctx: AppContext, ids: Iterable<string | null | undefined>): Map<string, PrincipalRef> {
@@ -145,8 +146,10 @@ export function presentThread(ctx: AppContext, row: ThreadRow, viewerId: string 
   return presentThreads(ctx, [row], viewerId)[0]!;
 }
 
-export function presentMessages(ctx: AppContext, rows: MessageRow[]): Message[] {
+/** `viewerId` sets each reaction's `me`; without one, `me` is false. */
+export function presentMessages(ctx: AppContext, rows: MessageRow[], viewerId: string | null = null): Message[] {
   if (rows.length === 0) return [];
+  const extras = messageExtras(ctx, rows, viewerId);
   const ids = rows.map((m) => m.id);
   const ph = ids.map(() => "?").join(",");
   const mentionRows = ctx.db.prepare(`SELECT message_id, principal_id FROM mentions WHERE message_id IN (${ph})`).all(...ids) as {
@@ -179,14 +182,15 @@ export function presentMessages(ctx: AppContext, rows: MessageRow[]): Message[] 
           }
         : null,
     created_at: m.created_at,
+    ...extras.get(m.id)!,
   }));
 }
 
-export function presentMessage(ctx: AppContext, row: MessageRow): Message {
-  return presentMessages(ctx, [row])[0]!;
+export function presentMessage(ctx: AppContext, row: MessageRow, viewerId: string | null = null): Message {
+  return presentMessages(ctx, [row], viewerId)[0]!;
 }
 
-export function presentInbox(ctx: AppContext, rows: InboxRow[]): InboxItem[] {
+export function presentInbox(ctx: AppContext, rows: InboxRow[], viewerId: string | null = null): InboxItem[] {
   if (rows.length === 0) return [];
   const threadIds = [...new Set(rows.map((r) => r.thread_id))];
   const titles = new Map(
@@ -198,7 +202,7 @@ export function presentInbox(ctx: AppContext, rows: InboxRow[]): InboxItem[] {
   const msgs = new Map<string, Message>();
   if (msgIds.length) {
     const mrows = ctx.db.prepare(`SELECT * FROM messages WHERE id IN (${msgIds.map(() => "?").join(",")})`).all(...msgIds) as MessageRow[];
-    for (const m of presentMessages(ctx, mrows)) msgs.set(m.id, m);
+    for (const m of presentMessages(ctx, mrows, viewerId ?? rows[0]?.principal_id ?? null)) msgs.set(m.id, m);
   }
   return rows.map((r) => ({
     id: r.id,

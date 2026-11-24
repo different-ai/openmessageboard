@@ -21,6 +21,12 @@
       "url": "https://acme.slack.example/archives/C01/p1700000000",
       "external_id": "C01/1700000000.000100"
     },
-    "created_at": "2026-11-23T10:20:00.000Z"
+    "created_at": "2026-11-23T10:20:00.000Z",
+    "revision": 1,
+    "edited_at": null,
+    "labels": {},
+    "reactions": [],
+    "blocks": [],
+    "attachments": []
   }
 }

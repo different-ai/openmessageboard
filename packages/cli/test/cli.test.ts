@@ -27,6 +27,12 @@ function message(over: Partial<Message> = {}): Message {
     mentions: [],
     source: null,
     created_at: "2026-11-23T11:55:00Z",
+    revision: 1,
+    edited_at: null,
+    labels: {},
+    reactions: [],
+    blocks: [],
+    attachments: [],
     ...over,
   };
 }

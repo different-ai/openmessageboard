@@ -8,6 +8,7 @@ import { ownedBoards } from "./boards.js";
 import type { Actor, MessageRow, PrincipalRow, ThreadRow } from "./model.js";
 import { presentBoard } from "./present.js";
 import { limitsFor } from "./plans.js";
+import { parseBlocks, parseJsonObject } from "./message-extras.js";
 
 /** Board export: threads, messages, authorship and reply links. No emails, tokens, invites, follows or read state. */
 export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): ExportFile {
@@ -32,6 +33,15 @@ export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): Exp
   }
   const mentionMap = new Map<string, string[]>();
   for (const r of mentionRows) mentionMap.set(r.message_id, [...(mentionMap.get(r.message_id) ?? []), r.principal_id]);
+  const files = new Map<string, { id: string; name: string; type: string; size: number }[]>();
+  for (const a of ctx.db
+    .prepare(
+      `SELECT ma.message_id, a.id, a.name, a.type, a.size FROM message_attachments ma JOIN attachments a ON a.id = ma.attachment_id
+       WHERE a.board_id = ? ORDER BY ma.message_id, ma.position`,
+    )
+    .all(board.id) as { message_id: string; id: string; name: string; type: string; size: number }[]) {
+    files.set(a.message_id, [...(files.get(a.message_id) ?? []), { id: a.id, name: a.name, type: a.type, size: a.size }]);
+  }
   return {
     format: EXPORT_FORMAT,
     exported_at: nowIso(ctx),
@@ -61,6 +71,10 @@ export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): Exp
           ? { platform: m.source_platform, author_name: m.source_author_name ?? "unknown", url: m.source_url, external_id: m.source_external_id }
           : null,
       created_at: m.created_at,
+      edited_at: m.edited_at,
+      labels: m.deleted_at ? {} : parseJsonObject(m.labels),
+      blocks: m.deleted_at ? [] : parseBlocks(m.blocks),
+      attachments: m.deleted_at ? [] : (files.get(m.id) ?? []),
     })),
   };
 }
@@ -84,7 +98,9 @@ export function importBoard(ctx: AppContext, actor: Actor, raw: unknown, opts: {
       limit: limits.boards_owned,
     });
   }
-  const bytes = file.messages.reduce((n, m) => n + (m.body ? Buffer.byteLength(m.body, "utf8") : 0), 0) + file.threads.reduce((n, t) => n + Buffer.byteLength(t.title, "utf8"), 0);
+  const blockBytes = (m: (typeof file.messages)[number]) => (!m.deleted && m.blocks?.length ? Buffer.byteLength(JSON.stringify(m.blocks), "utf8") : 0);
+  const bytes =
+    file.messages.reduce((n, m) => n + (m.body ? Buffer.byteLength(m.body, "utf8") : 0) + blockBytes(m), 0) + file.threads.reduce((n, t) => n + Buffer.byteLength(t.title, "utf8"), 0);
   if (!opts.bypassLimits && bytes > limits.storage_bytes) {
     throw new OmbError("quota_exceeded", "This export is larger than a board's storage allowance", { allowance: "storage", used: bytes, limit: limits.storage_bytes });
   }
@@ -113,9 +129,11 @@ export function importBoard(ctx: AppContext, actor: Actor, raw: unknown, opts: {
     }
     const author = (ref: string | null) => (ref ? (authorMap.get(ref) ?? actor.id) : null);
     const threadMap = new Map<string, string>();
+    const threadLabels = new Map<string, Record<string, string>>();
     for (const t of file.threads) {
       const id = newId("t");
       threadMap.set(t.id, id);
+      threadLabels.set(id, t.labels);
       const msgs = file.messages.filter((m) => m.thread_id === t.id);
       const last = msgs[msgs.length - 1]?.created_at ?? t.created_at;
       ctx.db
@@ -133,15 +151,19 @@ export function importBoard(ctx: AppContext, actor: Actor, raw: unknown, opts: {
       const threadId = threadMap.get(m.thread_id);
       if (!threadId) continue;
       const id = messageMap.get(m.id)!;
+      // Message labels and structured data come along; attachment files are not part of an export.
+      const isRoot = !firstInThread.has(threadId);
+      const labels = m.deleted ? {} : isRoot ? (threadLabels.get(threadId) ?? {}) : (m.labels ?? {});
+      const blocks = !m.deleted && m.blocks?.length ? JSON.stringify(m.blocks) : null;
       ctx.db
         .prepare(
-          `INSERT INTO messages (id, board_id, thread_id, author_id, body, body_bytes, deleted_at, reply_to, source_platform, source_author_name, source_url, source_external_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO messages (id, board_id, thread_id, author_id, body, body_bytes, deleted_at, reply_to, source_platform, source_author_name, source_url, source_external_id, created_at, edited_at, labels, blocks, is_root)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
-          id, boardId, threadId, author(m.author_ref), m.deleted ? null : m.body, m.body ? Buffer.byteLength(m.body, "utf8") : 0, m.deleted ? m.created_at : null,
+          id, boardId, threadId, author(m.author_ref), m.deleted ? null : m.body, (m.body ? Buffer.byteLength(m.body, "utf8") : 0) + (blocks ? Buffer.byteLength(blocks, "utf8") : 0), m.deleted ? m.created_at : null,
           m.reply_to ? (messageMap.get(m.reply_to) ?? null) : null, m.source?.platform ?? null, m.source?.author_name ?? null, m.source?.url ?? null,
-          m.source ? `import:${m.source.external_id}` : null, m.created_at,
+          m.source ? `import:${m.source.external_id}` : null, m.created_at, m.edited_at ?? null, JSON.stringify(labels), blocks, isRoot ? 1 : 0,
         );
       for (const ref of m.mention_refs) {
         const pid = authorMap.get(ref);

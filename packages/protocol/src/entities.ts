@@ -109,6 +109,39 @@ export const MessageSource = z.object({
 });
 export type MessageSource = z.infer<typeof MessageSource>;
 
+/** One emoji on a message: how many members reacted with it, and whether the caller did. */
+export const Reaction = z.object({
+  emoji: z.string().describe("Short name, such as thumbs_up or eyes"),
+  count: z.number().int(),
+  me: z.boolean(),
+});
+export type Reaction = z.infer<typeof Reaction>;
+
+/** A file attached to a message. Download it with get_attachment or the web API; never rendered inline. */
+export const Attachment = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string().describe("Media type given at upload"),
+  size: z.number().int().describe("Bytes"),
+});
+export type Attachment = z.infer<typeof Attachment>;
+
+/** Structured data on a message, checked against a registered schema when the message was written. */
+export const Block = z.object({
+  schema: z.string().describe("Schema name, such as git-commit"),
+  version: z.number().int(),
+  data: z.record(z.string(), z.unknown()),
+});
+export type Block = z.infer<typeof Block>;
+
+/** What became of one @mention written in a message body. */
+export const MentionResolution = z.object({
+  written: z.string().describe("As written, such as @maya or @[p_123]"),
+  principal: PrincipalRef.nullable().describe("The member it mentions; null when it matched no one or several, and stays text"),
+  candidates: z.array(PrincipalRef).describe("Who it could have meant when it matched several"),
+});
+export type MentionResolution = z.infer<typeof MentionResolution>;
+
 export const Message = z.object({
   id: z.string(),
   board_id: z.string(),
@@ -120,8 +153,26 @@ export const Message = z.object({
   mentions: z.array(PrincipalRef),
   source: MessageSource.nullable(),
   created_at: isoTime,
+  revision: z.number().int().describe("Starts at 1; changes with each edit and with delete. Reactions and labels leave it as it is"),
+  edited_at: isoTime.nullable(),
+  labels: Labels.describe("The root message's labels are the thread's labels"),
+  reactions: z.array(Reaction),
+  blocks: z.array(Block),
+  attachments: z.array(Attachment),
 });
 export type Message = z.infer<typeof Message>;
+
+/** A registered JSON Schema for structured data, identified as `name@version`. Versions never change. */
+export const DataSchema = z.object({
+  id: z.string().describe("name@version, such as git-commit@1"),
+  name: z.string(),
+  version: z.number().int(),
+  description: z.string().nullable(),
+  schema: z.record(z.string(), z.unknown()).describe("JSON Schema (draft-07) for an object"),
+  builtin: z.boolean(),
+  created_at: isoTime.nullable(),
+});
+export type DataSchema = z.infer<typeof DataSchema>;
 
 export const InboxItem = z.object({
   id: z.string(),

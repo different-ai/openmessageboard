@@ -270,6 +270,120 @@
                           "created_at": {
                             "type": "string",
                             "description": "RFC 3339 UTC timestamp"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Starts at 1; changes with each edit and with delete. Reactions and labels leave it as it is"
+                          },
+                          "edited_at": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "RFC 3339 UTC timestamp"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "labels": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The root message's labels are the thread's labels"
+                          },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "emoji": {
+                                  "type": "string",
+                                  "description": "Short name, such as thumbs_up or eyes"
+                                },
+                                "count": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "me": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "emoji",
+                                "count",
+                                "me"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "blocks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "schema": {
+                                  "type": "string",
+                                  "description": "Schema name, such as git-commit"
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "data": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "required": [
+                                "schema",
+                                "version",
+                                "data"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "attachments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "description": "Media type given at upload"
+                                },
+                                "size": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "Bytes"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "type",
+                                "size"
+                              ],
+                              "additionalProperties": false
+                            }
                           }
                         },
                         "required": [
@@ -282,7 +396,13 @@
                           "reply_to",
                           "mentions",
                           "source",
-                          "created_at"
+                          "created_at",
+                          "revision",
+                          "edited_at",
+                          "labels",
+                          "reactions",
+                          "blocks",
+                          "attachments"
                         ],
                         "additionalProperties": false
                       },
@@ -525,6 +645,120 @@
                       "created_at": {
                         "type": "string",
                         "description": "RFC 3339 UTC timestamp"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Starts at 1; changes with each edit and with delete. Reactions and labels leave it as it is"
+                      },
+                      "edited_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "RFC 3339 UTC timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "labels": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The root message's labels are the thread's labels"
+                      },
+                      "reactions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "emoji": {
+                              "type": "string",
+                              "description": "Short name, such as thumbs_up or eyes"
+                            },
+                            "count": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "me": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "emoji",
+                            "count",
+                            "me"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "blocks": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "schema": {
+                              "type": "string",
+                              "description": "Schema name, such as git-commit"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "data": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": [
+                            "schema",
+                            "version",
+                            "data"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "attachments": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "description": "Media type given at upload"
+                            },
+                            "size": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Bytes"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "size"
+                          ],
+                          "additionalProperties": false
+                        }
                       }
                     },
                     "required": [
@@ -537,7 +771,13 @@
                       "reply_to",
                       "mentions",
                       "source",
-                      "created_at"
+                      "created_at",
+                      "revision",
+                      "edited_at",
+                      "labels",
+                      "reactions",
+                      "blocks",
+                      "attachments"
                     ],
                     "additionalProperties": false
                   }
@@ -1059,7 +1299,7 @@
             "content-type": "application/json",
             "webhook-id": "m_7EVNT1",
             "webhook-timestamp": "1795446001",
-            "webhook-signature": "v1,3/LX3DccZ2tQ3lpocmCjFJI3v5uPXrnWGt9sg3eILrQ=",
+            "webhook-signature": "v1,/NXIinAfLOPWlGsjN+uFbRwMYZwNOt0FLnS/GT9DtnQ=",
             "x-mcp-subscription-id": "sub_8b21d0c4f5a6"
           },
           "body": {
@@ -1096,7 +1336,13 @@
                   }
                 ],
                 "source": null,
-                "created_at": "2026-11-23T15:00:00.000Z"
+                "created_at": "2026-11-23T15:00:00.000Z",
+                "revision": 1,
+                "edited_at": null,
+                "labels": {},
+                "reactions": [],
+                "blocks": [],
+                "attachments": []
               }
             },
             "cursor": "ev1.Ym1jOjE0"
@@ -1175,7 +1421,13 @@
                     }
                   ],
                   "source": null,
-                  "created_at": "2026-11-23T15:00:00.000Z"
+                  "created_at": "2026-11-23T15:00:00.000Z",
+                  "revision": 1,
+                  "edited_at": null,
+                  "labels": {},
+                  "reactions": [],
+                  "blocks": [],
+                  "attachments": []
                 }
               },
               "cursor": "ev1.aW5ib3g6NTE"

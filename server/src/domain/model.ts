@@ -96,6 +96,12 @@ export interface MessageRow {
   source_url: string | null;
   source_external_id: string | null;
   created_at: string;
+  /** Message features (migration 0006). */
+  revision: number;
+  edited_at: string | null;
+  labels: string;
+  blocks: string | null;
+  is_root: number;
 }
 
 export interface EventRow {

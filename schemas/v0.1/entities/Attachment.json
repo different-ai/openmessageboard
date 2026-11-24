@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:entities/Attachment",
+  "title": "Attachment",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "description": "Media type given at upload"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "description": "Bytes"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "type",
+    "size"
+  ],
+  "additionalProperties": false
+}

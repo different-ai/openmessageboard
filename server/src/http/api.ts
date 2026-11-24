@@ -33,6 +33,7 @@ import type { Actor } from "../domain/model.js";
 import { limitsFor, planOf } from "../domain/plans.js";
 import { parseBody, requireActor, type AppHono } from "./util.js";
 import { boardStream, inboxStream } from "./stream.js";
+import { registerMessageRoutes } from "./messages-api.js";
 
 export function principalOf(actor: Actor, ctx?: AppContext) {
   return {
@@ -140,14 +141,19 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   );
   app.post("/api/inbox/read", async (c) => c.json(changes.markRead(ctx, requireActor(c), await parseBody(c, MarkReadBody))));
   app.get("/api/boards/:boardId/changes", (c) =>
-    c.json(changes.boardChanges(ctx, requireActor(c), c.req.param("boardId"), c.req.query("cursor") || undefined, int(c.req.query("limit")) ?? 100)),
+    c.json(
+      changes.boardChanges(ctx, requireActor(c), c.req.param("boardId"), c.req.query("cursor") || undefined, int(c.req.query("limit")) ?? 100, undefined, {
+        labels: labelsFromQuery(c.req.queries("label") ?? []),
+      }),
+    ),
   );
   app.get("/api/boards/:boardId/stream", (c) => boardStream(ctx, c, requireActor(c), c.req.param("boardId")));
   app.get("/api/inbox/stream", (c) => inboxStream(ctx, c, requireActor(c)));
   app.get("/api/boards/:boardId/search", (c) => {
     const q = c.req.query("q") ?? "";
-    return c.json(usage.searchMessages(ctx, requireActor(c), c.req.param("boardId"), q, int(c.req.query("limit")) ?? 20));
+    return c.json(usage.searchMessages(ctx, requireActor(c), c.req.param("boardId"), q, int(c.req.query("limit")) ?? 20, labelsFromQuery(c.req.queries("label") ?? [])));
   });
+  registerMessageRoutes(app, ctx);
 
   // members, invites, agents, tokens
   app.get("/api/boards/:boardId/members", (c) => c.json({ members: boards.listMembers(ctx, requireActor(c), c.req.param("boardId")) }));

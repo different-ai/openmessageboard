@@ -31,6 +31,9 @@ export const EVENT_TYPES = [
   "thread.updated",
   "message.created",
   "message.deleted",
+  "message.edited",
+  "reactions.changed",
+  "labels.changed",
   "member.joined",
   "member.updated",
   "member.left",
@@ -48,10 +51,28 @@ export type Profile = (typeof PROFILES)[number];
 export const LABEL_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 export const MAX_LABELS = 16;
 export const MAX_LABEL_VALUE = 64;
+/** Label keys under this prefix belong to the server; setting one fails with `reserved_label`. */
+export const RESERVED_LABEL_PREFIX = "board.";
 export const MAX_TITLE_CHARS = 200;
 export const MAX_MENTIONS = 10;
 export const MAX_IDEMPOTENCY_KEY = 64;
 export const WAIT_MAX_SECONDS = 25;
+
+/** Message features: attachments, structured data blocks, reactions. */
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+/** Largest file one upload may carry. */
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+/** `get_attachment` returns the file inline (base64) up to this size. */
+export const MAX_INLINE_ATTACHMENT_BYTES = 1024 * 1024;
+export const MAX_ATTACHMENT_NAME = 255;
+export const MAX_BLOCKS_PER_MESSAGE = 10;
+/** Distinct emoji on one message. */
+export const MAX_REACTIONS_PER_MESSAGE = 20;
+/** Schema names: `git-commit`, `deployment`; a schema is identified as `name@version`. */
+export const SCHEMA_NAME_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
+export const MAX_SCHEMA_VERSION = 10000;
+/** Serialized JSON Schema definition, in bytes. */
+export const MAX_SCHEMA_BYTES = 16 * 1024;
 
 /** Free cloud defaults. Every value is a host setting. */
 export const DEFAULT_LIMITS = {
@@ -61,6 +82,7 @@ export const DEFAULT_LIMITS = {
   live_connections_per_board: 20,
   message_bytes: 16 * 1024,
   storage_bytes: 100 * 1024 * 1024,
+  attachment_bytes: 10 * 1024 * 1024,
   webhook_subscriptions_per_principal: 10,
   webhook_subscriptions_per_board: 50,
   agent_posts_per_day: 200,
@@ -83,6 +105,7 @@ export const OPENWORK_PLAN_LIMITS = {
   live_connections_per_board: 50,
   message_bytes: 32 * 1024,
   storage_bytes: 1024 * 1024 * 1024,
+  attachment_bytes: 100 * 1024 * 1024,
   webhook_subscriptions_per_principal: 25,
   webhook_subscriptions_per_board: 100,
   agent_posts_per_day: 1000,
@@ -105,6 +128,7 @@ export type RateLimits = { -readonly [K in keyof typeof DEFAULT_RATE_LIMITS]: nu
 export const ALLOWANCES = [
   "posts",
   "storage",
+  "attachments",
   "members",
   "live_connections",
   "webhook_subscriptions",

@@ -39,7 +39,7 @@
       "type": "string"
     },
     "labels": {
-      "description": "Every key=value pair must match",
+      "description": "Every key=value pair must match, on the thread's root or on one of its messages",
       "type": "object",
       "propertyNames": {
         "type": "string"
