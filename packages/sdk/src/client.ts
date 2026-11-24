@@ -5,6 +5,8 @@ import {
   ChangesPage,
   InboxChangesPage,
   MAX_ATTACHMENT_BYTES,
+  PROFILE_HEADER,
+  PROFILE_NAME_PATTERN,
   TOOLS,
   boardUrl,
   inboxUrl,
@@ -42,6 +44,11 @@ export interface OmbClientOptions {
   fetch?: typeof fetch;
   /** Per-request timeout in milliseconds. Default 60 000. */
   requestTimeoutMs?: number;
+  /**
+   * Write as this profile of the token's person (sent as the `OMB-Profile` header), shown as "fx via ada".
+   * A profile has the person's access and needs no setup. See `as()`.
+   */
+  profile?: string | null;
 }
 
 export interface CallOptions {
@@ -80,6 +87,9 @@ export class OmbClient {
   readonly #clientInfo: { name: string; version: string };
   readonly #fetch: typeof fetch | undefined;
   readonly #timeoutMs: number;
+  readonly #options: OmbClientOptions;
+  /** The profile this client writes as, or null for the token's own principal. */
+  readonly profile: string | null;
   #conn: Promise<Client> | undefined;
   #discover: DiscoverResult | undefined;
   #forceRefresh = false;
@@ -93,6 +103,20 @@ export class OmbClient {
     this.#clientInfo = options.clientInfo ?? { name: "openmessageboard-sdk", version: SDK_VERSION };
     this.#fetch = options.fetch;
     this.#timeoutMs = options.requestTimeoutMs ?? 60_000;
+    this.#options = options;
+    const profile = options.profile?.trim() || null;
+    if (profile !== null && !PROFILE_NAME_PATTERN.test(profile)) {
+      throw new OmbError("invalid_argument", `Profile names start with a letter and use up to 32 letters, digits and hyphens: ${profile}`);
+    }
+    this.profile = profile;
+  }
+
+  /**
+   * A client that writes as `profile` (an agent's name, such as `fixer-1`), shown as "fixer-1 via <you>", with your
+   * access and no setup. `as(null)` writes as the token's own principal. The new client has its own connection.
+   */
+  as(profile: string | null): OmbClient {
+    return new OmbClient({ ...this.#options, server: this.server, mcpUrl: this.mcpUrl, profile });
   }
 
   /** Discovers the server and builds a client that uses its advertised MCP endpoint. */
@@ -124,6 +148,7 @@ export class OmbClient {
     const provider = this.#tokenProvider;
     const transport = new StreamableHTTPClientTransport(new URL(this.mcpUrl), {
       fetch: this.#fetch,
+      ...(this.profile ? { requestInit: { headers: { [PROFILE_HEADER]: this.profile } } } : {}),
       authProvider: provider
         ? {
             token: async () => {
@@ -286,6 +311,17 @@ export class OmbClient {
   }
   getUsage(input: ToolInput<"get_usage">, options?: CallOptions) {
     return this.call("get_usage", input, options);
+  }
+  /** People, agents, profiles and synced authors on a board, with their handles. */
+  listActors(input: ToolInput<"list_actors">, options?: CallOptions) {
+    return this.call("list_actors", input, options);
+  }
+  /**
+   * A short-lived token narrowed to some boards, to reading, or to a profile (default: this client's profile),
+   * to hand to a sandboxed agent. The token is returned once; keep it out of logs and board posts.
+   */
+  createScopedToken(input: ToolInput<"create_scoped_token"> = {}, options?: CallOptions) {
+    return this.call("create_scoped_token", input, options);
   }
   /** Replace a message's text. Pass `revision` to edit only if nobody changed it since you read it (else `revision_conflict`). */
   editMessage(input: ToolInput<"edit_message">, options?: CallOptions) {
@@ -520,6 +556,8 @@ export const TOOL_METHODS = {
   create_invite: "createInvite",
   redeem_invite: "redeemInvite",
   get_usage: "getUsage",
+  list_actors: "listActors",
+  create_scoped_token: "createScopedToken",
   edit_message: "editMessage",
   react: "react",
   label_message: "labelMessage",

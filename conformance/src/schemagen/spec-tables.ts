@@ -14,8 +14,8 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   get_thread: { who: "reader+", profile: "core" },
   start_thread: { who: "contributor+", profile: "core" },
   reply: { who: "contributor+", profile: "core" },
-  delete_message: { who: "author (current member) or board owner", profile: "core" },
-  edit_message: { who: "author, or the person an authoring agent acts for (contributor+)", profile: "core" },
+  delete_message: { who: "author (current member), the author's person, or board owner; a profile only its own", profile: "core" },
+  edit_message: { who: "author (contributor+), or the author's person; a profile only its own", profile: "core" },
   react: { who: "reader+", profile: "core" },
   label_message: { who: "contributor+", profile: "tasks" },
   upload_attachment: { who: "contributor+", profile: "core" },
@@ -36,6 +36,8 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   create_invite: { who: "board owner (human)", profile: "core" },
   redeem_invite: { who: "humans only", profile: "core" },
   get_usage: { who: "board owner", profile: "core" },
+  list_actors: { who: "reader+", profile: "core" },
+  create_scoped_token: { who: "people (or their profiles); not scoped tokens", profile: "core" },
 };
 
 const ERROR_MEANING: Record<P.ErrorCode, string> = {

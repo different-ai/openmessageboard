@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
 import type { Change, Message, Thread, Usage } from "@openmessageboard/sdk";
-import { UsageError, boardIdFrom, helpText, parseCommandLine, parseLabels, parseTime, splitOptionalBoard, threadIdFrom } from "../src/args.ts";
+import { UsageError, boardIdFrom, helpText, parseCommandLine, parseDurationSeconds, parseLabels, parseTime, splitOptionalBoard, threadIdFrom } from "../src/args.ts";
 import { configPath, readConfig, resolveConnection, writeConfig } from "../src/config.ts";
 import { authorName, formatChange, formatMessage, formatTable, formatTasks, formatUsage, relativeTime } from "../src/format.ts";
 import type { Io } from "../src/io.ts";
@@ -76,6 +76,20 @@ describe("argument parsing", () => {
     assert.equal(p.values.task, true);
   });
 
+  it("parses tokens create and actors", () => {
+    const t = parseCommandLine(["tokens", "create", "--board", "b_1", "--board", "b_2", "--read-only", "--as", "fixer-1", "--expires", "1h", "--json"]);
+    assert.equal(t.command, "tokens create");
+    assert.deepEqual(t.values.board, ["b_1", "b_2"]);
+    assert.equal(t.values["read-only"], true);
+    assert.equal(t.values.as, "fixer-1");
+    assert.equal(t.values.expires, "1h");
+    assert.equal(parseCommandLine(["actors", "b_1", "--account", "bot"]).values.account, "bot");
+    assert.equal(parseDurationSeconds("1h", "--expires"), 3600);
+    assert.equal(parseDurationSeconds("90", "--expires"), 90);
+    assert.equal(parseDurationSeconds("30m", "--expires"), 1800);
+    assert.throws(() => parseDurationSeconds("soon", "--expires"), UsageError);
+  });
+
   it("parses task subcommands", () => {
     const claim = parseCommandLine(["tasks", "claim", "--ready", "--board", "b_1", "--label", "area=ios"]);
     assert.equal(claim.command, "tasks claim");
@@ -141,7 +155,7 @@ describe("argument parsing", () => {
 });
 
 describe("config", () => {
-  const config = { server: "https://board.example.com", profiles: { default: { token: "omb_person" }, "release-agent": { token: "omb_agent" } } };
+  const config = { server: "https://board.example.com", accounts: { default: { token: "omb_person" }, "release-agent": { token: "omb_agent" } } };
 
   it("lives under XDG_CONFIG_HOME, else ~/.config", () => {
     assert.equal(configPath({ XDG_CONFIG_HOME: "/x" }), "/x/openmessageboard/config.json");
@@ -156,21 +170,36 @@ describe("config", () => {
     assert.deepEqual(readConfig(path), config);
     writeFileSync(path, "{nope");
     assert.throws(() => readConfig(path), /not valid JSON/);
-    assert.deepEqual(readConfig(join(dir, "missing.json")), { profiles: {} });
+    assert.deepEqual(readConfig(join(dir, "missing.json")), { accounts: {} });
+  });
+
+  it("reads config files written before accounts were named profiles", () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-cli-"));
+    const path = join(dir, "config.json");
+    writeFileSync(path, JSON.stringify({ server: "https://board.example.com", profiles: { default: { token: "omb_person" }, bot: { token: "omb_agent" } } }));
+    assert.deepEqual(readConfig(path), { server: "https://board.example.com", accounts: { default: { token: "omb_person" }, bot: { token: "omb_agent" } } });
   });
 
   it("resolves the server and credential in order", () => {
     assert.equal(resolveConnection({}, {}, config).token, "omb_person");
     assert.equal(resolveConnection({}, { OMB_TOKEN: "env" }, config).token, "env");
-    assert.equal(resolveConnection({ as: "release-agent" }, { OMB_TOKEN: "env" }, config).token, "omb_agent", "--as beats OMB_TOKEN");
+    assert.equal(resolveConnection({ account: "release-agent" }, { OMB_TOKEN: "env" }, config).token, "omb_agent", "--account beats OMB_TOKEN");
+    // --as names a profile to write as; it never picks a credential.
+    const asFx = resolveConnection({ as: "fixer-1" }, {}, config);
+    assert.equal(asFx.token, "omb_person");
+    assert.equal(asFx.profile, "fixer-1");
+    assert.equal(resolveConnection({}, { OMB_PROFILE: "fixer-2" }, config).profile, "fixer-2");
+    assert.equal(resolveConnection({ as: "fixer-1" }, { OMB_PROFILE: "fixer-2" }, config).profile, "fixer-1", "--as beats OMB_PROFILE");
+    assert.equal(resolveConnection({}, {}, config).profile, null);
+    assert.throws(() => resolveConnection({ as: "1-bad" }, {}, config), /start with a letter/);
     assert.equal(resolveConnection({ server: "https://other.example.com/mcp" }, { OMB_SERVER: "https://env.example.com" }, config).server, "https://other.example.com");
     assert.equal(resolveConnection({}, { OMB_SERVER: "https://env.example.com" }, config).server, "https://env.example.com");
     const oidc = resolveConnection({ oidc: "github" }, {}, config);
     assert.equal(oidc.token, undefined);
     assert.equal(typeof oidc.tokenProvider, "function");
     assert.equal(oidc.source, "oidc:github");
-    assert.throws(() => resolveConnection({ as: "nobody" }, {}, config), /omb login --as nobody/);
-    assert.throws(() => resolveConnection({}, {}, { profiles: {} }), /No server configured/);
+    assert.throws(() => resolveConnection({ account: "nobody" }, {}, config), /omb login --account nobody/);
+    assert.throws(() => resolveConnection({}, {}, { accounts: {} }), /No server configured/);
     assert.throws(() => resolveConnection({ oidc: "gitlab" }, {}, config), /github or vercel/);
   });
 });
@@ -276,6 +305,12 @@ describe("main (no network)", () => {
     const c = io();
     assert.equal(await main(["post", "only-a-title"], c.value), 1);
     assert.match(c.err.join(""), /Usage: omb post/);
+  });
+
+  it("refuses login --as: saved credentials are accounts now", async () => {
+    const a = io();
+    assert.equal(await main(["login", "--server", "https://board.example.com", "--token", "t", "--as", "bot"], a.value), 1);
+    assert.match(a.err.join(""), /use --account <name>/);
   });
 
   it("reports errors as JSON with --json", async () => {

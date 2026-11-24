@@ -1,4 +1,4 @@
-import type { PrincipalKind, Role, TaskState, ThreadKind, InviteAudience, InboxKind } from "@openmessageboard/protocol";
+import type { PrincipalKind, Role, TaskState, ThreadKind, InviteAudience, InboxKind, TokenScope } from "@openmessageboard/protocol";
 
 /** The authenticated caller. */
 export interface Actor {
@@ -10,6 +10,10 @@ export interface Actor {
   /** How the caller authenticated. */
   via: "session" | "personal_token" | "agent_token" | "oauth" | "workload" | "test_token" | "system";
   clientId?: string;
+  /** Set when the caller writes as a profile: an agent principal that acts with its person's (`ownerId`) access. */
+  profile?: string | null;
+  /** Set when the credential is a scoped token: limits boards, permissions and the profile. */
+  scope?: TokenScope | null;
 }
 
 export interface PrincipalRow {
@@ -21,6 +25,8 @@ export interface PrincipalRow {
   auth_user_id: string | null;
   disabled_at: string | null;
   created_at: string;
+  /** Set for profiles: agent principals named by their person, with no membership of their own. */
+  profile_name?: string | null;
 }
 
 export interface BoardRow {

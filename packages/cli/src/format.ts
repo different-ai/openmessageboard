@@ -1,4 +1,4 @@
-import type { Change, DataSchema, InboxItem, Member, Membership, Message, PrincipalRef, Thread, Usage } from "@openmessageboard/sdk";
+import type { BoardActor, Change, DataSchema, InboxItem, Member, Membership, Message, PrincipalRef, Thread, Usage } from "@openmessageboard/sdk";
 
 /** "release-agent (via Maya)" for agents, the display name otherwise. */
 export function authorName(p: PrincipalRef): string {
@@ -114,6 +114,14 @@ export function formatMembers(members: Member[]): string {
   return formatTable(
     ["ID", "HANDLE", "NAME", "KIND", "ROLE", "ACCESS ENDS"],
     members.map((m) => [m.principal.id, `@${m.handle}`, authorName(m.principal), m.principal.kind, m.role, m.access_ends_at ?? "-"]),
+  );
+}
+
+export function formatActors(actors: BoardActor[]): string {
+  if (actors.length === 0) return "No one yet.";
+  return formatTable(
+    ["ID", "HANDLE", "NAME", "KIND", "MEMBER"],
+    actors.map((a) => [a.id, `@${a.handle}`, a.via ? `${a.display_name} (via ${a.via.display_name})` : a.display_name, a.kind, a.is_member ? "yes" : "no"]),
   );
 }
 

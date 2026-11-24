@@ -14,6 +14,7 @@ import { getAttachment, readAttachment, uploadAttachment } from "../src/domain/a
 import { exportBoard } from "../src/domain/portability.ts";
 import { findMentions } from "../src/domain/mentions.ts";
 import { actorFromPrincipal, getPrincipal } from "../src/domain/access.ts";
+import { ensureProfile, profileActor } from "../src/domain/profiles.ts";
 import { OmbError } from "../src/errors.ts";
 import type { AppContext } from "../src/context.ts";
 import type { Actor } from "../src/domain/model.ts";
@@ -69,7 +70,7 @@ test("edit: author only, revisions, conflicts, tombstones, storage and a change"
   assert.equal(editMessage(ctx, maya, t.message.id, { body: "step 2 of 5, tests pass" }).message.revision, 2);
   // Owners can delete anything but edit only their own.
   await rejects(() => editMessage(ctx, owner, t.message.id, { body: "owner rewrite" }), "forbidden");
-  assert.equal(getThread(ctx, owner, t.thread.id).messages[0]!.body, "step 2 of 5, tests pass");
+  assert.equal(getThread(ctx, owner, t.thread.id).messages.find((m) => m.id === t.message.id)!.body, "step 2 of 5, tests pass");
 
   // Search follows the edit.
   assert.equal(searchMessages(ctx, owner, boardId, "tests").results.length, 1);
@@ -94,6 +95,26 @@ test("edit: a person edits their agent's messages; edits re-resolve mentions", a
   assert.ok(inbox.items.some((i) => i.kind === "mention" && i.message?.id === t.message.id), "a newly mentioned member gets a mention item");
   const removed = editMessage(ctx, maya, t.message.id, { body: "deployed" });
   assert.deepEqual(removed.message.mentions, []);
+});
+
+test("profiles: a profile edits only what it wrote, its person edits all of it, and @person/profile mentions it", async () => {
+  const { ctx, owner, maya, boardId } = await setup();
+  const fx = profileActor(maya, ensureProfile(ctx, getPrincipal(ctx, maya.id)!, "fx"));
+  const t = startThread(ctx, fx, boardId, { title: "From fx", body: "fx here", idempotency_key: key() });
+  const mine = reply(ctx, maya, t.thread.id, { body: "maya here", idempotency_key: key() });
+  assert.equal(editMessage(ctx, maya, t.message.id, { body: "fx here (fixed by maya)" }).message.revision, 2);
+  await rejects(() => editMessage(ctx, fx, mine.message.id, { body: "fx rewrites maya" }), "forbidden");
+  await rejects(() => editMessage(ctx, owner, t.message.id, { body: "owner rewrites fx" }), "forbidden");
+  assert.equal(editMessage(ctx, fx, t.message.id, { body: "fx again" }).message.revision, 3);
+  const r = reply(ctx, owner, t.thread.id, { body: "thanks @maya/fx and @maya/nobody", idempotency_key: key() });
+  assert.deepEqual(
+    r.mentions_resolved?.map((m) => [m.written, m.principal?.id ?? null]),
+    [
+      ["@maya/fx", fx.id],
+      ["@maya/nobody", null],
+    ],
+  );
+  assert.deepEqual(r.message.mentions.map((m) => m.id), [fx.id]);
 });
 
 test("reactions: normalized names, counts, me, readers react, tombstones refuse", async () => {
@@ -155,7 +176,7 @@ test("labels on messages: root labels are thread labels, conditions, reserved ke
   assert.deepEqual(getThread(ctx, owner, t.thread.id).thread.labels, { kind: "bug", area: "web" });
   assert.deepEqual(changeTypes(ctx, owner, boardId, c1), ["labels.changed", "thread.updated"]);
   setLabels(ctx, owner, t.thread.id, { remove: ["area"] });
-  assert.deepEqual(getThread(ctx, owner, t.thread.id).messages[0]!.labels, { kind: "bug" });
+  assert.deepEqual(getThread(ctx, owner, t.thread.id).messages.find((m) => m.id === t.message.id)!.labels, { kind: "bug" });
 
   // Filters match the message or its thread's root.
   const ids = (labels: Record<string, string>) => listThreads(ctx, owner, boardId, { labels }).threads.map((x) => x.id);

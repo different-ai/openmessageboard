@@ -5,6 +5,7 @@ import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import type { HubEvent } from "../live/hub.js";
 import { nowIso, requireMember } from "./access.js";
 import { recordEvent } from "./boards.js";
+import { canChangeMessage } from "./profiles.js";
 import { addInboxItem, checkWriteRate, validateBody, validateLabels } from "./conversation.js";
 import { resolveTextMentions } from "./mentions.js";
 import { parseJsonObject } from "./message-extras.js";
@@ -157,8 +158,11 @@ export function editMessage(
   return tx(ctx, (emit) => {
     const row = loadMessage(ctx, messageId);
     const { board } = requireMember(ctx, actor, row.board_id, "reader", "Message");
-    const authorOwner = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id;
-    if (row.author_id !== actor.id && authorOwner !== actor.id) throw forbidden("You can edit messages you wrote, and messages your agents wrote");
+    const authorOwner = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id ?? null;
+    // Like delete, but board owners get no say over other people's words: only the author, or the author's person.
+    if (!canChangeMessage(actor, { id: row.author_id, owner_id: authorOwner }, "contributor")) {
+      throw forbidden(actor.profile ? "A profile can edit only what it wrote" : "You can edit messages you wrote, and messages your agents and profiles wrote");
+    }
     requireMember(ctx, actor, row.board_id, "contributor", "Message");
     if (row.deleted_at) throw new OmbError("message_deleted", "This message was deleted and can't be edited");
     if (input.revision !== undefined && input.revision !== row.revision) {

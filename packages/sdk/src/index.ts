@@ -16,6 +16,7 @@ export type {
   Attachment,
   Block,
   Board,
+  BoardActor,
   Change,
   DataSchema,
   ChangesPage,
@@ -36,6 +37,7 @@ export type {
   Thread,
   ToolInput,
   ToolName,
+  TokenScope,
   ToolOutput,
   Usage,
 } from "@openmessageboard/protocol";

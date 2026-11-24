@@ -1,6 +1,7 @@
 import type { MentionResolution, PrincipalRef } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { activeMembership } from "./access.js";
+import { findProfile } from "./profiles.js";
 import type { Actor } from "./model.js";
 import { principalRefs } from "./present.js";
 
@@ -61,15 +62,25 @@ export function resolveTextMentions(ctx: AppContext, boardId: string, body: stri
   if (written.length === 0) return { ids: [], resolved: [] };
   const matches: { written: string; ids: string[] }[] = [];
   for (const w of written) {
-    let candidates: { id: string; kind: Actor["kind"]; owner_id: string | null }[] = [];
+    let candidates: { id: string; kind: Actor["kind"]; owner_id: string | null; profile_name: string | null }[] = [];
     if (w.principalId) {
-      candidates = ctx.db.prepare("SELECT id, kind, owner_id FROM principals WHERE id = ?").all(w.principalId) as typeof candidates;
+      candidates = ctx.db.prepare("SELECT id, kind, owner_id, profile_name FROM principals WHERE id = ?").all(w.principalId) as typeof candidates;
     } else if (w.handle) {
-      candidates = ctx.db
-        .prepare("SELECT p.id, p.kind, p.owner_id FROM memberships m JOIN principals p ON p.id = m.principal_id WHERE m.board_id = ? AND lower(m.handle) = ?")
-        .all(boardId, w.handle) as typeof candidates;
+      // `@ada` is a member's handle; `@ada/fx` is the profile fx of the member whose handle is ada (as list_actors shows it).
+      const [person, profile] = w.handle.split("/") as [string, string | undefined];
+      const members = ctx.db
+        .prepare("SELECT p.id, p.kind, p.owner_id, p.profile_name FROM memberships m JOIN principals p ON p.id = m.principal_id WHERE m.board_id = ? AND lower(m.handle) = ?")
+        .all(boardId, person) as typeof candidates;
+      if (profile === undefined) candidates = members;
+      else {
+        candidates = [];
+        for (const m of members) {
+          const row = m.kind === "human" ? findProfile(ctx, m.id, profile) : undefined;
+          if (row) candidates.push({ id: row.id, kind: row.kind, owner_id: row.owner_id, profile_name: row.profile_name ?? null });
+        }
+      }
     }
-    const active = candidates.filter((p) => activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id }));
+    const active = candidates.filter((p) => activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name }));
     matches.push({ written: w.written, ids: active.map((p) => p.id) });
   }
   const refs: Map<string, PrincipalRef> = principalRefs(ctx, matches.flatMap((m) => m.ids));

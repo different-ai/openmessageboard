@@ -28,10 +28,13 @@ import * as changes from "../domain/changes.js";
 import * as usage from "../domain/usage.js";
 import * as portability from "../domain/portability.js";
 import { presentBoard } from "../domain/present.js";
-import { getMembership } from "../domain/access.js";
+import { getMembership, holderId } from "../domain/access.js";
+import { listActors } from "../domain/profiles.js";
+import * as tokens from "../domain/tokens.js";
+import { boardInScope, cappedRole } from "../auth/scopes.js";
 import type { Actor } from "../domain/model.js";
 import { limitsFor, planOf } from "../domain/plans.js";
-import { parseBody, requireActor, type AppHono } from "./util.js";
+import { parseBody, requireActor, type AppCtx, type AppHono } from "./util.js";
 import { boardStream, inboxStream } from "./stream.js";
 import { registerMessageRoutes } from "./messages-api.js";
 
@@ -43,11 +46,27 @@ export function principalOf(actor: Actor, ctx?: AppContext) {
     display_name: actor.displayName,
     email: actor.kind === "human" ? actor.email : null,
     owner: null as null | { id: string; kind: "human"; display_name: string; via: null },
+    ...(actor.profile ? { profile: actor.profile } : {}),
+    ...(actor.scope ? { scope: actor.scope } : {}),
   };
 }
 
+/**
+ * The caller's own board: a person's (created on first use), or for a profile its person's (never created).
+ * A scoped token never creates one and sees it only when it is in scope.
+ */
+function ownBoardOf(ctx: AppContext, actor: Actor, createBoard: boolean) {
+  const row = actor.profile ? (boards.ownedBoards(ctx, holderId(actor))[0] ?? null) : boards.ensureOwnBoard(ctx, actor, { create: createBoard && !actor.scope });
+  return row && boardInScope(actor, row.id) ? row : null;
+}
+
+function ownedBoardView(ctx: AppContext, actor: Actor, own: NonNullable<ReturnType<typeof ownBoardOf>>) {
+  const m = getMembership(ctx, own.id, holderId(actor))!;
+  return presentBoard(ctx, own, { ...m, role: cappedRole(actor, m.role) });
+}
+
 export function whoami(ctx: AppContext, actor: Actor, server: ServerInfo, createBoard: boolean) {
-  const own = boards.ensureOwnBoard(ctx, actor, { create: createBoard });
+  const own = ownBoardOf(ctx, actor, createBoard);
   const principal = principalOf(actor, ctx);
   if (actor.ownerId) {
     const owner = ctx.db.prepare("SELECT id, display_name FROM principals WHERE id = ?").get(actor.ownerId) as { id: string; display_name: string } | undefined;
@@ -55,7 +74,7 @@ export function whoami(ctx: AppContext, actor: Actor, server: ServerInfo, create
   }
   return {
     principal,
-    owned_board: own ? presentBoard(ctx, own, getMembership(ctx, own.id, actor.id)!) : null,
+    owned_board: own ? ownedBoardView(ctx, actor, own) : null,
     memberships: boards.listMemberships(ctx, actor),
     server,
   };
@@ -73,6 +92,21 @@ function labelsFromQuery(values: string[]): Record<string, string> | undefined {
 }
 
 const int = (v: string | undefined) => (v === undefined || v === "" ? undefined : Number.parseInt(v, 10));
+
+/** A token request body; an empty or missing body means an unscoped token, as before. */
+async function tokenBody(c: AppCtx): Promise<z.infer<typeof CreateTokenBody>> {
+  const text = await c.req.text();
+  if (!text.trim()) return {};
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw invalid("Request body must be JSON");
+  }
+  const parsed = CreateTokenBody.safeParse(raw ?? {});
+  if (!parsed.success) throw invalid(parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "));
+  return parsed.data;
+}
 
 export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () => ServerInfo): void {
   app.get("/api/session", (c) => {
@@ -157,6 +191,7 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
 
   // members, invites, agents, tokens
   app.get("/api/boards/:boardId/members", (c) => c.json({ members: boards.listMembers(ctx, requireActor(c), c.req.param("boardId")) }));
+  app.get("/api/boards/:boardId/actors", (c) => c.json({ actors: listActors(ctx, requireActor(c), c.req.param("boardId")) }));
   app.patch("/api/boards/:boardId/members/:principalId", async (c) =>
     c.json({ member: boards.updateMember(ctx, requireActor(c), c.req.param("boardId"), c.req.param("principalId"), await parseBody(c, UpdateMemberBody)) }),
   );
@@ -172,10 +207,7 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   app.get("/api/agents", (c) => c.json({ agents: boards.listAgents(ctx, requireActor(c)) }));
   app.post("/api/agents", async (c) => c.json({ agent: boards.createAgent(ctx, requireActor(c), (await parseBody(c, CreateAgentBody)).display_name) }));
   app.delete("/api/agents/:agentId", (c) => c.json({ agent: boards.disableAgent(ctx, requireActor(c), c.req.param("agentId")) }));
-  app.post("/api/agents/:agentId/tokens", async (c) => {
-    const body = await parseBody(c, CreateTokenBody).catch(() => ({ label: undefined }));
-    return c.json(boards.createAgentToken(ctx, requireActor(c), c.req.param("agentId"), body.label));
-  });
+  app.post("/api/agents/:agentId/tokens", async (c) => c.json(tokens.createAgentToken(ctx, requireActor(c), c.req.param("agentId"), await tokenBody(c))));
   app.delete("/api/agents/:agentId/tokens/:tokenId", (c) => {
     boards.revokeAgentToken(ctx, requireActor(c), c.req.param("agentId"), c.req.param("tokenId"));
     return c.json({ revoked: true });
@@ -185,10 +217,7 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
     return c.json({ member: boards.addAgentToBoard(ctx, requireActor(c), c.req.param("boardId"), body.agent_id, body.role) });
   });
   app.get("/api/tokens", (c) => c.json({ tokens: boards.listPersonalTokens(ctx, requireActor(c)) }));
-  app.post("/api/tokens", async (c) => {
-    const body = await parseBody(c, CreateTokenBody).catch(() => ({ label: undefined }));
-    return c.json(boards.createPersonalToken(ctx, requireActor(c), body.label));
-  });
+  app.post("/api/tokens", async (c) => c.json(tokens.createPersonalToken(ctx, requireActor(c), await tokenBody(c))));
   app.delete("/api/tokens/:tokenId", (c) => {
     boards.revokePersonalToken(ctx, requireActor(c), c.req.param("tokenId"));
     return c.json({ revoked: true });

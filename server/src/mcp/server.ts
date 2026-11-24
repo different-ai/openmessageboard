@@ -11,7 +11,10 @@ import * as usage from "../domain/usage.js";
 import * as messages from "../domain/messages.js";
 import * as attachments from "../domain/attachments.js";
 import * as schemas from "../domain/schemas.js";
-import { requireMember } from "../domain/access.js";
+import { holderId, requireMember } from "../domain/access.js";
+import { listActors } from "../domain/profiles.js";
+import { createScopedToken } from "../domain/tokens.js";
+import { METHOD_SCOPE, TOOL_SCOPE, requireScope } from "../auth/scopes.js";
 import type { Actor } from "../domain/model.js";
 import { whoami } from "../http/api.js";
 import { EventsError, listEventDefinitions, pollEvents, type EventSubscriptions } from "./events.js";
@@ -32,6 +35,7 @@ const READ_ONLY: ReadonlySet<ToolName> = new Set([
   "search_messages",
   "list_members",
   "get_usage",
+  "list_actors",
   "get_attachment",
   "list_schemas",
   "get_schema",
@@ -111,6 +115,8 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     create_invite: (a, x) => ({ invite: invites.createInvite(ctx, a, x.board_id, x) }),
     redeem_invite: (a, x) => ({ board: invites.redeemInvite(ctx, a, x.invite) }),
     get_usage: (a, x) => usage.getUsage(ctx, a, x.board_id),
+    list_actors: (a, x) => ({ actors: listActors(ctx, a, x.board_id) }),
+    create_scoped_token: (a, x) => createScopedToken(ctx, a, x),
   };
 
   const runTool = async (name: ToolName, args: unknown, sctx: ServerContext) => {
@@ -121,7 +127,9 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
         const issues = parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
         throw new OmbError("invalid_argument", issues.map((i) => `${i.path || "arguments"}: ${i.message}`).join("; "), { issues });
       }
-      if (READ_ONLY.has(name)) ctx.rate.hit(`r:p:${actor.id}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
+      requireScope(actor, TOOL_SCOPE[name]);
+      // A person's profiles share the person's burst limits.
+      if (READ_ONLY.has(name)) ctx.rate.hit(`r:p:${holderId(actor)}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
       const handler = handlers[name] as (a: Actor, x: unknown, s: ServerContext) => unknown;
       return ok(await handler(actor, parsed.data, sctx));
     } catch (e) {
@@ -215,10 +223,15 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
   };
   const anyParams = z.object({}).passthrough();
   const low = server.server;
+  const scoped = (method: string, sctx: ServerContext): Actor => {
+    const actor = actorOf(sctx);
+    requireScope(actor, METHOD_SCOPE[method] ?? "manage");
+    return actor;
+  };
   low.setRequestHandler("events/list", { params: anyParams.optional() }, async () => listEventDefinitions());
-  low.setRequestHandler("events/poll", { params: anyParams }, async (params, sctx) => rpc(() => pollEvents(ctx, actorOf(sctx), params)));
-  low.setRequestHandler("events/subscribe", { params: anyParams }, async (params, sctx) => rpc(() => deps.events.subscribe(actorOf(sctx), params)));
-  low.setRequestHandler("events/unsubscribe", { params: anyParams }, async (params, sctx) => rpc(() => deps.events.unsubscribe(actorOf(sctx), params)));
+  low.setRequestHandler("events/poll", { params: anyParams }, async (params, sctx) => rpc(() => pollEvents(ctx, scoped("events/poll", sctx), params)));
+  low.setRequestHandler("events/subscribe", { params: anyParams }, async (params, sctx) => rpc(() => deps.events.subscribe(scoped("events/subscribe", sctx), params)));
+  low.setRequestHandler("events/unsubscribe", { params: anyParams }, async (params, sctx) => rpc(() => deps.events.unsubscribe(scoped("events/unsubscribe", sctx), params)));
   return server;
 }
 

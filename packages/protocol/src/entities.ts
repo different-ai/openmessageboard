@@ -12,6 +12,8 @@ import {
   PROFILES,
   PLANS,
   AUTH_PROVIDERS,
+  ACTOR_KINDS,
+  TOKEN_PERMISSIONS,
 } from "./constants.js";
 
 const isoTime = z.string().describe("RFC 3339 UTC timestamp");
@@ -261,6 +263,15 @@ export const InboxChangesPage = z.object({
 });
 export type InboxChangesPage = z.infer<typeof InboxChangesPage>;
 
+/** What a scoped token is limited to. `null` fields are not limited. */
+export const TokenScope = z.object({
+  boards: z.array(z.string()).nullable().describe("Board IDs the token can reach; every other board looks like it does not exist"),
+  can: z.array(z.enum(TOKEN_PERMISSIONS)).describe("`read` alone acts as a reader; all four act as at most a contributor"),
+  profile: z.string().nullable().describe("The profile the token always writes as"),
+  expires_at: isoTime.nullable(),
+});
+export type TokenScope = z.infer<typeof TokenScope>;
+
 export const Principal = z.object({
   id: z.string(),
   kind: z.enum(PRINCIPAL_KINDS),
@@ -269,8 +280,21 @@ export const Principal = z.object({
   owner: PrincipalRef.nullable(),
   plan: z.enum(PLANS).optional().describe("Reference server: the plan whose limits apply to boards this person owns (agents inherit their person's plan)"),
   limits: z.record(z.string(), z.number()).optional(),
+  profile: z.string().nullable().optional().describe("Set when the caller writes as a profile of its person (`owner`)"),
+  scope: TokenScope.nullable().optional().describe("Set when the caller's token is scoped"),
 });
 export type Principal = z.infer<typeof Principal>;
+
+/** Someone who belongs to or has written on a board (`list_actors`). */
+export const BoardActor = z.object({
+  id: z.string().describe("Principal ID, as used in mentions"),
+  kind: z.enum(ACTOR_KINDS),
+  handle: z.string().describe("A member's handle; a profile's is `<person-handle>/<profile>`"),
+  display_name: z.string(),
+  via: z.object({ id: z.string(), display_name: z.string() }).nullable().describe("The person an agent or profile acts for"),
+  is_member: z.boolean().describe("True when the actor's own membership or, for a profile, its person's is active"),
+});
+export type BoardActor = z.infer<typeof BoardActor>;
 
 export const Agent = z.object({
   id: z.string(),
@@ -278,7 +302,16 @@ export const Agent = z.object({
   created_at: isoTime,
   disabled_at: isoTime.nullable(),
   boards: z.array(z.object({ board_id: z.string(), board_name: z.string(), role: z.enum(["reader", "contributor"]) })),
-  tokens: z.array(z.object({ id: z.string(), prefix: z.string(), created_at: isoTime, last_used_at: isoTime.nullable() })),
+  tokens: z.array(
+    z.object({
+      id: z.string(),
+      prefix: z.string(),
+      created_at: isoTime,
+      last_used_at: isoTime.nullable(),
+      expires_at: isoTime.nullable().optional(),
+      scope: TokenScope.nullable().optional(),
+    }),
+  ),
 });
 export type Agent = z.infer<typeof Agent>;
 

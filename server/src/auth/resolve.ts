@@ -1,6 +1,9 @@
+import { PROFILE_HEADER } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
+import { OmbError, toOmbError } from "../errors.js";
 import { actorFromPrincipal, getPrincipal } from "../domain/access.js";
 import { ensureHuman, principalForToken } from "../domain/boards.js";
+import { applyProfileHeader, ensureProfile, profileActor } from "../domain/profiles.js";
 import type { Actor } from "../domain/model.js";
 import { sha256 } from "../ids.js";
 import { OPAQUE_ACCESS_PREFIX, type Auth } from "./auth.js";
@@ -9,7 +12,8 @@ import { refreshPlan } from "../domain/plans.js";
 export type WorkloadVerifier = (ctx: AppContext, token: string) => Promise<Actor | null>;
 
 export interface Resolver {
-  fromRequest(req: Request): Promise<{ actor: Actor | null; source: "cookie" | "bearer" | "none"; invalidBearer: boolean }>;
+  /** `error` is set when the credential is valid but the request can't be served as asked (a bad `OMB-Profile`). */
+  fromRequest(req: Request): Promise<{ actor: Actor | null; source: "cookie" | "bearer" | "none"; invalidBearer: boolean; error?: OmbError }>;
   fromBearer(token: string): Promise<Actor | null>;
 }
 
@@ -53,7 +57,10 @@ export function createResolver(ctx: AppContext, auth: Auth, workload: WorkloadVe
       const found = principalForToken(ctx, token);
       if (!found) return null;
       const via = found.kind === "agent" ? "agent_token" : found.kind === "personal" ? "personal_token" : "test_token";
-      return actorFromPrincipal(found.principal, via);
+      const actor: Actor = { ...actorFromPrincipal(found.principal, via), scope: found.scope };
+      // A token scoped to a profile always writes as it.
+      if (found.scope?.profile && found.principal.kind === "human") return profileActor(actor, ensureProfile(ctx, found.principal, found.scope.profile));
+      return actor;
     }
     if (workload && token.split(".").length === 3) {
       try {
@@ -65,27 +72,38 @@ export function createResolver(ctx: AppContext, auth: Auth, workload: WorkloadVe
     return null;
   }
 
+  async function credential(req: Request): Promise<{ actor: Actor | null; source: "cookie" | "bearer" | "none"; invalidBearer: boolean }> {
+    const header = req.headers.get("authorization");
+    if (header) {
+      const m = /^Bearer\s+(.+)$/i.exec(header.trim());
+      const actor = m ? await fromBearer(m[1]!.trim()) : null;
+      return { actor, source: "bearer", invalidBearer: !actor };
+    }
+    const vercel = req.headers.get("x-vercel-oidc-token");
+    if (vercel && workload) {
+      const actor = await fromBearer(vercel);
+      if (actor) return { actor, source: "bearer", invalidBearer: false };
+    }
+    if (!req.headers.get("cookie")) return { actor: null, source: "none", invalidBearer: false };
+    const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
+    if (!session?.user?.email || !session.user.emailVerified) return { actor: null, source: "none", invalidBearer: false };
+    const human = ensureHuman(ctx, { email: session.user.email, displayName: session.user.name || undefined, authUserId: session.user.id });
+    if (human.disabled_at) return { actor: null, source: "none", invalidBearer: false };
+    refreshPlan(ctx, human.id, session.user.id);
+    return { actor: actorFromPrincipal(human, "session"), source: "cookie", invalidBearer: false };
+  }
+
   return {
     fromBearer,
     async fromRequest(req) {
-      const header = req.headers.get("authorization");
-      if (header) {
-        const m = /^Bearer\s+(.+)$/i.exec(header.trim());
-        const actor = m ? await fromBearer(m[1]!.trim()) : null;
-        return { actor, source: "bearer", invalidBearer: !actor };
+      const found = await credential(req);
+      const profile = req.headers.get(PROFILE_HEADER);
+      if (!found.actor || !profile) return found;
+      try {
+        return { ...found, actor: applyProfileHeader(ctx, found.actor, profile) };
+      } catch (e) {
+        return { ...found, actor: null, error: toOmbError(e) };
       }
-      const vercel = req.headers.get("x-vercel-oidc-token");
-      if (vercel && workload) {
-        const actor = await fromBearer(vercel);
-        if (actor) return { actor, source: "bearer", invalidBearer: false };
-      }
-      if (!req.headers.get("cookie")) return { actor: null, source: "none", invalidBearer: false };
-      const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
-      if (!session?.user?.email || !session.user.emailVerified) return { actor: null, source: "none", invalidBearer: false };
-      const human = ensureHuman(ctx, { email: session.user.email, displayName: session.user.name || undefined, authUserId: session.user.id });
-      if (human.disabled_at) return { actor: null, source: "none", invalidBearer: false };
-      refreshPlan(ctx, human.id, session.user.id);
-      return { actor: actorFromPrincipal(human, "session"), source: "cookie", invalidBearer: false };
     },
   };
 }
