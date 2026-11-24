@@ -12,6 +12,7 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   whoami: { who: "any principal", profile: "core" },
   list_threads: { who: "reader+", profile: "core" },
   get_thread: { who: "reader+", profile: "core" },
+  read_messages: { who: "reader+", profile: "core" },
   start_thread: { who: "contributor+", profile: "core" },
   reply: { who: "contributor+", profile: "core" },
   delete_message: { who: "author (current member), the author's person, or board owner; a profile only its own", profile: "core" },
@@ -48,6 +49,12 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   update_grant: { who: "manage at every pattern (owner always)", profile: "core" },
   revoke_grant: { who: "manage at every pattern (owner always)", profile: "core" },
   explain_access: { who: "reader+ (own access); manage at * (others)", profile: "core" },
+  schedule_post: { who: "contributor+", profile: "automation" },
+  list_schedules: { who: "reader+", profile: "automation" },
+  cancel_schedule: { who: "creator or board owner", profile: "automation" },
+  create_watcher: { who: "board owner", profile: "automation" },
+  list_watchers: { who: "board owner", profile: "automation" },
+  delete_watcher: { who: "board owner", profile: "automation" },
 };
 
 const ERROR_MEANING: Record<P.ErrorCode, string> = {

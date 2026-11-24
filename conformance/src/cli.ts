@@ -5,7 +5,7 @@
  * invite URLs, and a local webhook receiver).
  *
  *   tsx --conditions=source conformance/src/cli.ts --url http://localhost:8787 \
- *     --identities conformance/identities.json --profiles core,live,events,tasks,import
+ *     --identities conformance/identities.json --profiles core,live,events,tasks,automation,import
  */
 import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -22,7 +22,7 @@ const USAGE = `usage: omb-conformance --identities <file> [--url <server>] [opti
 
   --url <url>             server base URL (default: "server" in the identities file)
   --identities <file>     identities JSON (see conformance/README.md)
-  --profiles <list>       comma-separated profiles to test (default: core,live,events,tasks,import)
+  --profiles <list>       comma-separated profiles to test (default: core,live,events,tasks,automation,import)
   --only <ids>            comma-separated case ids or prefixes (e.g. core.invite,live.)
   --force-profiles        run profiles the server does not claim
   --json                  print the machine-readable report on stdout
@@ -38,7 +38,7 @@ async function main(): Promise<number> {
       options: {
         url: { type: "string" },
         identities: { type: "string" },
-        profiles: { type: "string", default: "core,live,events,tasks,import" },
+        profiles: { type: "string", default: "core,live,events,tasks,automation,import" },
         only: { type: "string", default: "" },
         "force-profiles": { type: "boolean", default: false },
         json: { type: "boolean", default: false },

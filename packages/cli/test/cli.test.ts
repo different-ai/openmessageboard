@@ -10,7 +10,7 @@ import { UsageError, boardIdFrom, helpText, isBoardArg, parseCan, parseCommandLi
 import { forgetClaim, loadClaim, saveClaim } from "../src/claims.ts";
 import { parsePlan } from "../src/tasks.ts";
 import { configPath, readConfig, resolveConnection, writeConfig } from "../src/config.ts";
-import { authorName, formatAccess, formatChange, formatChannels, formatGrants, formatMessage, formatTable, formatTasks, formatUsage, relativeTime } from "../src/format.ts";
+import { authorName, formatAccess, formatChange, formatChannels, formatGrants, formatInterval, formatMessage, formatSchedules, formatTable, formatTasks, formatUsage, formatWatchers, relativeTime } from "../src/format.ts";
 import type { Io } from "../src/io.ts";
 import { main } from "../src/main.ts";
 import { FakeServer, ToolError } from "../../sdk/test/fake-server.ts";
@@ -177,12 +177,61 @@ describe("argument parsing", () => {
   it("parses wait and invite flags", () => {
     const w = parseCommandLine(["wait", "--mentions", "--timeout", "30", "--oidc", "github"]);
     assert.equal(w.command, "wait");
-    assert.equal(w.values.mentions, true);
+    assert.equal(w.values.mentions, "me", "a bare --mentions means you");
     assert.equal(w.values.timeout, "30");
     assert.equal(w.values.oidc, "github");
     const i = parseCommandLine(["invite", "--email", "omar@example.test", "--role", "contributor", "--access-ends", "7d"]);
     assert.equal(i.values.email, "omar@example.test");
     assert.equal(i.values["access-ends"], "7d");
+  });
+
+  it("parses message filters on read, wait and tail", () => {
+    const r = parseCommandLine(["read", "b_1", "--by", "maya", "--mentions", "--label", "kind=bug", "--text", "timeout", "--source", "slack", "--re", "m_1", "--after", "m_0", "-n", "100"]);
+    assert.equal(r.command, "read");
+    assert.deepEqual(r.positionals, ["b_1"]);
+    assert.equal(r.values.mentions, "me");
+    assert.equal(r.values.limit, "100");
+    assert.equal(r.values.source, "slack");
+    assert.equal(parseCommandLine(["read", "--mentions=ada"]).values.mentions, "ada");
+    assert.equal(parseCommandLine(["read", "--mentions", "ada", "b_1"]).values.mentions, "ada");
+    const w = parseCommandLine(["wait", "m_9", "--by", "maya", "--timeout", "60"]);
+    assert.deepEqual(w.positionals, ["m_9"]);
+    assert.equal(w.values.by, "maya");
+    const t = parseCommandLine(["tail", "b_1", "--label", "kind=bug", "--after", "m_1"]);
+    assert.deepEqual(t.values.label, ["kind=bug"]);
+  });
+
+  it("parses schedule and watcher commands", () => {
+    const s = parseCommandLine(["schedule", "t_1", "still broken?", "--in", "1d"]);
+    assert.equal(s.command, "schedule");
+    assert.deepEqual(s.positionals, ["t_1", "still broken?"]);
+    assert.equal(s.values.in, "1d");
+    const daily = parseCommandLine(["schedule", "b_1", "standup", "--title", "Standup", "--at", "2026-11-02T09:00:00Z", "--every", "1d", "-u", "2026-12-01T00:00:00Z"]);
+    assert.equal(daily.values.every, "1d");
+    assert.equal(daily.values.until, "2026-12-01T00:00:00Z");
+    const c = parseCommandLine(["schedule", "cancel", "sch_1"]);
+    assert.equal(c.command, "schedule cancel");
+    assert.deepEqual(c.positionals, ["sch_1"]);
+    assert.equal(parseCommandLine(["schedules", "--all"]).values.all, true);
+    const wc = parseCommandLine(["watchers", "create", "b_1", "--url", "https://hooks.example.com/omb", "--type", "message.created", "--mentions", "ada"]);
+    assert.equal(wc.command, "watchers create");
+    assert.deepEqual(wc.values.type, ["message.created"]);
+    assert.equal(wc.values.mentions, "ada");
+    assert.equal(parseCommandLine(["watchers", "b_1"]).command, "watchers");
+    assert.deepEqual(parseCommandLine(["watchers", "b_1"]).positionals, ["b_1"]);
+    assert.equal(parseCommandLine(["watchers", "delete", "wch_1"]).command, "watchers delete");
+    assert.match(helpText(), /schedule cancel/);
+  });
+
+  it("parses durations in seconds", () => {
+    assert.equal(parseDurationSeconds("30s", "--in"), 30);
+    assert.equal(parseDurationSeconds("90", "--in"), 90);
+    assert.equal(parseDurationSeconds("10m", "--in"), 600);
+    assert.equal(parseDurationSeconds("1h", "--every"), 3600);
+    assert.equal(parseDurationSeconds("1d", "--every"), 86_400);
+    assert.equal(parseDurationSeconds("2w", "--every"), 1_209_600);
+    assert.throws(() => parseDurationSeconds("soon", "--in"), UsageError);
+    assert.throws(() => parseDurationSeconds("0s", "--in"), UsageError);
   });
 
   it("rejects unknown commands and flags", () => {
@@ -390,6 +439,49 @@ describe("formatting", () => {
     assert.match(formatChange(change, NOW), /^t_1 release-agent \(via Maya\) · 5m ago · m_1\n {2}Build 812/);
     const claimed: Change = { ...change, type: "thread.updated", message: null, message_id: null, thread: task("t_1", "claimed", "Fix") };
     assert.equal(formatChange(claimed, NOW), "~ t_1 task claimed by release-agent (via Maya)");
+  });
+
+  it("formats schedules and watchers", () => {
+    assert.equal(formatInterval(3600), "1h");
+    assert.equal(formatInterval(90), "90s");
+    const sched = {
+      id: "sch_1",
+      board_id: "b_1",
+      thread_id: "t_1",
+      channel: "general",
+      title: null,
+      body: "still broken?",
+      labels: {},
+      mentions: [],
+      created_by: maya,
+      created_at: "2026-11-23T10:00:00Z",
+      state: "pending" as const,
+      next_run_at: "2026-11-24T10:00:00.000Z",
+      every_seconds: 86_400,
+      times: 3,
+      until: null,
+      runs: 0,
+      last_run_at: null,
+      last_message_id: null,
+      last_error: null,
+      stopped_reason: null,
+    };
+    assert.match(formatSchedules([sched]), /sch_1\s+pending\s+2026-11-24T10:00:00.000Z\s+every 1d, 3 times\s+t_1\s+Maya\s+still broken\?/);
+    assert.equal(formatSchedules([]), "No scheduled posts.");
+    const watcher = {
+      id: "wch_1",
+      board_id: "b_1",
+      url: "https://hooks.example.com/omb",
+      filter: { by: "p_maya", labels: { kind: "bug" } },
+      created_by: maya,
+      created_at: "2026-11-23T10:00:00Z",
+      status: "active" as const,
+      stopped_reason: null,
+      recent_deliveries: [
+        { id: "wdl_1", change_seq: 4, change_type: "message.created" as const, status: "failed" as const, attempts: 10, last_error: "HTTP 500", created_at: "2026-11-23T11:00:00Z", delivered_at: null },
+      ],
+    };
+    assert.match(formatWatchers([watcher]), /wch_1\s+active\s+https:\/\/hooks.example.com\/omb\s+by=p_maya kind=bug\s+failed \(HTTP 500\)/);
   });
 
   it("formats usage with bytes and warnings", () => {

@@ -18,6 +18,8 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
   const posts = (ctx.db.prepare("SELECT posts FROM usage_monthly WHERE board_id = ? AND month = ?").get(boardId, currentMonth(ctx)) as { posts: number } | undefined)?.posts ?? 0;
   const subs = (ctx.db.prepare("SELECT COUNT(*) AS n FROM event_subscriptions WHERE board_id = ? AND status = 'active'").get(boardId) as { n: number }).n;
   const owned = (ctx.db.prepare("SELECT COUNT(*) AS n FROM boards WHERE owner_id = ? AND disabled_at IS NULL").get(board.owner_id) as { n: number }).n;
+  const schedules = (ctx.db.prepare("SELECT COUNT(*) AS n FROM schedules WHERE board_id = ? AND state = 'pending'").get(boardId) as { n: number }).n;
+  const watchers = (ctx.db.prepare("SELECT COUNT(*) AS n FROM watchers WHERE board_id = ? AND status = 'active'").get(boardId) as { n: number }).n;
   const item = (allowance: AllowanceUsage["allowance"], used: number, limit: number, unit: "count" | "bytes", resets: string | null): AllowanceUsage => ({
     allowance,
     used,
@@ -36,6 +38,8 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
       item("live_connections", ctx.connections.countForBoard(boardId), l.live_connections_per_board, "count", null),
       item("webhook_subscriptions", subs, l.webhook_subscriptions_per_board, "count", null),
       item("boards_owned", owned, ownerLimits.boards_owned, "count", null),
+      item("pending_schedules", schedules, l.pending_schedules_per_board, "count", null),
+      item("watchers", watchers, l.watchers_per_board, "count", null),
     ],
     plan: planOf(ctx, board.owner_id),
     storage_formula:

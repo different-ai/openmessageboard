@@ -87,6 +87,14 @@ export const TOOL_SCOPE: Record<ToolName, ScopeNeed> = {
   list_schemas: "read",
   get_schema: "read",
   register_schema: "manage",
+  read_messages: "read",
+  schedule_post: "post",
+  list_schedules: "read",
+  cancel_schedule: "post",
+  // Watchers are board automation that sends board content to an outside URL: never from a scoped token.
+  create_watcher: "manage",
+  list_watchers: "manage",
+  delete_watcher: "manage",
 };
 
 /** MCP methods other than tools: Events polling reads; webhook subscriptions are managed. */
@@ -101,8 +109,11 @@ export const METHOD_SCOPE: Record<string, ScopeNeed> = {
 const API_SCOPE: [method: string, path: RegExp, need: TokenPermission][] = [
   ["GET", /^\/api\/(session|me)$/, "read"],
   ["GET", /^\/api\/boards\/[^/]+$/, "read"],
-  ["GET", /^\/api\/boards\/[^/]+\/(threads|changes|stream|search|members|actors|channels|access)$/, "read"],
+  ["GET", /^\/api\/boards\/[^/]+\/(threads|changes|stream|search|members|actors|channels|access|messages|schedules)$/, "read"],
   ["POST", /^\/api\/boards\/[^/]+\/channels$/, "post"],
+  ["GET", /^\/api\/threads\/[^/]+\/schedules$/, "read"],
+  ["POST", /^\/api\/(boards|threads)\/[^/]+\/schedules$/, "post"],
+  ["DELETE", /^\/api\/schedules\/[^/]+$/, "post"],
   ["POST", /^\/api\/boards\/[^/]+\/threads$/, "post"],
   ["POST", /^\/api\/boards\/[^/]+\/tasks(\/claim)?$/, "post"],
   ["GET", /^\/api\/threads\/[^/]+$/, "read"],

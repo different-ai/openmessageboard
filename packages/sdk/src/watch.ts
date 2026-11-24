@@ -11,6 +11,7 @@ import {
   resolveTarget,
   retryAfterMs,
   sleep,
+  type ChangeFilters,
   type ResolvedTarget,
   type WatchItem,
   type WatchTarget,
@@ -29,6 +30,10 @@ export interface WatchOptions {
   onChange: (item: WatchItem, ctx: { cursor: string | undefined }) => void | Promise<void>;
   /** Saved cursor to resume from. Omit to start at the current position. */
   cursor?: string;
+  /** Start after this message ID, thread ID or cursor instead (when there is no saved cursor). */
+  after?: string;
+  /** Server-side message filters for board and thread targets; only matching changes reach `onChange`. */
+  filters?: ChangeFilters;
   /** Persist the cursor here; called after each applied page (and once with the starting position). */
   onCursor?: (cursor: string) => void | Promise<void>;
   /**
@@ -89,6 +94,7 @@ export function watch(client: OmbClient, target: WatchTarget, options: WatchOpti
   const stopped = () => signal.aborted;
 
   let cursor = options.cursor;
+  let after = cursor === undefined ? options.after : undefined;
   let resolved: ResolvedTarget | undefined;
   let listenSupported: boolean | undefined = options.mode === "poll" ? false : undefined;
   let attempt = 0;
@@ -132,13 +138,17 @@ export function watch(client: OmbClient, target: WatchTarget, options: WatchOpti
     await saveCursor(page.cursor);
   }
 
+  const filters = (r: ResolvedTarget) => ("inbox" in r.changes ? {} : (options.filters ?? {}));
+
   async function catchUp(r: ResolvedTarget): Promise<void> {
     while (!stopped()) {
       let page: ChangesPage | InboxChangesPage;
       try {
-        page = await client.getChanges({ ...r.changes, cursor, limit: 100 }, { signal });
+        page = await client.getChanges({ ...r.changes, ...filters(r), ...(after ? { after } : { cursor }), limit: 100 }, { signal });
+        after = undefined;
       } catch (err) {
         if (isOmbError(err, "cursor_expired")) {
+          after = undefined;
           await resync(r);
           continue;
         }
@@ -183,7 +193,7 @@ export function watch(client: OmbClient, target: WatchTarget, options: WatchOpti
     options.onStatus?.({ state: "connecting" });
     resolved ??= await resolveTarget(client, target, signal);
     const r = resolved;
-    if (cursor === undefined) {
+    if (cursor === undefined && after === undefined) {
       const start = r.asOf ?? (await currentCursor(client, r, signal));
       await saveCursor(start);
     }
@@ -235,7 +245,7 @@ export function watch(client: OmbClient, target: WatchTarget, options: WatchOpti
     while (!stopped()) {
       let page: ChangesPage | InboxChangesPage;
       try {
-        page = await client.waitForActivity({ ...r.wait, cursor: cursor!, timeout_seconds: pollSeconds }, { signal });
+        page = await client.waitForActivity({ ...r.wait, ...filters(r), cursor: cursor!, timeout_seconds: pollSeconds }, { signal });
       } catch (err) {
         if (isOmbError(err, "cursor_expired")) {
           await resync(r);

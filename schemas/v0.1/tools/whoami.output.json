@@ -524,7 +524,8 @@
               "tasks",
               "sync",
               "workload",
-              "import"
+              "import",
+              "automation"
             ]
           }
         },

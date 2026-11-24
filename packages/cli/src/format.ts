@@ -1,4 +1,4 @@
-import type { AccessExplanation, BoardActor, Change, Channel, DataSchema, Grant, InboxItem, Member, Membership, Message, PrincipalRef, Thread, Usage } from "@openmessageboard/sdk";
+import type { AccessExplanation, BoardActor, Change, Channel, DataSchema, Grant, InboxItem, Member, Membership, Message, PrincipalRef, Schedule, Thread, Usage, Watcher, WatcherFilter } from "@openmessageboard/sdk";
 
 /** "release-agent (via Maya)" for agents, the display name otherwise. */
 export function authorName(p: PrincipalRef): string {
@@ -228,6 +228,36 @@ export function formatChange(c: Change, now?: Date): string {
   }
 }
 
+/** "every 1h", "every 2d" and so on, for schedules. */
+export function formatInterval(seconds: number): string {
+  for (const [unit, n] of [["w", 604_800], ["d", 86_400], ["h", 3600], ["m", 60]] as const) if (seconds % n === 0) return `${seconds / n}${unit}`;
+  return `${seconds}s`;
+}
+
+function repeatOf(s: Schedule): string {
+  if (!s.every_seconds) return "once";
+  const parts = [`every ${formatInterval(s.every_seconds)}`];
+  if (s.times !== null) parts.push(`${s.times} times`);
+  if (s.until) parts.push(`until ${s.until}`);
+  return parts.join(", ");
+}
+
+export function formatSchedules(schedules: Schedule[]): string {
+  if (schedules.length === 0) return "No scheduled posts.";
+  return formatTable(
+    ["ID", "STATE", "NEXT RUN", "REPEAT", "IN", "BY", "TEXT"],
+    schedules.map((s) => [
+      s.id,
+      s.state === "stopped" && s.stopped_reason ? `stopped (${s.stopped_reason})` : s.state,
+      s.next_run_at ?? "-",
+      repeatOf(s),
+      s.thread_id ?? `new thread in ${s.channel}: "${truncate(s.title ?? "", 30)}"`,
+      authorName(s.created_by),
+      truncate(s.body.replace(/\s+/g, " "), 48),
+    ]),
+  );
+}
+
 /** Channels grouped by path, with thread counts and what you can do in each. */
 export function formatChannels(channels: Channel[], now?: Date): string {
   if (channels.length === 0) return "No channels yet. A first post creates one.";
@@ -252,6 +282,40 @@ export function formatGrants(grants: Grant[], members: Member[] = []): string {
         .map(([pattern, perms]) => `${pattern}=${perms.length ? perms.join(",") : "none"}`)
         .join(" "),
     ]),
+  );
+}
+
+export function formatScheduled(s: Schedule): string {
+  return `Scheduled ${s.id}: ${s.next_run_at ? `next run ${s.next_run_at}` : s.state}, ${repeatOf(s)}`;
+}
+
+export function formatWatcherFilter(f: WatcherFilter): string {
+  const parts: string[] = [];
+  if (f.channel) parts.push(`channel=${f.channel}`);
+  if (f.thread) parts.push(`re=${f.thread}`);
+  if (f.types) parts.push(`types=${f.types.join(",")}`);
+  if (f.by) parts.push(`by=${f.by}`);
+  if (f.mentions) parts.push(`mentions=${f.mentions}`);
+  if (f.labels) parts.push(formatLabels(f.labels));
+  if (f.text) parts.push(`text="${f.text}"`);
+  if (f.source) parts.push(`source=${f.source}`);
+  return parts.join(" ") || "every change";
+}
+
+export function formatWatchers(watchers: Watcher[]): string {
+  if (watchers.length === 0) return "No watchers.";
+  return formatTable(
+    ["ID", "STATUS", "URL", "FILTER", "LAST DELIVERY"],
+    watchers.map((w) => {
+      const d = w.recent_deliveries[0];
+      return [
+        w.id,
+        w.status === "stopped" && w.stopped_reason ? `stopped (${w.stopped_reason})` : w.status,
+        w.url,
+        formatWatcherFilter(w.filter),
+        d ? `${d.status}${d.last_error ? ` (${d.last_error})` : ""} ${d.created_at}` : "-",
+      ];
+    }),
   );
 }
 

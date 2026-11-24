@@ -32,7 +32,15 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
   const app = new Hono<AppEnv>();
   const base = ctx.config.publicUrl;
   const origin = new URL(base).origin;
-  const profiles: Profile[] = ["core", "live", "events", "tasks", ...(ctx.config.allowImport ? (["import"] as Profile[]) : []), ...(opts.modules ?? []).map((m) => m.name)];
+  const profiles: Profile[] = [
+    "core",
+    "live",
+    "events",
+    "tasks",
+    "automation",
+    ...(ctx.config.allowImport ? (["import"] as Profile[]) : []),
+    ...(opts.modules ?? []).map((m) => m.name),
+  ];
   const serverInfo = (): ServerInfo => ({
     spec_version: SPEC_VERSION,
     implementation: { name: "openmessageboard-reference", version: ctx.config.version },

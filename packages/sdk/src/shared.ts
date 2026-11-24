@@ -1,9 +1,27 @@
-import type { Change, ChangesPage, InboxChangesPage, InboxItem } from "@openmessageboard/protocol";
+import type { Change, ChangesPage, InboxChangesPage, InboxItem, MessageFilter } from "@openmessageboard/protocol";
 import type { OmbClient } from "./client.js";
 import { OmbError } from "./errors.js";
 
 /** What to follow: one board, one thread (board optional; looked up when absent), or your inbox. */
 export type WatchTarget = { board: string } | { thread: string; board?: string } | { inbox: true };
+
+/** Server-side message filters for board and thread targets (the `read_messages` filters). */
+export type ChangeFilters = MessageFilter;
+
+/** Seconds, or a duration string: `"30s"`, `"10m"`, `"12h"`, `"1d"`, `"2w"`. */
+export type Duration = number | string;
+
+const UNIT_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86_400, w: 604_800 };
+
+export function toSeconds(d: Duration): number {
+  if (typeof d === "number") {
+    if (!Number.isFinite(d) || d <= 0) throw new OmbError("invalid_argument", `Not a duration: ${d}`);
+    return Math.round(d);
+  }
+  const m = /^(\d+) ?([smhdw])?$/i.exec(d.trim());
+  if (!m) throw new OmbError("invalid_argument", `Not a duration: ${d} (use 30s, 10m, 12h, 1d or 2w)`);
+  return Number(m[1]) * UNIT_SECONDS[(m[2] ?? "s").toLowerCase()]!;
+}
 
 /** A board change, or an inbox item when following the inbox. */
 export type WatchItem = Change | InboxItem;

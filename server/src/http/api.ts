@@ -40,6 +40,7 @@ import type { Actor } from "../domain/model.js";
 import { limitsFor, planOf } from "../domain/plans.js";
 import { parseBody, requireActor, type AppCtx, type AppHono } from "./util.js";
 import { boardStream, inboxStream } from "./stream.js";
+import { filterQuery, registerAutomationRoutes } from "./automation.js";
 import { registerMessageRoutes } from "./messages-api.js";
 
 export function principalOf(actor: Actor, ctx?: AppContext) {
@@ -189,16 +190,13 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   app.post("/api/inbox/read", async (c) => c.json(changes.markRead(ctx, requireActor(c), await parseBody(c, MarkReadBody))));
   app.get("/api/boards/:boardId/changes", (c) =>
     c.json(
-      changes.boardChanges(
-        ctx,
-        requireActor(c),
-        c.req.param("boardId"),
-        c.req.query("cursor") || undefined,
-        int(c.req.query("limit")) ?? 100,
-        undefined,
-        ChannelFilter.optional().parse(c.req.query("channel") || undefined),
-        { labels: labelsFromQuery(c.req.queries("label") ?? []) },
-      ),
+      changes.getChanges(ctx, requireActor(c), {
+        board_id: c.req.param("boardId"),
+        cursor: c.req.query("cursor") || undefined,
+        after: c.req.query("after") || undefined,
+        ...filterQuery(c),
+        limit: int(c.req.query("limit")) ?? 100,
+      }),
     ),
   );
   app.get("/api/boards/:boardId/stream", (c) => boardStream(ctx, c, requireActor(c), c.req.param("boardId")));
@@ -262,6 +260,9 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
     }
     return c.json({ board: portability.importBoard(ctx, actor, body, { name: c.req.query("name") || undefined }) });
   });
+
+  // filtered reads, scheduled posts, watchers
+  registerAutomationRoutes(app, ctx);
 
   // test mode: sign-in codes that would have been emailed
   app.get("/api/test/outbox", (c) => {

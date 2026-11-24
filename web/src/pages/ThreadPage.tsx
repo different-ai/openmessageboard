@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { api, isApiError } from "../api";
 import { useBoard, useBoardChanges } from "../board";
 import { AttachmentPicker, MarkdownEditor, extractMentions, useAttachments, useIdempotencyKey } from "../composer";
-import { labelError, MAX_LABELS } from "../format";
+import { formatDateTime, labelError, MAX_LABELS } from "../format";
 import { excerpt, Markdown } from "../markdown";
 import {
   AttachmentList,
@@ -19,6 +19,7 @@ import {
 } from "../messageParts";
 import { Link, useTitle } from "../router";
 import { AccessRequired } from "./Status";
+import { ScheduleDialog, ThreadSchedules } from "../schedules";
 import { TaskPanel } from "./TaskPanel";
 import {
   Author,
@@ -56,6 +57,7 @@ export function ThreadPage({ threadId }: { threadId: string }) {
   const [denied, setDenied] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [scheduleKey, setScheduleKey] = useState(0);
   const nextRef = useRef<string | null>(null);
   nextRef.current = next;
   useTitle(thread?.title ?? "Thread");
@@ -199,8 +201,10 @@ export function ThreadPage({ threadId }: { threadId: string }) {
         )}
         <ErrorNote error={error} />
 
+        <ThreadSchedules threadId={thread.id} refreshKey={scheduleKey} />
         {canWrite ? (
           <ReplyForm
+            onScheduled={() => setScheduleKey((k) => k + 1)}
             thread={thread}
             replyTo={replyTo}
             onClearReply={() => setReplyTo(null)}
@@ -422,15 +426,18 @@ function ReplyForm({
   replyTo,
   onClearReply,
   onPosted,
+  onScheduled,
   members,
 }: {
   thread: Thread;
   replyTo: Message | null;
   onClearReply: () => void;
   onPosted: (m: Message) => void;
+  onScheduled: () => void;
   members: ReturnType<typeof useBoard>["members"];
 }) {
   const [body, setBody] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const idem = useIdempotencyKey();
@@ -466,6 +473,7 @@ function ReplyForm({
   }
 
   return (
+    <>
     <form className="card composer reply" onSubmit={submit} aria-label="Reply">
       {replyTo && (
         <div className="replying-to">
@@ -490,11 +498,28 @@ function ReplyForm({
       <AttachmentPicker state={files} disabled={busy} />
       <ErrorNote error={error} />
       <div className="actions">
+        <button type="button" className="button" disabled={busy || !body.trim()} onClick={() => setScheduling(true)}>
+          Schedule…
+        </button>
         <button type="submit" className="button button-primary" disabled={busy || files.uploading || !body.trim()}>
           {busy ? "Sending…" : files.uploading ? "Uploading files…" : error ? "Retry" : "Reply"}
         </button>
       </div>
     </form>
+    {/* Outside the reply form: forms can't nest. */}
+    <ScheduleDialog
+        open={scheduling}
+        onClose={() => setScheduling(false)}
+        threadId={thread.id}
+        body={body}
+        members={members}
+        onScheduled={(s) => {
+          setBody("");
+          onScheduled();
+          toast(`Scheduled for ${s.next_run_at ? formatDateTime(s.next_run_at) : "later"}.`, "success");
+        }}
+      />
+    </>
   );
 }
 

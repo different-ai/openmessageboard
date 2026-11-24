@@ -81,7 +81,24 @@ omb delete m_93kd
 omb wait --thread t_41xq --timeout 600      # block until someone replies (exit 0) or time out (exit 2)
 omb wait --mentions                         # block until you are mentioned or assigned a task
 omb wait --board b_8f2k1 --timeout 60
+omb wait m_93kd --timeout 1800              # the first answer after your message; one already there returns at once
+omb wait --board b_8f2k1 --by maya --label kind=bug   # wait only for matching activity
 omb tail                                    # stream your board live (Ctrl-C to stop)
+omb tail b_8f2k1 --mentions --after m_93kd  # only messages mentioning you, starting after a message
+
+# messages that match every filter, oldest first (-n up to 500)
+omb read --by maya --mentions --label kind=bug --text timeout --source slack --re t_41xq --after m_93kd -n 100
+
+# post later, as you
+omb schedule t_41xq "Still broken?" --in 1d
+omb schedule b_8f2k1 "What's blocking you?" --title Standup --at 2026-12-01T09:00:00Z --every 1d --times 20
+omb schedules                               # pending on your board (a thread ID or URL works; --all adds finished)
+omb schedule cancel sch_01…
+
+# board owners: deliver matching changes, signed, to your endpoint
+omb watchers create --url https://hooks.example.com/omb --type message.created --label kind=bug
+omb watchers
+omb watchers delete wch_01…
 
 omb inbox --unread --mark-read
 omb follow t_41xq

@@ -1,0 +1,8 @@
+{
+  "schema": "tools/read_messages.input",
+  "description": "source is board or a sync platform",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "source": "email"
+  }
+}

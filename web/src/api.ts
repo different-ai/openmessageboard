@@ -13,6 +13,7 @@ import type {
   CreateTasksBody,
   CreateInviteBody,
   CreateWorkloadTrustBody,
+  CreateWatcherBody,
   CreatedToken,
   CreateTokenBody,
   EditMessageBody,
@@ -33,6 +34,7 @@ import type {
   ReactBody,
   RenewTaskBody,
   ReplyBody,
+  ScheduleBody,
   ServerInfo,
   StartThreadBody,
   TaskStateFilter,
@@ -67,6 +69,20 @@ export type LinkThreadInput = Out<typeof LinkThreadBody>;
 export type CreateWorkloadTrustInput = Out<typeof CreateWorkloadTrustBody>;
 export type ConsentInfo = Out<typeof OAuthConsentInfo>;
 export type ConsentInput = Out<typeof OAuthConsentBody>;
+export type ScheduleInput = Out<typeof ScheduleBody>;
+export type CreateWatcherInput = Out<typeof CreateWatcherBody>;
+export type MessageQuery = {
+  channel?: string;
+  by?: string;
+  mentions?: string;
+  labels?: Record<string, string>;
+  text?: string;
+  source?: string;
+  re?: string;
+  after?: string;
+  before?: string;
+  limit?: number;
+};
 export type CreateGrantInput = Out<typeof CreateGrantBody>;
 export type UpdateGrantInput = Out<typeof UpdateGrantBody>;
 
@@ -270,6 +286,34 @@ export const api = {
   search: (boardId: string, query: string) =>
     get<ToolOutput<"search_messages">>(`/api/boards/${enc(boardId)}/search${qs({ query })}`),
 
+  messages: (boardId: string, q: MessageQuery = {}, signal?: AbortSignal) =>
+    get<ToolOutput<"read_messages">>(
+      `/api/boards/${enc(boardId)}/messages${qs({
+        channel: q.channel,
+        by: q.by,
+        mentions: q.mentions,
+        label: labelParams(q.labels),
+        text: q.text,
+        source: q.source,
+        re: q.re,
+        after: q.after,
+        before: q.before,
+        limit: q.limit,
+      })}`,
+      signal,
+    ),
+
+  // Scheduled posts and watchers
+  threadSchedules: (threadId: string, all = false, signal?: AbortSignal) =>
+    get<ToolOutput<"list_schedules">>(`/api/threads/${enc(threadId)}/schedules${qs({ all: all || undefined })}`, signal),
+  boardSchedules: (boardId: string, all = false, signal?: AbortSignal) =>
+    get<ToolOutput<"list_schedules">>(`/api/boards/${enc(boardId)}/schedules${qs({ all: all || undefined })}`, signal),
+  scheduleReply: (threadId: string, body: ScheduleInput) => post<ToolOutput<"schedule_post">>(`/api/threads/${enc(threadId)}/schedules`, body),
+  scheduleThread: (boardId: string, body: ScheduleInput) => post<ToolOutput<"schedule_post">>(`/api/boards/${enc(boardId)}/schedules`, body),
+  cancelSchedule: (scheduleId: string) => del<ToolOutput<"cancel_schedule">>(`/api/schedules/${enc(scheduleId)}`),
+  watchers: (boardId: string, signal?: AbortSignal) => get<ToolOutput<"list_watchers">>(`/api/boards/${enc(boardId)}/watchers`, signal),
+  createWatcher: (boardId: string, body: CreateWatcherInput) => post<ToolOutput<"create_watcher">>(`/api/boards/${enc(boardId)}/watchers`, body),
+  deleteWatcher: (watcherId: string) => del<ToolOutput<"delete_watcher">>(`/api/watchers/${enc(watcherId)}`),
   // Channels and access
   channels: (boardId: string, signal?: AbortSignal) => get<{ channels: Channel[] }>(`/api/boards/${enc(boardId)}/channels`, signal),
   createChannel: (boardId: string, body: { path: string; private?: boolean }) =>

@@ -14,7 +14,8 @@ export class UsageError extends Error {
   override readonly name = "UsageError";
 }
 
-type OptionSpec = { type: "string" | "boolean"; short?: string; multiple?: boolean };
+/** `optionalValue`: a string option that may be given bare (`--mentions`), meaning this value. */
+type OptionSpec = { type: "string" | "boolean"; short?: string; multiple?: boolean; optionalValue?: string };
 export type Options = Record<string, OptionSpec>;
 export type Values = Record<string, string | boolean | string[] | undefined>;
 
@@ -29,6 +30,16 @@ export const GLOBAL_OPTIONS = {
 } as const satisfies Options;
 
 const label = { type: "string", multiple: true } as const;
+/** The read_messages filters, shared by read, wait, tail and watchers create. */
+const filterOptions = {
+  channel: { type: "string" },
+  by: { type: "string" },
+  mentions: { type: "string", optionalValue: "me" },
+  label,
+  text: { type: "string" },
+  source: { type: "string" },
+  re: { type: "string" },
+} as const satisfies Options;
 const attach = { type: "string", multiple: true } as const;
 
 export interface CommandSpec {
@@ -50,9 +61,19 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { private: { type: "boolean" } },
   },
   read: {
-    usage: "read [board|channel|channel/] [--board <id>] [--channel <c>] [--thread <id>] [--unread] [--label k=v] [--limit n]",
-    summary: "List threads (in a channel, or a subtree with a trailing /), or read one thread",
-    options: { thread: { type: "string" }, unread: { type: "boolean" }, label, limit: { type: "string" }, board: { type: "string" }, channel: { type: "string" } },
+    usage:
+      "read [board|channel|channel/] [--board <id>] [--channel <c>] [--thread <id>] [--unread] [--label k=v] [--by h] [--mentions [h]] [--text t] [--source s] [--re id] [--after id] [--messages] [-n n]",
+    summary: "List threads (in a channel, or a subtree with a trailing /), read one thread, or read messages that match filters",
+    options: {
+      thread: { type: "string" },
+      unread: { type: "boolean" },
+      board: { type: "string" },
+      ...filterOptions,
+      after: { type: "string" },
+      before: { type: "string" },
+      messages: { type: "boolean" },
+      limit: { type: "string", short: "n" },
+    },
   },
   post: {
     usage:
@@ -93,11 +114,39 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { file: { type: "string" }, data: { type: "string" }, description: { type: "string" }, board: { type: "string" } },
   },
   wait: {
-    usage: "wait [--thread <id> | --mentions | --board <id>] [--timeout <s>]",
-    summary: "Block until activity arrives (exit 0), or time out (exit 2)",
-    options: { thread: { type: "string" }, mentions: { type: "boolean" }, board: { type: "string" }, timeout: { type: "string" } },
+    usage: "wait [<message-id>] [--thread <id> | --board <id> | --mentions [h]] [--by h] [--label k=v] [--text t] [--source s] [--re id] [--after id] [--timeout <s>]",
+    summary: "Block until matching activity arrives (exit 0), or time out (exit 2)",
+    options: { thread: { type: "string" }, board: { type: "string" }, ...filterOptions, after: { type: "string" }, timeout: { type: "string" } },
   },
-  tail: { usage: "tail [board] [--thread <id> | --inbox]", summary: "Stream changes live", options: { thread: { type: "string" }, inbox: { type: "boolean" } } },
+  tail: {
+    usage: "tail [board] [--thread <id> | --inbox] [--by h] [--mentions [h]] [--label k=v] [--text t] [--source s] [--re id] [--after id]",
+    summary: "Stream changes live",
+    options: { thread: { type: "string" }, inbox: { type: "boolean" }, ...filterOptions, after: { type: "string" } },
+  },
+  schedule: {
+    usage: "schedule <board|thread> <text|-> [--title <t> [--channel <c>]] [--in 1d] [--at <time>] [--every 1h] [--times n] [--until <time>] [--label k=v] [--mention <id>]",
+    summary: "Post later, once or repeating (--title starts a new thread each run)",
+    options: {
+      title: { type: "string" },
+      channel: { type: "string" },
+      in: { type: "string" },
+      at: { type: "string" },
+      every: { type: "string" },
+      times: { type: "string" },
+      until: { type: "string", short: "u" },
+      label,
+      mention: { type: "string", multiple: true },
+    },
+  },
+  "schedule cancel": { usage: "schedule cancel <schedule>", summary: "Cancel a scheduled post" },
+  schedules: { usage: "schedules [board|thread] [--all]", summary: "Pending scheduled posts (--all adds finished ones)", options: { all: { type: "boolean", short: "a" } } },
+  watchers: { usage: "watchers [board]", summary: "Watchers on a board and their recent deliveries (board owners)" },
+  "watchers create": {
+    usage: "watchers create [board] --url <https-url> [--secret whsec_…] [--thread id] [--type t ...] [--by h] [--mentions h] [--label k=v] [--text t] [--source s]",
+    summary: "POST matching changes, signed, to a URL (board owners)",
+    options: { url: { type: "string" }, secret: { type: "string" }, thread: { type: "string" }, type: { type: "string", multiple: true }, ...filterOptions, mentions: { type: "string" } },
+  },
+  "watchers delete": { usage: "watchers delete <watcher>", summary: "Delete a watcher" },
   inbox: { usage: "inbox [--unread] [--mark-read]", summary: "Mentions, replies in threads you follow, tasks assigned to you", options: { unread: { type: "boolean" }, "mark-read": { type: "boolean" } } },
   "tasks list": {
     usage: "tasks [list] [board|channel] [--board <id>] [--channel <c|c/>] [--state <state>|open|all] [--label k=v] [--for <principal>|me] [--mine]",
@@ -235,6 +284,25 @@ const TAKES_REST = new Set(["tasks run"]);
 const GROUPS = new Set(["tasks", "tokens", "boards", "channels", "grants", "schemas"]);
 /** Groups that run a default subcommand when the next word isn't one of theirs (`omb tasks b_1` lists). */
 const DEFAULT_SUBCOMMAND: Record<string, string> = { tasks: "list", boards: "list", channels: "list", grants: "list", schemas: "list" };
+/** Commands that are also groups: `schedule cancel`, `watchers create`. Other words are arguments. */
+const OPTIONAL_GROUPS: Record<string, string[]> = { schedule: ["cancel"], watchers: ["create", "delete"] };
+
+/** Expands a bare `--name` of an option with an optional value into `--name=<value>`. */
+function expandOptionalValues(argv: string[], options: Options): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    const spec = arg.startsWith("--") && !arg.includes("=") ? options[arg.slice(2)] : undefined;
+    const next = argv[i + 1];
+    if (spec?.optionalValue !== undefined && (next === undefined || next.startsWith("-"))) out.push(`${arg}=${spec.optionalValue}`);
+    else out.push(arg);
+  }
+  return out;
+}
+
+function parseArgsOptions(options: Options): Record<string, { type: "string" | "boolean"; short?: string; multiple?: boolean }> {
+  return Object.fromEntries(Object.entries(options).map(([k, { optionalValue: _ignored, ...spec }]) => [k, spec]));
+}
 
 /**
  * Parses `omb [global flags] <command> [args] [flags]`. Global flags may appear anywhere.
@@ -264,6 +332,9 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
       command = `${words[0]} ${words[1]}`;
       consumed = 2;
     }
+  } else if (words[0] && words[1] && OPTIONAL_GROUPS[words[0]]?.includes(words[1])) {
+    command = `${words[0]} ${words[1]}`;
+    consumed = 2;
   } else if (words[0]) {
     command = words[0];
     consumed = 1;
@@ -280,7 +351,7 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
   }
   let parsed;
   try {
-    parsed = parseArgs({ args, options, strict: true, allowPositionals: true });
+    parsed = parseArgs({ args: expandOptionalValues(args, options), options: parseArgsOptions(options), strict: true, allowPositionals: true });
   } catch (err) {
     throw new UsageError((err as Error).message.replace(/^.*?Unknown option/, "Unknown option"));
   }
@@ -372,10 +443,10 @@ export function parseTime(input: string, now: Date = new Date()): string {
   return new Date(ms).toISOString();
 }
 
-const SECONDS = /^(\d+)\s*(s|sec|m|min|h|d)?$/i;
-const UNIT_S: Record<string, number> = { s: 1, sec: 1, m: 60, min: 60, h: 3600, d: 86_400 };
+const SECONDS = /^(\d+)\s*(s|sec|m|min|h|d|w)?$/i;
+const UNIT_S: Record<string, number> = { s: 1, sec: 1, m: 60, min: 60, h: 3600, d: 86_400, w: 604_800 };
 
-/** A duration such as 90s, 30m, 1h or 1d (a bare number is seconds), in seconds. */
+/** A duration such as 90s, 30m, 1h, 1d or 2w (a bare number is seconds), in seconds. */
 export function parseDurationSeconds(input: string, name: string): number {
   const m = SECONDS.exec(input.trim());
   if (!m || Number(m[1]) < 1) throw new UsageError(`${name} is a duration such as 30m, 1h or 24h`);

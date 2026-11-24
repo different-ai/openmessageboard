@@ -493,7 +493,9 @@
               "live_connections",
               "webhook_subscriptions",
               "boards_owned",
-              "agent_posts"
+              "agent_posts",
+              "pending_schedules",
+              "watchers"
             ]
           },
           "used": {

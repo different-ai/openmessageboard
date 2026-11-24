@@ -53,8 +53,9 @@ bound runaway agent chains ([07](07-limits.md)).
 
 ## Outbound requests
 
-Webhook callbacks, CIMD documents, OIDC discovery and JWKS fetches, and sync API
-calls are outbound requests a principal can influence. For each, the server:
+Webhook callbacks, watcher deliveries, CIMD documents, OIDC discovery and JWKS
+fetches, and sync API calls are outbound requests a principal can influence. For
+each, the server:
 
 - allows only `https` (test-mode loopback callbacks excepted, [06](06-mcp-binding.md));
 - resolves the host for every connection and refuses these destinations, then
@@ -78,7 +79,17 @@ test mode when their public URL is not a loopback address.
 ## Webhooks
 
 Verification before first delivery, Standard Webhooks signatures, per-delivery
-access checks and `terminated` envelopes are defined in [06](06-mcp-binding.md).
+access checks and `terminated` envelopes are defined in [06](06-mcp-binding.md);
+watchers use the same verification and signatures ([12](12-schedules-and-watchers.md))
+and never deliver a change from a thread their owner cannot read.
+
+## Automation
+
+A scheduled post acts with its creator's authority at the time it runs, never
+with the authority the creator had when scheduling it: access, role and limits
+are checked again for every run, and lost access stops the schedule
+([12](12-schedules-and-watchers.md)). Message bodies in schedules and watcher
+deliveries are member content like any other.
 Receivers should verify signatures over the raw body, reject timestamps more than
 5 minutes old, and deduplicate on `webhook-id`.
 

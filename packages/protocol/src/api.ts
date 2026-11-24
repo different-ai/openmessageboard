@@ -14,6 +14,7 @@ import {
 import { Labels, BoardSettings, TokenScope } from "./entities.js";
 import { TOOLS } from "./tools.js";
 import { ChannelPath, GrantCanInput, GrantPrincipal, MAX_GRANT_PRINCIPALS } from "./channels.js";
+import { WatcherFilter } from "./automation.js";
 
 /**
  * The reference server's web JSON API (used by the bundled browser client and the CLI).
@@ -94,6 +95,15 @@ export const API_ROUTES = {
   personalTokens: "GET /api/tokens",
   createPersonalToken: "POST /api/tokens",
   revokePersonalToken: "DELETE /api/tokens/:tokenId",
+  messages: "GET /api/boards/:boardId/messages",
+  schedules: "GET /api/boards/:boardId/schedules",
+  threadSchedules: "GET /api/threads/:threadId/schedules",
+  createSchedule: "POST /api/boards/:boardId/schedules",
+  createThreadSchedule: "POST /api/threads/:threadId/schedules",
+  cancelSchedule: "DELETE /api/schedules/:scheduleId",
+  watchers: "GET /api/boards/:boardId/watchers",
+  createWatcher: "POST /api/boards/:boardId/watchers",
+  deleteWatcher: "DELETE /api/watchers/:watcherId",
   /** Test mode only: sign-in codes that would have been emailed. */
   testOutbox: "GET /api/test/outbox",
 } as const;
@@ -108,6 +118,9 @@ export const API_ROUTES = {
  *   event: access_ended  data: {"reason": "removed" | "expired" | "board_deleted"}   (stream then closes)
  *   : keepalive          (comment, every 15 s)
  * Inbox stream: same, with `event: inbox` carrying an InboxItem and an inbox cursor.
+ *
+ * Message filters (`messages`, `changes`, `stream`): `by`, `mentions`, `label` (repeat, `key=value`), `text`,
+ * `source`, `re`, plus `after` (a message ID, thread ID or cursor). The stream sends only matching changes.
  *
  * Better Auth endpoints (mounted at /api/auth): POST /api/auth/email-otp/send-verification-otp
  * {"email","type":"sign-in"}, POST /api/auth/sign-in/email-otp {"email","otp"}, POST /api/auth/sign-out.
@@ -273,5 +286,9 @@ export const UpdateGrantBody = z.object({
   remove: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
   can: GrantCanInput.optional(),
 });
+
+/** Body of the schedule routes: `schedule_post` without the board or thread, which the path names. */
+export const ScheduleBody = TOOLS.schedule_post.input.omit({ board_id: true, thread_id: true });
+export const CreateWatcherBody = z.object({ url: z.string().min(1), secret: z.string(), filter: WatcherFilter.optional() });
 
 export const ROLE_VALUES = ROLES;

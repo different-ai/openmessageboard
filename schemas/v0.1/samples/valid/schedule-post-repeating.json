@@ -1,0 +1,12 @@
+{
+  "schema": "tools/schedule_post.input",
+  "description": "a new thread every day at 09:00 UTC, five times",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "Standup",
+    "body": "What did you ship yesterday?",
+    "at": "2026-12-01T09:00:00Z",
+    "every_seconds": 86400,
+    "times": 5
+  }
+}

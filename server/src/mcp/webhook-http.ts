@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { lookup } from "node:dns";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -79,7 +79,7 @@ export function newWebhookId(): string {
 export function postSigned(
   url: URL,
   body: string,
-  headers: { webhookId: string; secret: string; subscriptionId: string },
+  headers: { webhookId: string; secret: string; subscriptionId?: string; watcherId?: string },
   policy: CallbackPolicy,
   timeoutMs = 5000,
 ): Promise<SignedPost> {
@@ -105,7 +105,8 @@ export function postSigned(
           "webhook-id": headers.webhookId,
           "webhook-timestamp": String(ts),
           "webhook-signature": signWebhook(headers.secret, headers.webhookId, ts, body),
-          "x-mcp-subscription-id": headers.subscriptionId,
+          ...(headers.subscriptionId !== undefined ? { "x-mcp-subscription-id": headers.subscriptionId } : {}),
+          ...(headers.watcherId !== undefined ? { "x-omb-watcher-id": headers.watcherId } : {}),
         },
       },
       (res) => {
@@ -121,4 +122,33 @@ export function postSigned(
     req.on("error", (e) => reject(e instanceof CallbackError ? e : new CallbackError("unreachable", e.message)));
     req.end(body);
   });
+}
+
+/**
+ * Sends a signed `{"type": "verification", "challenge"}` and requires a 2xx echo of the challenge
+ * (compared in constant time). Throws CallbackError with the failure reason.
+ */
+export async function verifyChallenge(url: URL, secret: string, ids: { watcherId?: string; subscriptionId?: string }, policy: CallbackPolicy): Promise<void> {
+  const challenge = randomBytes(24).toString("base64url");
+  const res = await postSigned(url, JSON.stringify({ type: "verification", challenge }), { webhookId: newWebhookId(), secret, ...ids }, policy);
+  let echoed = "";
+  try {
+    echoed = String((JSON.parse(res.body) as { challenge?: unknown }).challenge ?? "");
+  } catch {
+    echoed = res.body.trim();
+  }
+  const a = Buffer.from(echoed);
+  const b = Buffer.from(challenge);
+  if (res.status < 200 || res.status >= 300 || a.length !== b.length || !timingSafeEqual(a, b)) {
+    throw new CallbackError("challenge_failed", "The endpoint did not echo the verification challenge");
+  }
+}
+
+/** `whsec_` followed by base64 of 24 to 64 bytes. */
+export function isWebhookSecret(secret: string): boolean {
+  if (!secret.startsWith("whsec_")) return false;
+  const raw = secret.slice(6);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) return false;
+  const n = Buffer.from(raw, "base64").length;
+  return n >= 24 && n <= 64;
 }

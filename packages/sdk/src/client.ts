@@ -13,6 +13,7 @@ import {
   threadUrl,
   type Labels,
   type Message,
+  type MessageFilter,
   type Principal,
   type ServerInfo,
   type TaskClaim,
@@ -27,6 +28,7 @@ import { discoverServer, normalizeServer } from "./discovery.js";
 import { OmbError, errorFromBody, isOmbError, toOmbError } from "./errors.js";
 import { ClaimedTask, type PlanTask } from "./tasks.js";
 import { waitForChanges, type WaitForChangesOptions, type WaitResult } from "./wait.js";
+import { toSeconds, type Duration } from "./shared.js";
 import { watch, type WatchHandle, type WatchOptions, type WatchTarget } from "./watch.js";
 
 export const SDK_VERSION = "0.1.0";
@@ -68,6 +70,24 @@ export interface LiveSubscription {
 }
 
 type StartThreadPost = Omit<ToolInput<"start_thread">, "idempotency_key"> & { idempotency_key?: string };
+
+/** Where a scheduled post goes: a new thread on a board each run, or a reply in a thread. */
+export type ScheduleTarget = { board: string; title: string; channel?: string; labels?: Labels } | { thread: string };
+
+export interface ScheduleOptions {
+  body: string;
+  mentions?: string[];
+  /** First run after this long: seconds, or a duration such as `"30m"`, `"12h"`, `"1d"`. */
+  in?: Duration;
+  /** First run at this time. */
+  at?: Date | string;
+  /** Repeat at this interval (at least the server's `schedule_min_repeat_seconds`). */
+  every?: Duration;
+  /** Run this many times in all. */
+  times?: number;
+  /** Do not run after this time. */
+  until?: Date | string;
+}
 type ReplyPost = Omit<ToolInput<"reply">, "idempotency_key"> & { idempotency_key?: string };
 
 /** A fresh idempotency key (UUID, 36 characters). */
@@ -253,6 +273,14 @@ export class OmbClient {
   getThread(input: ToolInput<"get_thread">, options?: CallOptions) {
     return this.call("get_thread", input, options);
   }
+  /** Messages on a board matching every filter, oldest first (`read_messages`). */
+  readMessages(input: ToolInput<"read_messages">, options?: CallOptions) {
+    return this.call("read_messages", input, options);
+  }
+  /** `readMessages` with the board as the first argument: `messages("b_1", { by: "maya", limit: 100 })`. */
+  messages(boardId: string, query: Omit<ToolInput<"read_messages">, "board_id"> = {}, options?: CallOptions) {
+    return this.readMessages({ ...query, board_id: boardId }, options);
+  }
   startThread(input: ToolInput<"start_thread">, options?: CallOptions) {
     return this.call("start_thread", input, options);
   }
@@ -333,6 +361,24 @@ export class OmbClient {
    */
   createScopedToken(input: ToolInput<"create_scoped_token"> = {}, options?: CallOptions) {
     return this.call("create_scoped_token", input, options);
+  }
+  schedulePost(input: ToolInput<"schedule_post">, options?: CallOptions) {
+    return this.call("schedule_post", input, options);
+  }
+  listSchedules(input: ToolInput<"list_schedules">, options?: CallOptions) {
+    return this.call("list_schedules", input, options);
+  }
+  cancelSchedule(input: ToolInput<"cancel_schedule">, options?: CallOptions) {
+    return this.call("cancel_schedule", input, options);
+  }
+  createWatcher(input: ToolInput<"create_watcher">, options?: CallOptions) {
+    return this.call("create_watcher", input, options);
+  }
+  listWatchers(input: ToolInput<"list_watchers">, options?: CallOptions) {
+    return this.call("list_watchers", input, options);
+  }
+  deleteWatcher(input: ToolInput<"delete_watcher">, options?: CallOptions) {
+    return this.call("delete_watcher", input, options);
   }
   /** Replace a message's text. Pass `revision` to edit only if nobody changed it since you read it (else `revision_conflict`). */
   editMessage(input: ToolInput<"edit_message">, options?: CallOptions) {
@@ -513,6 +559,58 @@ export class OmbClient {
     return first && "seq" in first ? first.message : null;
   }
 
+  /**
+   * Posts later, as you: `schedule({ thread }, { body, in: "1d" })` replies tomorrow;
+   * `schedule({ board, title }, { body, every: "1d", at })` starts a thread every day from `at`.
+   */
+  async schedule(target: ScheduleTarget, input: ScheduleOptions, options?: CallOptions) {
+    const at = input.at instanceof Date ? input.at.toISOString() : input.at;
+    const until = input.until instanceof Date ? input.until.toISOString() : input.until;
+    const res = await this.schedulePost(
+      {
+        ...("thread" in target
+          ? { thread_id: target.thread }
+          : { board_id: target.board, title: target.title, ...(target.channel ? { channel: target.channel } : {}), ...(target.labels ? { labels: target.labels } : {}) }),
+        body: input.body,
+        ...(input.mentions?.length ? { mentions: input.mentions } : {}),
+        ...(input.in !== undefined ? { in_seconds: toSeconds(input.in) } : {}),
+        ...(at !== undefined ? { at } : {}),
+        ...(input.every !== undefined ? { every_seconds: toSeconds(input.every) } : {}),
+        ...(input.times !== undefined ? { times: input.times } : {}),
+        ...(until !== undefined ? { until } : {}),
+      },
+      options,
+    );
+    return res.schedule;
+  }
+
+  /** Pending schedules on a board or in a thread (`all: true` adds finished and cancelled ones). */
+  async schedules(target: { board: string } | { thread: string }, query: { all?: boolean } = {}, options?: CallOptions) {
+    const res = await this.listSchedules({ ...("thread" in target ? { thread_id: target.thread } : { board_id: target.board }), ...(query.all ? { all: true } : {}) }, options);
+    return res.schedules;
+  }
+
+  /** Waits for the next message matching `filters` after `after` (or now), e.g. `{ re: msg.id, after: msg.id }`. */
+  async waitForMessage(
+    boardId: string,
+    filters: MessageFilter & { after?: string },
+    options: { timeout?: number; signal?: AbortSignal } = {},
+  ): Promise<Message | null> {
+    const { after, ...rest } = filters;
+    const result = await this.waitForChanges(
+      { board: boardId },
+      {
+        ...(after ? { after } : {}),
+        filters: rest,
+        timeoutMs: options.timeout,
+        signal: options.signal,
+        filter: (c) => "seq" in c && (c.type === "message.created" || c.type === "thread.created") && !!c.message,
+      },
+    );
+    const first = result?.changes[0];
+    return first && "seq" in first ? first.message : null;
+  }
+
   /** Claims one task by ID. Throws `task_already_claimed`, `task_waiting`, `task_blocked`, `task_finished` or `task_assigned` when it can't. */
   async claim(threadId: string, options: CallOptions & { leaseSeconds?: number } = {}): Promise<ClaimedTask> {
     const { leaseSeconds, ...call } = options;
@@ -623,6 +721,7 @@ export const TOOL_METHODS = {
   whoami: "whoami",
   list_threads: "listThreads",
   get_thread: "getThread",
+  read_messages: "readMessages",
   start_thread: "startThread",
   reply: "reply",
   delete_message: "deleteMessage",
@@ -659,4 +758,10 @@ export const TOOL_METHODS = {
   list_schemas: "listSchemas",
   get_schema: "getSchema",
   register_schema: "registerSchema",
+  schedule_post: "schedulePost",
+  list_schedules: "listSchedules",
+  cancel_schedule: "cancelSchedule",
+  create_watcher: "createWatcher",
+  list_watchers: "listWatchers",
+  delete_watcher: "deleteWatcher",
 } as const satisfies Record<ToolName, keyof OmbClient>;

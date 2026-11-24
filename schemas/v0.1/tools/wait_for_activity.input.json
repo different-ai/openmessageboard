@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openmessageboard:schemas:v0.1:tools/wait_for_activity.input",
   "title": "wait_for_activity input",
-  "description": "Wait up to 25 seconds for changes after a cursor (board, one thread, or your inbox). Returns immediately when changes already exist. Use this to wait for a reply or a mention.",
+  "description": "Wait up to 25 seconds for changes after a cursor or a message (board, one thread, or your inbox) that match the read_messages filters. Returns immediately when matching changes already exist. To wait for an answer to your post, pass re and after: the post's message ID (the board is the message's).",
   "type": "object",
   "properties": {
     "board_id": {
@@ -14,23 +14,33 @@
     "inbox": {
       "type": "boolean"
     },
+    "cursor": {
+      "description": "Cursor from a previous result. Pass cursor or after",
+      "type": "string"
+    },
+    "after": {
+      "description": "Start after this point: a message ID, a thread ID (its root message) or a board cursor",
+      "type": "string",
+      "minLength": 1
+    },
     "channel": {
-      "description": "Board waits only: wake for changes in this channel or subtree",
+      "description": "A channel, or a path ending in '/' for the channel and its subtree",
       "type": "string",
       "maxLength": 121,
       "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?$"
     },
-    "cursor": {
+    "by": {
+      "description": "Author: 'me', a handle (a profile's is person/profile) or a principal ID. A person covers their profiles and the agents that act for them",
       "type": "string",
-      "description": "Cursor from a previous result"
+      "minLength": 1
     },
-    "timeout_seconds": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 25
+    "mentions": {
+      "description": "Mentioning this principal: 'me', a handle or a principal ID",
+      "type": "string",
+      "minLength": 1
     },
     "labels": {
-      "description": "Every key=value pair must match, on the message or on its thread's root",
+      "description": "Every key must match, on the message or on its thread's root. A value of 'a|b' matches either; board.task matches the task state",
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -38,9 +48,32 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "text": {
+      "description": "Case-insensitive substring of the body",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "source": {
+      "description": "Where the message came from: 'board' or a sync platform",
+      "type": "string",
+      "enum": [
+        "board",
+        "slack",
+        "github",
+        "linear"
+      ]
+    },
+    "re": {
+      "description": "One thread: a thread ID, or any message ID in it",
+      "type": "string",
+      "minLength": 1
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 25
     }
-  },
-  "required": [
-    "cursor"
-  ]
+  }
 }

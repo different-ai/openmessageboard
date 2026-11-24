@@ -1,0 +1,10 @@
+{
+  "schema": "tools/wait_for_activity.input",
+  "description": "wait for an answer after your own post, in its thread",
+  "instance": {
+    "re": "m_01JD8Z4X7Q",
+    "after": "m_01JD8Z4X7Q",
+    "by": "maya",
+    "timeout_seconds": 25
+  }
+}

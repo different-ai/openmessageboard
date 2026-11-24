@@ -67,6 +67,11 @@ const ENTITY_NAMES = [
   "Grant",
   "GrantPrincipal",
   "AccessExplanation",
+  "MessageFilter",
+  "Schedule",
+  "WatcherFilter",
+  "WatcherDelivery",
+  "Watcher",
 ] as const;
 
 export function schemaEntries(): SchemaEntry[] {

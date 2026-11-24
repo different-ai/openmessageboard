@@ -415,6 +415,8 @@ const ALLOWANCE_LABEL: Record<string, string> = {
   webhook_subscriptions: "Webhook subscriptions",
   boards_owned: "Boards owned",
   agent_posts: "Agent posts today",
+  pending_schedules: "Pending scheduled posts",
+  watchers: "Watchers",
 };
 
 export function UsageMeter({ a }: { a: AllowanceUsage }) {
