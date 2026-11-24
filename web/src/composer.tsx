@@ -1,8 +1,9 @@
-import type { Member } from "@openmessageboard/protocol";
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { MAX_MENTIONS, newIdempotencyKey } from "./format";
+import type { Attachment, Member } from "@openmessageboard/protocol";
+import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { api } from "./api";
+import { formatBytes, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, MAX_MENTIONS, newIdempotencyKey } from "./format";
 import { Markdown } from "./markdown";
-import { Avatar } from "./ui";
+import { Avatar, ErrorNote, errorText } from "./ui";
 
 type MentionQuery = { start: number; text: string };
 
@@ -218,4 +219,120 @@ export function useIdempotencyKey() {
       ref.current = null;
     },
   };
+}
+
+/* ---------- Attachments ---------- */
+
+type PendingAttachment = { key: string; name: string; size: number; attachment: Attachment | null };
+
+/**
+ * Files picked in a composer. Each uploads as soon as it is picked; the composer sends
+ * the IDs of finished uploads and waits while any are still in flight.
+ */
+export function useAttachments(boardId: string) {
+  const [items, setItems] = useState<PendingAttachment[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const seq = useRef(0);
+  const countRef = useRef(0);
+  countRef.current = items.length;
+
+  const add = useCallback(
+    (files: File[]) => {
+      const problems: string[] = [];
+      const room = Math.max(0, MAX_ATTACHMENTS - countRef.current);
+      if (files.length > room) problems.push(`A message can carry up to ${MAX_ATTACHMENTS} files.`);
+      const picked: { item: PendingAttachment; file: File }[] = [];
+      for (const file of files.slice(0, room)) {
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+          problems.push(`“${file.name}” is ${formatBytes(file.size)}; files can be up to ${formatBytes(MAX_ATTACHMENT_BYTES)}.`);
+        } else {
+          picked.push({ item: { key: `f${++seq.current}`, name: file.name, size: file.size, attachment: null }, file });
+        }
+      }
+      countRef.current += picked.length;
+      setErrors(problems);
+      setItems((list) => [...list, ...picked.map((p) => p.item)]);
+      for (const { item, file } of picked) {
+        api.uploadAttachment(boardId, file).then(
+          (res) => setItems((list) => list.map((x) => (x.key === item.key ? { ...x, attachment: res.attachment } : x))),
+          (err: unknown) => {
+            setItems((list) => list.filter((x) => x.key !== item.key));
+            setErrors((list) => [...list, `Couldn't attach “${item.name}”: ${errorText(err)}`]);
+          },
+        );
+      }
+    },
+    [boardId],
+  );
+
+  const remove = useCallback((key: string) => setItems((list) => list.filter((x) => x.key !== key)), []);
+  const clear = useCallback(() => {
+    setItems([]);
+    setErrors([]);
+  }, []);
+
+  return {
+    items,
+    errors,
+    add,
+    remove,
+    clear,
+    uploading: items.some((x) => !x.attachment),
+    ids: items.flatMap((x) => (x.attachment ? [x.attachment.id] : [])),
+  };
+}
+
+/** "Attach files" button, the picked files as chips, and upload errors. */
+export function AttachmentPicker({ state, disabled }: { state: ReturnType<typeof useAttachments>; disabled?: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hintId = useId();
+  const full = state.items.length >= MAX_ATTACHMENTS;
+  return (
+    <div className="attach">
+      <div className="attach-row">
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          hidden
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            if (files.length) state.add(files);
+          }}
+        />
+        <button
+          type="button"
+          className="button button-small"
+          disabled={disabled || full}
+          aria-describedby={hintId}
+          onClick={() => inputRef.current?.click()}
+        >
+          Attach files
+        </button>
+        <span id={hintId} className="hint">
+          Up to {MAX_ATTACHMENTS} files, {formatBytes(MAX_ATTACHMENT_BYTES)} each.
+        </span>
+      </div>
+      {state.items.length > 0 && (
+        <ul className="attach-list" aria-label="Files to attach" aria-live="polite">
+          {state.items.map((item) => (
+            <li key={item.key} className={`attach-chip ${item.attachment ? "" : "uploading"}`}>
+              <span className="attachment-icon" aria-hidden="true">
+                {item.attachment ? "📎" : <span className="spinner spinner-small" />}
+              </span>
+              <span className="attachment-name">{item.name}</span>
+              <span className="attachment-size">{item.attachment ? formatBytes(item.size) : "Uploading…"}</span>
+              <button type="button" className="chip-remove" aria-label={`Remove ${item.name}`} onClick={() => state.remove(item.key)}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ErrorNote error={state.errors.length ? new Error(state.errors.join(" ")) : null} className="compact" />
+    </div>
+  );
 }

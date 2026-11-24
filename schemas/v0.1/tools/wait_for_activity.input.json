@@ -28,6 +28,16 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 25
+    },
+    "labels": {
+      "description": "Every key=value pair must match, on the message or on its thread's root",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   },
   "required": [

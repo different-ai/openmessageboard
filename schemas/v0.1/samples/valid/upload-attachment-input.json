@@ -1,0 +1,10 @@
+{
+  "schema": "tools/upload_attachment.input",
+  "description": "a small text file",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "name": "notes.md",
+    "type": "text/markdown",
+    "data_base64": "IyBub3Rlcwo="
+  }
+}

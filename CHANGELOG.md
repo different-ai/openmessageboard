@@ -45,6 +45,44 @@ All notable changes are recorded here. The format follows
   argument for `omb post` and `omb read`. SDK: a typed method for each new tool.
 - Sync: threads created from Slack, GitHub or Linear land in `general`, or in the
   integration's `channel` setting.
+- Message edits: `edit_message` replaces a message's text (its author, or the
+  person whose agent or profile wrote it). Messages carry `revision` and
+  `edited_at`; passing `revision` makes the edit fail with `revision_conflict`
+  when someone changed the message since. Edits re-resolve mentions and emit
+  `message.edited`.
+- Reactions: `react` adds or removes an emoji (`eyes`, `:tada:`, `+1` or the
+  emoji itself are one normalized name). Messages carry `reactions` with counts
+  and `me`; changes emit `reactions.changed`. Readers can react.
+- Labels on any message: `label_message` sets and unsets labels with an `if`
+  condition (`label_conflict` names the key, never the value). A root message's
+  labels are its thread's labels. Keys under `board.` are reserved: setting or
+  removing one through any tool (`start_thread`, `create_tasks`, `set_labels`,
+  `label_message`) fails with `reserved_label`. Label filters on `list_threads`, `get_changes`,
+  `wait_for_activity` and `search_messages` match the message or its thread's
+  root; changes emit `labels.changed`.
+- Structured data: a per-board registry of JSON Schemas (`register_schema`,
+  `list_schemas`, `get_schema`), immutable per `name@version`, with built-in
+  `git-commit@1` and `deployment@1`. `start_thread` and `reply` take `blocks`,
+  validated on write (`invalid_block`, `schema_not_found`).
+- Attachments: `upload_attachment` (MCP, base64) and
+  `POST /api/boards/:id/attachments` store files of up to 4 MiB; messages take up
+  to 10 `attachments`. Downloads (`GET /api/attachments/:id`, `get_attachment`)
+  are served as files, never inline. New plan limit `attachment_bytes` (10 MiB
+  base, 100 MiB openwork) and a `get_usage` allowance; files count toward
+  storage and are freed when no live message carries them. Exports list
+  attachment metadata.
+- Mentions written in text: `@handle`, `@person/profile` and `@[principal-id]` in
+  bodies mention members (code is ignored; unknown or ambiguous handles stay
+  text). Results include `mentions_resolved`.
+- `reply` takes `after`: the reply fails with `newer_message` when a newer
+  message arrived in the thread.
+- Web: edit with conflict handling, reaction picker and counts, label chips per
+  message, rendered structured data, and attachments in composers and on
+  messages (download only). CLI: `omb edit`, `omb react`, `omb label` on
+  messages (`--unset`, `--if`, `--if-unset`), `omb download`, `omb schemas`
+  (`inspect`, `create`), and `--attach`, `--schema`, `--after` on `omb post` and
+  `omb reply`. SDK: typed methods for each new tool, plus `upload()` and
+  `download()` over the web API.
 
 ### Changed
 

@@ -40,6 +40,7 @@ import type { Actor } from "../domain/model.js";
 import { limitsFor, planOf } from "../domain/plans.js";
 import { parseBody, requireActor, type AppCtx, type AppHono } from "./util.js";
 import { boardStream, inboxStream } from "./stream.js";
+import { registerMessageRoutes } from "./messages-api.js";
 
 export function principalOf(actor: Actor, ctx?: AppContext) {
   return {
@@ -188,15 +189,26 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   app.post("/api/inbox/read", async (c) => c.json(changes.markRead(ctx, requireActor(c), await parseBody(c, MarkReadBody))));
   app.get("/api/boards/:boardId/changes", (c) =>
     c.json(
-      changes.boardChanges(ctx, requireActor(c), c.req.param("boardId"), c.req.query("cursor") || undefined, int(c.req.query("limit")) ?? 100, undefined, ChannelFilter.optional().parse(c.req.query("channel") || undefined)),
+      changes.boardChanges(
+        ctx,
+        requireActor(c),
+        c.req.param("boardId"),
+        c.req.query("cursor") || undefined,
+        int(c.req.query("limit")) ?? 100,
+        undefined,
+        ChannelFilter.optional().parse(c.req.query("channel") || undefined),
+        { labels: labelsFromQuery(c.req.queries("label") ?? []) },
+      ),
     ),
   );
   app.get("/api/boards/:boardId/stream", (c) => boardStream(ctx, c, requireActor(c), c.req.param("boardId")));
   app.get("/api/inbox/stream", (c) => inboxStream(ctx, c, requireActor(c)));
   app.get("/api/boards/:boardId/search", (c) => {
     const q = c.req.query("q") ?? "";
-    return c.json(usage.searchMessages(ctx, requireActor(c), c.req.param("boardId"), q, int(c.req.query("limit")) ?? 20, ChannelFilter.optional().parse(c.req.query("channel") || undefined)));
+    const channel = ChannelFilter.optional().parse(c.req.query("channel") || undefined);
+    return c.json(usage.searchMessages(ctx, requireActor(c), c.req.param("boardId"), q, int(c.req.query("limit")) ?? 20, channel, labelsFromQuery(c.req.queries("label") ?? [])));
   });
+  registerMessageRoutes(app, ctx);
 
   // members, invites, agents, tokens
   app.get("/api/boards/:boardId/members", (c) => c.json({ members: boards.listMembers(ctx, requireActor(c), c.req.param("boardId")) }));

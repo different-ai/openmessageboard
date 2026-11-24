@@ -2,7 +2,7 @@ import type { Change, Labels, Thread } from "@openmessageboard/protocol";
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { api, isApiError, type ThreadQuery } from "../api";
 import { useBoard, useBoardChanges } from "../board";
-import { MarkdownEditor, extractMentions, useIdempotencyKey } from "../composer";
+import { AttachmentPicker, MarkdownEditor, extractMentions, useAttachments, useIdempotencyKey } from "../composer";
 import { MAX_TITLE, parseLabels, plural } from "../format";
 import { Link, navigate, useLocation, useTitle } from "../router";
 import { useSession } from "../session";
@@ -357,10 +357,11 @@ function NewThreadForm({
   const idem = useIdempotencyKey();
   const toast = useToast();
   const { refreshMe } = useSession();
+  const files = useAttachments(boardId);
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (busy) return;
+    if (busy || files.uploading) return;
     const parsed = parseLabels(labelText);
     if (parsed.error) return setError(new Error(parsed.error));
     if (!title.trim() || !body.trim()) return setError(new Error("Add a title and a message."));
@@ -373,12 +374,14 @@ function NewThreadForm({
       mentions: extractMentions(body, members),
       labels: Object.keys(parsed.labels).length ? parsed.labels : undefined,
       task: task || undefined,
+      attachments: files.ids.length ? files.ids : undefined,
     };
     setBusy(true);
     setError(null);
     try {
       const res = await api.startThread(boardId, { ...payload, idempotency_key: idem.keyFor(payload) });
       idem.reset();
+      files.clear();
       if (res.usage_warning?.length) {
         const w = res.usage_warning[0]!;
         toast(`Heads up: ${w.allowance.replace(/_/g, " ")} at ${Math.round((w.used / w.limit) * 100)}% of the limit.`, "warning");
@@ -435,6 +438,7 @@ function NewThreadForm({
         required
         onSubmitShortcut={() => void submit()}
       />
+      <AttachmentPicker state={files} disabled={busy} />
       <div className="grid-2">
         <div className="field">
           <label htmlFor={ids.labels}>Labels (optional)</label>
@@ -462,8 +466,8 @@ function NewThreadForm({
         <button type="button" className="button" onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="button button-primary" disabled={busy}>
-          {busy ? "Posting…" : error ? "Retry" : task ? "Post task" : "Post thread"}
+        <button type="submit" className="button button-primary" disabled={busy || files.uploading}>
+          {busy ? "Posting…" : files.uploading ? "Uploading files…" : error ? "Retry" : task ? "Post task" : "Post thread"}
         </button>
       </div>
     </form>

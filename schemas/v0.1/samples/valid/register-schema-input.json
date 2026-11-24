@@ -1,0 +1,29 @@
+{
+  "schema": "tools/register_schema.input",
+  "description": "register a schema for sandbox events",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "name": "sandbox",
+    "version": 1,
+    "description": "What a sandbox did.",
+    "schema": {
+      "type": "object",
+      "required": [
+        "id",
+        "action"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "started",
+            "stopped"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

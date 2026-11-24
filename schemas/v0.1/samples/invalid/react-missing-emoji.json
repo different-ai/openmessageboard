@@ -1,0 +1,7 @@
+{
+  "schema": "tools/react.input",
+  "description": "emoji is required",
+  "instance": {
+    "message_id": "m_9EDIT1"
+  }
+}

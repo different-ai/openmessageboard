@@ -2,13 +2,16 @@ import { McpServer, ProtocolError, ResourceTemplate, type ServerContext } from "
 import { TOOLS, TOOL_NAMES, EVENTS_EXTENSION_ID, boardUrl, inboxUrl, threadUrl, parseResourceUri, type ToolName, type ServerInfo } from "@openmessageboard/protocol";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
-import { OmbError, toOmbError } from "../errors.js";
+import { OmbError, invalid, toOmbError } from "../errors.js";
 import * as boards from "../domain/boards.js";
 import * as invites from "../domain/invites.js";
 import * as convo from "../domain/conversation.js";
 import * as tasks from "../domain/tasks.js";
 import * as changes from "../domain/changes.js";
 import * as usage from "../domain/usage.js";
+import * as messages from "../domain/messages.js";
+import * as attachments from "../domain/attachments.js";
+import * as schemas from "../domain/schemas.js";
 import * as channels from "../domain/channels.js";
 import { holderId, requireMember } from "../domain/access.js";
 import { listActors } from "../domain/profiles.js";
@@ -39,7 +42,17 @@ const READ_ONLY: ReadonlySet<ToolName> = new Set([
   "list_channels",
   "list_grants",
   "explain_access",
+  "get_attachment",
+  "list_schemas",
+  "get_schema",
 ]);
+
+/** Strict base64 (standard alphabet, padding optional), so a garbled upload is an error rather than a silently different file. */
+function decodeBase64(data: string): Buffer {
+  const clean = data.replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(clean) || clean.length % 4 === 1) throw invalid("data_base64 is not valid base64");
+  return Buffer.from(clean, "base64");
+}
 
 function actorOf(sctx: ServerContext): Actor {
   const actor = sctx.http?.authInfo?.extra?.actor as Actor | undefined;
@@ -87,12 +100,20 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     start_thread: (a, x) => convo.startThread(ctx, a, x.board_id, x),
     reply: (a, x) => convo.reply(ctx, a, x.thread_id, x),
     delete_message: (a, x) => convo.deleteMessage(ctx, a, x.message_id),
+    edit_message: (a, x) => messages.editMessage(ctx, a, x.message_id, x),
+    react: (a, x) => messages.react(ctx, a, x.message_id, x),
+    label_message: (a, x) => messages.labelMessage(ctx, a, x.message_id, x),
+    upload_attachment: (a, x) => attachments.uploadAttachment(ctx, a, x.board_id, { name: x.name, type: x.type, data: decodeBase64(x.data_base64) }),
+    get_attachment: (a, x) => attachments.getAttachment(ctx, a, x.attachment_id),
+    list_schemas: (a, x) => schemas.listSchemas(ctx, a, x.board_id),
+    get_schema: (a, x) => schemas.getSchema(ctx, a, x.board_id, x.schema),
+    register_schema: (a, x) => schemas.registerSchema(ctx, a, x.board_id, x),
     set_follow: (a, x) => convo.setFollow(ctx, a, x.thread_id, x.following),
     get_inbox: (a, x) => changes.getInbox(ctx, a, x),
     mark_read: (a, x) => changes.markRead(ctx, a, x),
     get_changes: (a, x) => changes.getChanges(ctx, a, x),
     wait_for_activity: (a, x, s) => changes.waitForActivity(ctx, a, x, s.mcpReq.signal),
-    search_messages: (a, x) => usage.searchMessages(ctx, a, x.board_id, x.query, x.limit, x.channel),
+    search_messages: (a, x) => usage.searchMessages(ctx, a, x.board_id, x.query, x.limit, x.channel, x.labels),
     list_members: (a, x) => ({ members: boards.listMembers(ctx, a, x.board_id) }),
     claim_task: (a, x, s) => tasks.claimTask(ctx, a, x, s.mcpReq.signal),
     renew_task: (a, x) => tasks.renewTask(ctx, a, x.thread_id, x),
@@ -144,7 +165,9 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
         annotations: {
           readOnlyHint: READ_ONLY.has(name),
           destructiveHint: name === "delete_message" || name === "revoke_grant",
-          idempotentHint: READ_ONLY.has(name) || ["set_follow", "set_labels", "mark_read", "start_thread", "reply", "create_tasks"].includes(name),
+          idempotentHint:
+            READ_ONLY.has(name) ||
+            ["set_follow", "set_labels", "mark_read", "start_thread", "reply", "create_tasks", "react", "label_message", "register_schema"].includes(name),
           openWorldHint: false,
         },
       },

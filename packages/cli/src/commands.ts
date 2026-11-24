@@ -1,6 +1,9 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 import type { GrantPrincipal } from "@openmessageboard/protocol";
 import {
   OmbClient,
+  OmbError,
   isInboxItem,
   normalizeServer,
   type Change,
@@ -42,6 +45,7 @@ import {
   formatThreadHeader,
   formatThreadRow,
   formatUsage,
+  formatSchema,
 } from "./format.js";
 import { promptHidden, readAll, type Io } from "./io.js";
 import { TASK_RUNNERS } from "./tasks.js";
@@ -260,38 +264,217 @@ async function read(ctx: Context, args: string[], values: Values): Promise<void>
   ctx.out(res.threads.length ? res.threads.map((t) => formatThreadRow(t, ctx.now())).join("\n") : "No threads.");
 }
 
+const MEDIA_TYPES: Record<string, string> = {
+  txt: "text/plain",
+  log: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  zip: "application/zip",
+  gz: "application/gzip",
+  tar: "application/x-tar",
+  html: "text/html",
+  xml: "application/xml",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+};
+
+/** Uploads each --attach file to the board and returns the attachment IDs. */
+async function uploadAll(ctx: Context, boardId: string, values: Values): Promise<string[]> {
+  const ids: string[] = [];
+  for (const path of list(values, "attach")) {
+    let data: Uint8Array;
+    try {
+      data = readFileSync(path);
+    } catch (err) {
+      throw new UsageError(`Can't read ${path}: ${(err as Error).message}`);
+    }
+    const name = basename(path);
+    const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
+    const attachment = await ctx.client().upload(boardId, { data, name, type: MEDIA_TYPES[ext] ?? "application/octet-stream" });
+    if (!ctx.json) ctx.info(`Uploaded ${attachment.name} (${attachment.size} bytes) as ${attachment.id}`);
+    ids.push(attachment.id);
+  }
+  return ids;
+}
+
+function parseSchemaRef(input: string): { schema: string; version: number } {
+  const m = /^(.+)@(\d+)$/.exec(input.trim());
+  if (!m) throw new UsageError(`--schema takes name@version, such as git-commit@1`);
+  return { schema: m[1]!, version: Number(m[2]) };
+}
+
+function parseJsonObject(text: string, what: string): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    throw new UsageError(`${what} is not JSON: ${(err as Error).message}`);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new UsageError(`${what} must be a JSON object`);
+  return value as Record<string, unknown>;
+}
+
+/**
+ * The body and structured data for post and reply. With --schema and --data, the body stays text; with --schema
+ * alone, the body argument is the data and the text names the schema.
+ */
+async function bodyAndBlocks(ctx: Context, bodyArg: string, values: Values) {
+  const schemaArg = str(values, "schema");
+  const dataArg = str(values, "data");
+  if (!schemaArg) {
+    if (dataArg !== undefined) throw new UsageError("--data needs --schema name@version");
+    return { body: await ctx.body(bodyArg) };
+  }
+  const ref = parseSchemaRef(schemaArg);
+  if (dataArg !== undefined) {
+    const data = parseJsonObject(dataArg === "-" ? await readAll(ctx.io.stdin) : dataArg, "--data");
+    return { body: await ctx.body(bodyArg), blocks: [{ ...ref, data }] };
+  }
+  const data = parseJsonObject(bodyArg === "-" ? await readAll(ctx.io.stdin) : bodyArg, "The data");
+  return { body: `${ref.schema}@${ref.version}`, blocks: [{ ...ref, data }] };
+}
+
 async function post(ctx: Context, args: string[], values: Values): Promise<void> {
   const usage = "post [board|channel] <title> <body|->";
   if (args.length !== 2 && args.length !== 3) throw new UsageError(`Usage: omb ${usage}`);
   const { board, channel } = boardAndChannel(args.length === 3 ? args[0] : undefined, values);
   const [title, bodyArg] = args.slice(-2) as [string, string];
   const mentions = list(values, "mention");
+  const boardId = await ctx.board(board);
+  const content = await bodyAndBlocks(ctx, bodyArg, values);
+  const attachments = await uploadAll(ctx, boardId, values);
   const res = await ctx.client().postIdempotent({
-    board_id: await ctx.board(board),
+    board_id: boardId,
     ...(channel ? { channel } : {}),
     title,
-    body: await ctx.body(bodyArg),
+    ...content,
     ...(mentions.length ? { mentions } : {}),
     ...(labelsOf(values) ? { labels: labelsOf(values) } : {}),
     ...(flag(values, "task") ? { task: true } : {}),
+    ...(attachments.length ? { attachments } : {}),
   });
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`${res.thread.kind === "task" ? "Created task" : "Posted thread"} ${res.thread.id} in ${res.thread.channel} ${res.thread.url}`);
+  reportMentions(ctx, res.mentions_resolved);
+}
+
+function reportMentions(ctx: Context, resolved: { written: string; principal: { display_name: string } | null; candidates: unknown[] }[] | undefined): void {
+  for (const m of resolved ?? []) {
+    if (m.principal) ctx.info(`Mentioned ${m.principal.display_name} (${m.written})`);
+    else ctx.info(`${m.written} ${m.candidates.length ? `matches ${m.candidates.length} members` : "matches no member"}; left as text`);
+  }
 }
 
 async function reply(ctx: Context, args: string[], values: Values): Promise<void> {
   need(args, 2, "reply <thread> <body|->");
   const mentions = list(values, "mention");
   const replyTo = str(values, "reply-to");
+  const after = str(values, "after");
   const thread_id = threadIdFrom(args[0]!);
+  const content = await bodyAndBlocks(ctx, args[1]!, values);
+  let attachments: string[] = [];
+  if (list(values, "attach").length) {
+    const { thread } = await ctx.client().getThread({ thread_id, limit: 1 });
+    attachments = await uploadAll(ctx, thread.board_id, values);
+  }
   const res = await ctx.client().postIdempotent({
     thread_id,
-    body: await ctx.body(args[1]!),
+    ...content,
     ...(mentions.length ? { mentions } : {}),
     ...(replyTo ? { reply_to: replyTo } : {}),
+    ...(after ? { after } : {}),
+    ...(attachments.length ? { attachments } : {}),
   });
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Replied ${res.message.id} in ${thread_id}`);
+  reportMentions(ctx, res.mentions_resolved);
+}
+
+async function edit(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 2, "edit <message> <body|-> [--if-revision n]");
+  const rev = str(values, "if-revision");
+  const res = await ctx.client().editMessage({
+    message_id: args[0]!,
+    body: await ctx.body(args[1]!),
+    ...(rev ? { revision: parsePositiveInt(rev, "--if-revision") } : {}),
+  });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`edited ${res.message.id} (revision ${res.message.revision})`);
+  reportMentions(ctx, res.mentions_resolved);
+}
+
+async function reactCmd(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 2, "react <message> <emoji> [--remove]");
+  const remove = flag(values, "remove");
+  const res = await ctx.client().react({ message_id: args[0]!, emoji: args[1]!, ...(remove ? { remove: true } : {}) });
+  if (ctx.json) return ctx.printJson(res);
+  const summary = res.message.reactions.map((r) => `${r.emoji} ${r.count}`).join(" · ");
+  ctx.out(`${remove ? "unreacted" : "reacted"} ${res.message.id}${summary ? ` (${summary})` : ""}`);
+}
+
+async function download(ctx: Context, args: string[]): Promise<void> {
+  if (args.length < 1 || args.length > 2) throw new UsageError("Usage: omb download <attachment> [path|-]");
+  const file = await ctx.client().download(args[0]!);
+  const target = args[1];
+  if (target === "-") {
+    (ctx.io.stdout as { write(data: string | Uint8Array): unknown }).write(file.data);
+    return;
+  }
+  const path = target ?? basename(file.name.replace(/\\/g, "/")) ?? args[0]!;
+  writeFileSync(path, file.data);
+  if (ctx.json) return ctx.printJson({ path, name: file.name, type: file.type, size: file.data.byteLength });
+  ctx.out(`Saved ${path} (${file.data.byteLength} bytes, ${file.type})`);
+}
+
+async function schemasList(ctx: Context, args: string[]): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb schemas [list] [board]");
+  const res = await ctx.client().listSchemas({ board_id: await ctx.board(args[0]) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(res.schemas.map((s) => `${s.id}${s.builtin ? " (built in)" : ""}${s.description ? ` · ${s.description}` : ""}`).join("\n") || "No schemas.");
+}
+
+async function schemasInspect(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 1, "schemas inspect <name@version> [--board <id>]");
+  const res = await ctx.client().getSchema({ board_id: await ctx.board(str(values, "board")), schema: args[0]! });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatSchema(res.schema));
+}
+
+async function schemasCreate(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 1, "schemas create <name@version> --file <path|-> | --data <json> [--description <text>] [--board <id>]");
+  const m = /^(.+)@(\d+)$/.exec(args[0]!.trim());
+  if (!m) throw new UsageError("Name the schema as name@version, such as sandbox@1");
+  const file = str(values, "file");
+  const data = str(values, "data");
+  if ((file === undefined) === (data === undefined)) throw new UsageError("Pass the JSON Schema with --file <path|-> or --data <json>");
+  let text: string;
+  if (data !== undefined) text = data;
+  else if (file === "-") text = await readAll(ctx.io.stdin);
+  else {
+    try {
+      text = readFileSync(file!, "utf8");
+    } catch (err) {
+      throw new UsageError(`Can't read ${file}: ${(err as Error).message}`);
+    }
+  }
+  const description = str(values, "description");
+  const res = await ctx.client().registerSchema({
+    board_id: await ctx.board(str(values, "board")),
+    name: m[1]!,
+    version: Number(m[2]),
+    schema: parseJsonObject(text, "The schema"),
+    ...(description ? { description } : {}),
+  });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(res.created ? `Registered ${res.schema.id}` : `${res.schema.id} is already registered with this definition`);
 }
 
 async function del(ctx: Context, args: string[]): Promise<void> {
@@ -388,12 +571,33 @@ async function inbox(ctx: Context, args: string[], values: Values): Promise<void
 }
 
 async function label(ctx: Context, args: string[], values: Values): Promise<void> {
-  const remove = list(values, "remove");
-  if (args.length < 1 || (args.length === 1 && remove.length === 0)) throw new UsageError("Usage: omb label <thread> k=v ... [--remove k ...]");
+  const unset = [...list(values, "unset"), ...list(values, "remove")];
+  const ifSet = list(values, "if");
+  const ifUnset = list(values, "if-unset");
+  if (args.length < 1 || (args.length === 1 && unset.length === 0)) {
+    throw new UsageError("Usage: omb label <message|thread> [k=v ...] [--unset k ...] [--if k=v ...] [--if-unset k ...]");
+  }
   const set = args.length > 1 ? parseLabels(args.slice(1)) : undefined;
-  const res = await ctx.client().setLabels({ thread_id: threadIdFrom(args[0]!), ...(set ? { set } : {}), ...(remove.length ? { remove } : {}) });
+  const conditions: Record<string, string | null> = {};
+  for (const [k, v] of Object.entries(ifSet.length ? parseLabels(ifSet) : {})) conditions[k] = v;
+  for (const k of ifUnset) conditions[k.trim()] = null;
+  const client = ctx.client();
+  // A thread's labels are its root message's labels.
+  const target = args[0]!;
+  let messageId = target;
+  if (isThreadUrl(target) || /^t_/.test(target)) {
+    const { messages } = await client.getThread({ thread_id: threadIdFrom(target), limit: 1 });
+    if (!messages[0]) throw new OmbError("not_found", "Thread not found");
+    messageId = messages[0].id;
+  }
+  const res = await client.labelMessage({
+    message_id: messageId,
+    ...(set ? { set } : {}),
+    ...(unset.length ? { unset } : {}),
+    ...(Object.keys(conditions).length ? { if: conditions } : {}),
+  });
   if (ctx.json) return ctx.printJson(res);
-  ctx.out(`${res.thread.id}: ${formatLabels(res.thread.labels) || "(no labels)"}`);
+  ctx.out(`labeled ${res.message.id}: ${formatLabels(res.message.labels) || "(no labels)"}`);
 }
 
 async function invite(ctx: Context, args: string[], values: Values): Promise<void> {
@@ -617,6 +821,12 @@ export const RUNNERS: Record<string, Run> = {
   post,
   reply,
   delete: del,
+  edit,
+  react: reactCmd,
+  download,
+  "schemas list": schemasList,
+  "schemas inspect": schemasInspect,
+  "schemas create": schemasCreate,
   wait,
   tail,
   inbox,

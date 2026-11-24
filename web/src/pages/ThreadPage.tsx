@@ -1,10 +1,22 @@
 import type { Change, Integration, Message, Thread } from "@openmessageboard/protocol";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { api, isApiError } from "../api";
 import { useBoard, useBoardChanges } from "../board";
-import { MarkdownEditor, extractMentions, useIdempotencyKey } from "../composer";
+import { AttachmentPicker, MarkdownEditor, extractMentions, useAttachments, useIdempotencyKey } from "../composer";
 import { labelError, MAX_LABELS } from "../format";
 import { excerpt, Markdown } from "../markdown";
+import {
+  AttachmentList,
+  BlockList,
+  EditedMark,
+  MessageEditor,
+  MessageLabels,
+  ReactionChips,
+  ReactionPicker,
+  canEditMessage,
+  useReactionToggle,
+  type MessageUpdate,
+} from "../messageParts";
 import { Link, useTitle } from "../router";
 import { AccessRequired } from "./Status";
 import { TaskPanel } from "./TaskPanel";
@@ -28,6 +40,11 @@ function upsertMessage(list: Message[], m: Message): Message[] {
   const copy = list.slice();
   copy[i] = m;
   return copy;
+}
+
+/** Updates a message only if it is loaded; never appends. */
+function replaceMessage(list: Message[], m: Message): Message[] {
+  return list.some((x) => x.id === m.id) ? list.map((x) => (x.id === m.id ? m : x)) : list;
 }
 
 export function ThreadPage({ threadId }: { threadId: string }) {
@@ -80,9 +97,14 @@ export function ThreadPage({ threadId }: { threadId: string }) {
       if (c.thread) setThread({ ...c.thread, unread_count: 0 });
       if (c.message) {
         const m = c.message;
-        // While older pages are still unloaded, new messages arrive with the last page.
-        if (c.type === "message.created" && nextRef.current) return;
-        setMessages((list) => upsertMessage(list, m));
+        if (c.type === "message.created") {
+          // While older pages are still unloaded, new messages arrive with the last page.
+          if (nextRef.current) return;
+          setMessages((list) => upsertMessage(list, m));
+        } else {
+          // Edits, reactions, labels and deletes update a loaded message in place.
+          setMessages((list) => replaceMessage(list, m));
+        }
       } else if (c.type === "message.deleted" && c.message_id) {
         setMessages((list) => list.map((x) => (x.id === c.message_id ? { ...x, deleted: true, body: null } : x)));
       }
@@ -108,6 +130,14 @@ export function ThreadPage({ threadId }: { threadId: string }) {
   }
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const updateMessage = useCallback(
+    (id: string, next: Message | ((current: Message) => Message)) =>
+      setMessages((list) => list.map((x) => (x.id === id ? (typeof next === "function" ? next(x) : next) : x))),
+    [],
+  );
+  // The first page loads first, so the root is always messages[0]. Its labels are the thread's
+  // labels, edited in the Labels panel.
+  const rootId = messages[0]?.id;
 
   if (denied) return <AccessRequired />;
   if (error && !thread)
@@ -147,6 +177,11 @@ export function ThreadPage({ threadId }: { threadId: string }) {
               parent={m.reply_to ? (byId.get(m.reply_to) ?? null) : null}
               canDelete={!m.deleted && (m.author.id === meId || isOwner)}
               canReply={canWrite && !m.deleted}
+              canEdit={canEditMessage(m, meId, canWrite)}
+              canLabel={canWrite && !m.deleted && m.id !== rootId}
+              showLabels={m.id !== rootId}
+              members={members}
+              onUpdate={(next) => updateMessage(m.id, next)}
               onReply={() => {
                 setReplyTo(m);
                 document.getElementById("reply-body")?.focus();
@@ -249,18 +284,35 @@ function MessageItem({
   parent,
   canDelete,
   canReply,
+  canEdit,
+  canLabel,
+  showLabels,
+  members,
   onReply,
   onDeleted,
+  onUpdate,
 }: {
   m: Message;
   parent: Message | null;
   canDelete: boolean;
   canReply: boolean;
+  canEdit: boolean;
+  canLabel: boolean;
+  showLabels: boolean;
+  members: ReturnType<typeof useBoard>["members"];
   onReply: () => void;
   onDeleted: (m: Message) => void;
+  onUpdate: MessageUpdate;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [addingLabel, setAddingLabel] = useState(false);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const labelRef = useRef<HTMLButtonElement>(null);
+  const toggleReaction = useReactionToggle(m, onUpdate);
   const name = m.source ? m.source.author_name : m.author.display_name;
+  const isEditing = editing && canEdit;
+  const refocus = (ref: RefObject<HTMLButtonElement | null>) => requestAnimationFrame(() => ref.current?.focus());
   return (
     <li id={`m-${m.id}`} className={`message ${m.deleted ? "deleted" : ""} ${m.source ? `synced synced-${m.source.platform}` : ""}`}>
       <Avatar name={name} kind={m.author.kind} />
@@ -270,6 +322,7 @@ function MessageItem({
           <a href={`#m-${m.id}`} className="message-time">
             <TimeAgo iso={m.created_at} />
           </a>
+          <EditedMark m={m} />
         </div>
         {m.reply_to && (
           <a href={`#m-${m.reply_to}`} className="quote">
@@ -285,14 +338,60 @@ function MessageItem({
         )}
         {m.deleted ? (
           <p className="tombstone">This message was deleted.</p>
+        ) : isEditing ? (
+          <MessageEditor
+            m={m}
+            members={members}
+            onUpdate={onUpdate}
+            onClose={() => {
+              setEditing(false);
+              refocus(editRef);
+            }}
+          />
         ) : (
           <Markdown source={m.body ?? ""} />
         )}
-        {!m.deleted && (canReply || canDelete) && (
+        {!m.deleted && (
+          <>
+            <BlockList blocks={m.blocks} />
+            <AttachmentList attachments={m.attachments} />
+            {showLabels && (
+              <MessageLabels
+                m={m}
+                canEdit={canLabel}
+                adding={addingLabel}
+                onCloseAdd={() => {
+                  setAddingLabel(false);
+                  refocus(labelRef);
+                }}
+                onUpdate={onUpdate}
+              />
+            )}
+            <ReactionChips m={m} onToggle={(emoji) => void toggleReaction(emoji)} />
+          </>
+        )}
+        {!m.deleted && !isEditing && (
           <div className="message-actions">
             {canReply && (
               <button type="button" className="link-button" onClick={onReply}>
                 Reply
+              </button>
+            )}
+            <ReactionPicker m={m} onToggle={(emoji) => void toggleReaction(emoji)} />
+            {canEdit && (
+              <button ref={editRef} type="button" className="link-button" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            )}
+            {canLabel && (
+              <button
+                ref={labelRef}
+                type="button"
+                className="link-button"
+                aria-expanded={addingLabel}
+                onClick={() => setAddingLabel((a) => !a)}
+              >
+                Add label
               </button>
             )}
             {canDelete && (
@@ -336,17 +435,24 @@ function ReplyForm({
   const [error, setError] = useState<unknown>(null);
   const idem = useIdempotencyKey();
   const toast = useToast();
+  const files = useAttachments(thread.board_id);
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (busy || !body.trim()) return;
-    const payload = { body, reply_to: replyTo?.id, mentions: extractMentions(body, members) };
+    if (busy || files.uploading || !body.trim()) return;
+    const payload = {
+      body,
+      reply_to: replyTo?.id,
+      mentions: extractMentions(body, members),
+      attachments: files.ids.length ? files.ids : undefined,
+    };
     setBusy(true);
     setError(null);
     try {
       const res = await api.reply(thread.id, { ...payload, idempotency_key: idem.keyFor(payload) });
       idem.reset();
       setBody("");
+      files.clear();
       onPosted(res.message);
       if (res.usage_warning?.length) {
         const w = res.usage_warning[0]!;
@@ -381,10 +487,11 @@ function ReplyForm({
         rows={4}
         onSubmitShortcut={() => void submit()}
       />
+      <AttachmentPicker state={files} disabled={busy} />
       <ErrorNote error={error} />
       <div className="actions">
-        <button type="submit" className="button button-primary" disabled={busy || !body.trim()}>
-          {busy ? "Sending…" : error ? "Retry" : "Reply"}
+        <button type="submit" className="button button-primary" disabled={busy || files.uploading || !body.trim()}>
+          {busy ? "Sending…" : files.uploading ? "Uploading files…" : error ? "Retry" : "Reply"}
         </button>
       </div>
     </form>

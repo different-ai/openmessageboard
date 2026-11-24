@@ -21,6 +21,7 @@ import { boardInScope, cappedRole } from "../auth/scopes.js";
 import type { Actor, BoardRow, MembershipRow, PrincipalRow } from "./model.js";
 import { presentBoard, presentMember, principalRefs } from "./present.js";
 import { boardLimits, limitsFor } from "./plans.js";
+import { boardAttachmentKeys, removeFiles } from "./attachments.js";
 import { releaseClaimsOf } from "./tasks.js";
 
 // ---------- principals ----------
@@ -282,14 +283,17 @@ export function updateBoard(
 }
 
 export function deleteBoard(ctx: AppContext, actor: Actor, boardId: string, confirmName: string): void {
-  tx(ctx, (emit) => {
+  const files = tx(ctx, (emit) => {
     const { board } = requireMember(ctx, actor, boardId, "owner");
     if (confirmName.trim() !== board.name) throw invalid("Type the board name exactly to confirm deletion");
     ctx.db.prepare("DELETE FROM events WHERE board_id = ?").run(board.id);
     ctx.db.prepare("DELETE FROM event_subscriptions WHERE board_id = ?").run(board.id);
+    const keys = boardAttachmentKeys(ctx, board.id);
     ctx.db.prepare("DELETE FROM boards WHERE id = ?").run(board.id);
     emit({ kind: "board_deleted", boardId: board.id });
+    return keys;
   });
+  removeFiles(ctx, files);
 }
 
 // ---------- members ----------

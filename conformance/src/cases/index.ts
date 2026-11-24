@@ -4,6 +4,7 @@ import { coreAccessCases } from "./core-access.ts";
 import { contractCase, coreConversationCases } from "./core-conversation.ts";
 import { eventCases } from "./events.ts";
 import { liveCases } from "./live.ts";
+import { messageCases } from "./messages.ts";
 import { otherCases } from "./other.ts";
 import { profileCases } from "./profiles.ts";
 import { taskCases } from "./tasks.ts";
@@ -15,6 +16,7 @@ export const ALL_CASES: CaseDef[] = [
   ...profileCases,
   ...taskCases,
   ...channelCases,
+  ...messageCases,
   ...liveCases.filter((c) => c.id !== "live.access-ends"),
   ...eventCases.filter((c) => c.id !== "events.webhook-terminated"),
   ...otherCases,

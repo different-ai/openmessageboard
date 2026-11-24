@@ -488,6 +488,7 @@
             "enum": [
               "posts",
               "storage",
+              "attachments",
               "members",
               "live_connections",
               "webhook_subscriptions",

@@ -29,6 +29,7 @@ export const GLOBAL_OPTIONS = {
 } as const satisfies Options;
 
 const label = { type: "string", multiple: true } as const;
+const attach = { type: "string", multiple: true } as const;
 
 export interface CommandSpec {
   usage: string;
@@ -54,16 +55,43 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { thread: { type: "string" }, unread: { type: "boolean" }, label, limit: { type: "string" }, board: { type: "string" }, channel: { type: "string" } },
   },
   post: {
-    usage: "post [board|channel] <title> <body|-> [--board <id>] [--channel <c>] [--task] [--label k=v ...] [--mention <principal-id> ...]",
-    summary: "Start a thread, in general unless a channel is given (- reads the body from stdin)",
-    options: { task: { type: "boolean" }, label, mention: { type: "string", multiple: true }, board: { type: "string" }, channel: { type: "string" } },
+    usage:
+      "post [board|channel] <title> <body|-> [--board <id>] [--channel <c>] [--task] [--label k=v ...] [--mention <principal-id> ...] [--attach <file> ...] [--schema name@v [--data <json|->]]",
+    summary: "Start a thread, in general unless a channel is given (- reads the body from stdin; with --schema and no --data, the body is the JSON data)",
+    options: {
+      task: { type: "boolean" },
+      label,
+      mention: { type: "string", multiple: true },
+      board: { type: "string" },
+      channel: { type: "string" },
+      attach,
+      schema: { type: "string" },
+      data: { type: "string" },
+    },
   },
   reply: {
-    usage: "reply <thread> <body|-> [--mention <principal-id> ...] [--reply-to <message>]",
-    summary: "Reply in a thread",
-    options: { mention: { type: "string", multiple: true }, "reply-to": { type: "string" } },
+    usage: "reply <thread> <body|-> [--mention <principal-id> ...] [--reply-to <message>] [--after <message>] [--attach <file> ...] [--schema name@v [--data <json|->]]",
+    summary: "Reply in a thread (--after: only while that message is still the newest)",
+    options: {
+      mention: { type: "string", multiple: true },
+      "reply-to": { type: "string" },
+      after: { type: "string" },
+      attach,
+      schema: { type: "string" },
+      data: { type: "string" },
+    },
   },
   delete: { usage: "delete <message>", summary: "Delete a message (leaves a tombstone)" },
+  edit: { usage: "edit <message> <body|-> [--if-revision n]", summary: "Replace a message's text (yours, or your agent's)", options: { "if-revision": { type: "string" } } },
+  react: { usage: "react <message> <emoji> [--remove]", summary: "React to a message (eyes, +1, :tada: or the emoji)", options: { remove: { type: "boolean" } } },
+  download: { usage: "download <attachment> [path|-]", summary: "Save an attachment (to its own name, a path, or stdout with -)" },
+  "schemas list": { usage: "schemas [list] [board]", summary: "Schemas for structured data on a board" },
+  "schemas inspect": { usage: "schemas inspect <name@version> [--board <id>]", summary: "Print one schema", options: { board: { type: "string" } } },
+  "schemas create": {
+    usage: "schemas create <name@version> --file <path|-> | --data <json> [--description <text>] [--board <id>]",
+    summary: "Register a schema (board owners); a version never changes",
+    options: { file: { type: "string" }, data: { type: "string" }, description: { type: "string" }, board: { type: "string" } },
+  },
   wait: {
     usage: "wait [--thread <id> | --mentions | --board <id>] [--timeout <s>]",
     summary: "Block until activity arrives (exit 0), or time out (exit 2)",
@@ -127,7 +155,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
   "tasks assign": { usage: "tasks assign <thread> <principal>|me | tasks assign <thread> --pool", summary: "Keep a task for one member or agent, or return it to anyone", options: { pool: { type: "boolean" } } },
   "tasks needs": { usage: "tasks needs <thread> <thread>... | tasks needs <thread> --none", summary: "Replace the tasks a task waits for", options: { none: { type: "boolean" } } },
   "tasks cancel": { usage: "tasks cancel <thread> <reason>", summary: "Call a task off, as its owner" },
-  label: { usage: "label <thread> k=v ... [--remove k ...]", summary: "Set or remove thread labels", options: { remove: { type: "string", multiple: true } } },
+  label: {
+    usage: "label <message|thread> [k=v ...] [--unset k ...] [--if k=v ...] [--if-unset k ...]",
+    summary: "Set or remove labels on a message (a thread's labels are its first message's)",
+    options: {
+      unset: { type: "string", multiple: true },
+      remove: { type: "string", multiple: true },
+      if: { type: "string", multiple: true },
+      "if-unset": { type: "string", multiple: true },
+    },
+  },
   invite: {
     usage: "invite [board] --link|--email <e>|--domain <d> --role reader|contributor [--join-by <time>] [--access-ends <time>] [--max-uses n]",
     summary: "Create an invite link (board owners)",
@@ -195,9 +232,9 @@ export interface ParsedCommandLine {
 /** Commands that take a command line after `--`. */
 const TAKES_REST = new Set(["tasks run"]);
 
-const GROUPS = new Set(["tasks", "tokens", "boards", "channels", "grants"]);
+const GROUPS = new Set(["tasks", "tokens", "boards", "channels", "grants", "schemas"]);
 /** Groups that run a default subcommand when the next word isn't one of theirs (`omb tasks b_1` lists). */
-const DEFAULT_SUBCOMMAND: Record<string, string> = { tasks: "list", boards: "list", channels: "list", grants: "list" };
+const DEFAULT_SUBCOMMAND: Record<string, string> = { tasks: "list", boards: "list", channels: "list", grants: "list", schemas: "list" };
 
 /**
  * Parses `omb [global flags] <command> [args] [flags]`. Global flags may appear anywhere.

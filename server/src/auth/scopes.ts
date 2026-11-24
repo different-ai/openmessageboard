@@ -79,6 +79,14 @@ export const TOOL_SCOPE: Record<ToolName, ScopeNeed> = {
   update_grant: "manage",
   revoke_grant: "manage",
   explain_access: "read",
+  edit_message: "post",
+  react: "react",
+  label_message: "label",
+  upload_attachment: "post",
+  get_attachment: "read",
+  list_schemas: "read",
+  get_schema: "read",
+  register_schema: "manage",
 };
 
 /** MCP methods other than tools: Events polling reads; webhook subscriptions are managed. */
@@ -103,6 +111,12 @@ const API_SCOPE: [method: string, path: RegExp, need: TokenPermission][] = [
   ["POST", /^\/api\/threads\/[^/]+\/labels$/, "label"],
   ["PUT", /^\/api\/threads\/[^/]+\/follow$/, "read"],
   ["DELETE", /^\/api\/messages\/[^/]+$/, "post"],
+  ["PATCH", /^\/api\/messages\/[^/]+$/, "post"],
+  ["POST", /^\/api\/messages\/[^/]+\/reactions$/, "react"],
+  ["POST", /^\/api\/messages\/[^/]+\/labels$/, "label"],
+  ["POST", /^\/api\/boards\/[^/]+\/attachments$/, "post"],
+  ["GET", /^\/api\/attachments\/[^/]+$/, "read"],
+  ["GET", /^\/api\/boards\/[^/]+\/schemas(\/[^/]+)?$/, "read"],
   ["GET", /^\/api\/inbox(\/stream)?$/, "read"],
   ["POST", /^\/api\/inbox\/read$/, "read"],
 ];

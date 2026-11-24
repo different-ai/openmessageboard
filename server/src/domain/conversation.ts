@@ -8,6 +8,7 @@ import {
   MAX_IDEMPOTENCY_KEY,
   RESERVED_LABEL_PREFIX,
   type AllowanceUsage,
+  type MentionResolution,
   type Message,
   type TaskClaim,
   type TaskStateFilter,
@@ -27,6 +28,10 @@ import { encodeCursor, encodePage, decodePage } from "./cursors.js";
 import type { Actor, BoardRow, MessageRow, ThreadRow } from "./model.js";
 import { presentMessage, presentMessages, presentThread, presentThreads } from "./present.js";
 import { boardLimits } from "./plans.js";
+import { resolveTextMentions } from "./mentions.js";
+import { validateBlocks, type BlockInput } from "./schemas.js";
+import { attachToMessage, checkAttachable, releaseMessageAttachments, removeFiles } from "./attachments.js";
+import { applyLabelChange, threadLabelFilter } from "./messages.js";
 import { finishTaskCreation, prepareTask, taskStateClause, type NewTask } from "./tasks.js";
 
 // Task writes live in tasks.ts; these re-exports keep existing imports from this module working.
@@ -59,6 +64,34 @@ export function validateBody(ctx: AppContext, body: string, boardId?: string): n
   return bytes;
 }
 
+/** Body and structured data together must fit in `message_bytes`. */
+function checkMessageSize(ctx: AppContext, boardId: string, bodyBytes: number, blockBytes: number): number {
+  const total = bodyBytes + blockBytes;
+  const max = boardLimits(ctx, boardId).message_bytes;
+  if (total > max) {
+    throw new OmbError("message_too_large", `Messages (text and structured data) can be up to ${max} bytes; this one is ${total}`, {
+      allowance: "message_bytes",
+      bytes: total,
+      limit: max,
+    });
+  }
+  return total;
+}
+
+/** Explicit mention IDs first, then mentions written in the body, at most MAX_MENTIONS in all. */
+function mergeMentions(explicit: string[], fromText: string[]): { all: string[]; text: Set<string> } {
+  const all = [...explicit];
+  const text = new Set<string>();
+  for (const id of fromText) {
+    if (all.length >= MAX_MENTIONS) break;
+    if (!all.includes(id)) {
+      all.push(id);
+      text.add(id);
+    }
+  }
+  return { all, text };
+}
+
 export function validateTitle(title: string): string {
   const t = title.trim();
   if (!t) throw invalid("Title can't be empty");
@@ -78,10 +111,14 @@ export function validateLabels(labels: Record<string, string>): Record<string, s
 }
 
 /** Labels under `board.` belong to the board (`board.task` is the task state): members cannot set or remove them. */
+/** Keys under `board.` belong to the server; setting or removing one fails with `reserved_label`. */
 export function rejectReservedLabels(keys: Iterable<string>): void {
   for (const k of keys) {
     if (k.startsWith(RESERVED_LABEL_PREFIX)) {
-      throw invalid(`Labels under "${RESERVED_LABEL_PREFIX}" belong to the board; change a task's state with claim_task or update_task`, { label: k });
+      throw new OmbError("reserved_label", `Labels under "${RESERVED_LABEL_PREFIX}" belong to the board; change a task's state with claim_task or update_task`, {
+        key: k,
+        label: k,
+      });
     }
   }
 }
@@ -215,8 +252,13 @@ interface InsertMessageInput {
   bytes: number;
   replyTo: string | null;
   mentions: string[];
+  /** Mentions that came from @handles in the body (the rest were passed explicitly). */
+  textMentions?: Set<string>;
   source?: MessageSource;
   isRoot: boolean;
+  labels?: Record<string, string>;
+  blocks?: string | null;
+  attachments?: string[] | undefined;
 }
 
 /** Inserts a message with its event, follows and inbox items. Caller holds a transaction and has charged quota. */
@@ -236,14 +278,22 @@ function insertMessage(ctx: AppContext, emit: Emit, m: InsertMessageInput): Mess
     source_url: m.source?.url ?? null,
     source_external_id: m.source?.external_id ?? null,
     created_at: now,
+    revision: 1,
+    edited_at: null,
+    labels: JSON.stringify(m.labels ?? {}),
+    blocks: m.blocks ?? null,
+    is_root: m.isRoot ? 1 : 0,
   };
   ctx.db
     .prepare(
-      `INSERT INTO messages (id, board_id, thread_id, author_id, body, body_bytes, deleted_at, reply_to, source_platform, source_author_name, source_url, source_external_id, created_at)
-       VALUES (@id, @board_id, @thread_id, @author_id, @body, @body_bytes, @deleted_at, @reply_to, @source_platform, @source_author_name, @source_url, @source_external_id, @created_at)`,
+      `INSERT INTO messages (id, board_id, thread_id, author_id, body, body_bytes, deleted_at, reply_to, source_platform, source_author_name, source_url, source_external_id, created_at, revision, edited_at, labels, blocks, is_root)
+       VALUES (@id, @board_id, @thread_id, @author_id, @body, @body_bytes, @deleted_at, @reply_to, @source_platform, @source_author_name, @source_url, @source_external_id, @created_at, @revision, @edited_at, @labels, @blocks, @is_root)`,
     )
     .run(row);
-  for (const pid of m.mentions) ctx.db.prepare("INSERT INTO mentions (message_id, principal_id) VALUES (?, ?)").run(row.id, pid);
+  for (const pid of m.mentions) {
+    ctx.db.prepare("INSERT INTO mentions (message_id, principal_id, source) VALUES (?, ?, ?)").run(row.id, pid, m.textMentions?.has(pid) ? "text" : "explicit");
+  }
+  attachToMessage(ctx, m.author, m.board.id, row.id, m.attachments);
   const consecutive = m.author.kind === "agent" ? m.thread.consecutive_agent_messages + 1 : 0;
   ctx.db
     .prepare("UPDATE threads SET message_count = message_count + 1, last_activity_at = ?, consecutive_agent_messages = ? WHERE id = ?")
@@ -280,6 +330,8 @@ export interface StartThreadInput {
   needs?: string[] | undefined;
   for?: string | undefined;
   claim?: boolean | undefined;
+  blocks?: BlockInput[] | undefined;
+  attachments?: string[] | undefined;
   idempotency_key?: string | undefined;
 }
 
@@ -288,11 +340,16 @@ export interface NewThread {
   channel: string;
   title: string;
   body: string;
+  /** Bytes of the body and its structured data. */
   bytes: number;
   labels: Record<string, string>;
   mentions: string[];
+  /** Mentions that came from @handles in the body. */
+  textMentions?: Set<string>;
   kind: ThreadKind;
   task?: NewTask | null;
+  blocks?: string | null;
+  attachments?: string[] | undefined;
 }
 
 /**
@@ -311,7 +368,21 @@ export function insertThread(ctx: AppContext, emit: Emit, actor: Actor, board: B
     .run(threadId, board.id, t.channel, t.title, t.kind, JSON.stringify(t.labels), t.task?.state ?? null, t.task?.forId ?? null, actor.id, now, now);
   ensureChannel(ctx, board.id, t.channel, actor.id);
   const thread = loadThread(ctx, threadId);
-  const row = insertMessage(ctx, emit, { board, thread, author: actor, body: t.body, bytes: t.bytes, replyTo: null, mentions: t.mentions, isRoot: true, ...(opts.source ? { source: opts.source } : {}) });
+  const row = insertMessage(ctx, emit, {
+    board,
+    thread,
+    author: actor,
+    body: t.body,
+    bytes: t.bytes,
+    replyTo: null,
+    mentions: t.mentions,
+    isRoot: true,
+    labels: t.labels,
+    ...(t.textMentions ? { textMentions: t.textMentions } : {}),
+    blocks: t.blocks ?? null,
+    attachments: t.attachments,
+    ...(opts.source ? { source: opts.source } : {}),
+  });
   recordEvent(ctx, emit, { boardId: board.id, type: "thread.created", threadId, messageId: row.id, actorId: actor.id });
   return { thread, message: row };
 }
@@ -322,7 +393,7 @@ export function startThread(
   boardId: string,
   input: StartThreadInput,
   opts: WriteOptions = {},
-): { thread: Thread; message: Message; claim?: TaskClaim; usage_warning?: AllowanceUsage[] } {
+): { thread: Thread; message: Message; claim?: TaskClaim; usage_warning?: AllowanceUsage[]; mentions_resolved?: MentionResolution[] } {
   checkWriteRate(ctx, actor, boardId, opts);
   const result = tx(ctx, (emit) => {
     const { board } = requireMember(ctx, actor, boardId, "contributor");
@@ -335,12 +406,41 @@ export function startThread(
       const bytes = validateBody(ctx, input.body, board.id);
       const labels = validateLabels(input.labels ?? {});
       rejectReservedLabels(Object.keys(labels));
-      const mentions = resolveMentions(ctx, board.id, input.mentions);
+      const explicit = resolveMentions(ctx, board.id, input.mentions);
+      const blocks = validateBlocks(ctx, board.id, input.blocks);
+      const size = checkMessageSize(ctx, board.id, bytes, blocks.bytes);
+      checkAttachable(ctx, actor, board.id, input.attachments);
+      const text = opts.source ? { ids: [], resolved: [] } : resolveTextMentions(ctx, board.id, input.body, channel);
+      const { all: mentions, text: textMentions } = mergeMentions(explicit, text.ids);
       const kind: ThreadKind = input.task ? "task" : "discussion";
       const task = prepareTask(ctx, actor, board.id, kind, input, channel);
-      const { thread, message } = insertThread(ctx, emit, actor, board, { channel, title, body: input.body, bytes, labels, mentions, kind, task }, opts);
+      const { thread, message } = insertThread(
+        ctx,
+        emit,
+        actor,
+        board,
+        {
+          channel,
+          title,
+          body: input.body,
+          bytes: size,
+          labels,
+          mentions,
+          textMentions,
+          kind,
+          task,
+          blocks: blocks.blocks.length ? JSON.stringify(blocks.blocks) : null,
+          attachments: input.attachments,
+        },
+        opts,
+      );
       const claim = task ? finishTaskCreation(ctx, emit, actor, board, thread.id, message.id, task, input.claim === true) : undefined;
-      return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id), message: presentMessage(ctx, message), ...(claim ? { claim } : {}) };
+      return {
+        thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id),
+        message: presentMessage(ctx, message, actor.id),
+        ...(claim ? { claim } : {}),
+        ...(text.resolved.length ? { mentions_resolved: text.resolved } : {}),
+      };
     });
   });
   const warn = usageWarnings(ctx, boardId);
@@ -351,21 +451,37 @@ export interface ReplyInput {
   body: string;
   reply_to?: string | undefined;
   mentions?: string[] | undefined;
+  after?: string | undefined;
+  blocks?: BlockInput[] | undefined;
+  attachments?: string[] | undefined;
   idempotency_key?: string | undefined;
 }
 
-export function replyInTx(ctx: AppContext, emit: Emit, actor: Actor, threadId: string, input: ReplyInput, opts: WriteOptions): { message: Message } {
+export function replyInTx(ctx: AppContext, emit: Emit, actor: Actor, threadId: string, input: ReplyInput, opts: WriteOptions): { message: Message; mentions_resolved?: MentionResolution[] } {
   const t = requireThread(ctx, actor, threadId, "contributor");
   const { board, thread } = t;
   const { idempotency_key: key, ...payload } = input;
   return idempotent(ctx, actor, key, { op: "reply", threadId, ...payload }, () => {
     requireChannelPermission(t, "post");
     const bytes = validateBody(ctx, input.body, board.id);
-    const mentions = resolveMentions(ctx, board.id, input.mentions);
+    const explicit = resolveMentions(ctx, board.id, input.mentions);
     if (input.reply_to) {
       const target = ctx.db.prepare("SELECT thread_id FROM messages WHERE id = ?").get(input.reply_to) as { thread_id: string } | undefined;
       if (!target || target.thread_id !== thread.id) throw invalid("reply_to must be a message in the same thread");
     }
+    if (input.after) {
+      const target = ctx.db.prepare("SELECT rowid AS r, thread_id FROM messages WHERE id = ?").get(input.after) as { r: number; thread_id: string } | undefined;
+      if (!target || target.thread_id !== thread.id) throw invalid("after must be a message in the same thread");
+      const newer = ctx.db
+        .prepare("SELECT id FROM messages WHERE thread_id = ? AND rowid > ? AND deleted_at IS NULL ORDER BY rowid DESC LIMIT 1")
+        .get(thread.id, target.r) as { id: string } | undefined;
+      if (newer) throw new OmbError("newer_message", "A newer message arrived in this thread since the one you named in after; read it, then reply again", { newest_message_id: newer.id });
+    }
+    const blocks = validateBlocks(ctx, board.id, input.blocks);
+    const size = checkMessageSize(ctx, board.id, bytes, blocks.bytes);
+    checkAttachable(ctx, actor, board.id, input.attachments);
+    const text = opts.source ? { ids: [], resolved: [] } : resolveTextMentions(ctx, board.id, input.body, thread.channel);
+    const { all: mentions, text: textMentions } = mergeMentions(explicit, text.ids);
     if (actor.kind === "agent") {
       const limit = board.agent_consecutive_limit ?? boardLimits(ctx, board.id).agent_consecutive_limit;
       if (thread.consecutive_agent_messages >= limit) {
@@ -375,13 +491,32 @@ export function replyInTx(ctx: AppContext, emit: Emit, actor: Actor, threadId: s
         });
       }
     }
-    chargePost(ctx, actor, board, bytes);
-    const row = insertMessage(ctx, emit, { board, thread, author: actor, body: input.body, bytes, replyTo: input.reply_to ?? null, mentions, isRoot: false, ...(opts.source ? { source: opts.source } : {}) });
-    return { message: presentMessage(ctx, row) };
+    chargePost(ctx, actor, board, size);
+    const row = insertMessage(ctx, emit, {
+      board,
+      thread,
+      author: actor,
+      body: input.body,
+      bytes: size,
+      replyTo: input.reply_to ?? null,
+      mentions,
+      textMentions,
+      isRoot: false,
+      blocks: blocks.blocks.length ? JSON.stringify(blocks.blocks) : null,
+      attachments: input.attachments,
+      ...(opts.source ? { source: opts.source } : {}),
+    });
+    return { message: presentMessage(ctx, row, actor.id), ...(text.resolved.length ? { mentions_resolved: text.resolved } : {}) };
   });
 }
 
-export function reply(ctx: AppContext, actor: Actor, threadId: string, input: ReplyInput, opts: WriteOptions = {}): { message: Message; usage_warning?: AllowanceUsage[] } {
+export function reply(
+  ctx: AppContext,
+  actor: Actor,
+  threadId: string,
+  input: ReplyInput,
+  opts: WriteOptions = {},
+): { message: Message; usage_warning?: AllowanceUsage[]; mentions_resolved?: MentionResolution[] } {
   const thread = ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(threadId) as { board_id: string } | undefined;
   if (thread) checkWriteRate(ctx, actor, thread.board_id, opts);
   const result = tx(ctx, (emit) => replyInTx(ctx, emit, actor, threadId, input, opts));
@@ -390,7 +525,8 @@ export function reply(ctx: AppContext, actor: Actor, threadId: string, input: Re
 }
 
 export function deleteMessage(ctx: AppContext, actor: Actor, messageId: string): { message: Message } {
-  return tx(ctx, (emit) => {
+  const freed: string[] = [];
+  const result = tx(ctx, (emit) => {
     const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId) as MessageRow | undefined;
     if (!row) throw notFound("Message");
     const { membership } = requireMember(ctx, actor, row.board_id, "reader", "Message");
@@ -402,13 +538,19 @@ export function deleteMessage(ctx: AppContext, actor: Actor, messageId: string):
     }
     if (!row.deleted_at) {
       const now = nowIso(ctx);
-      ctx.db.prepare("UPDATE messages SET body = NULL, deleted_at = ?, body_bytes = 0 WHERE id = ?").run(now, row.id);
+      // A tombstone loses its text, mentions, labels, reactions, structured data and attachments.
+      ctx.db.prepare("UPDATE messages SET body = NULL, deleted_at = ?, body_bytes = 0, labels = '{}', blocks = NULL, revision = revision + 1 WHERE id = ?").run(now, row.id);
       ctx.db.prepare("DELETE FROM mentions WHERE message_id = ?").run(row.id);
+      ctx.db.prepare("DELETE FROM reactions WHERE message_id = ?").run(row.id);
+      if (row.is_root) ctx.db.prepare("UPDATE threads SET labels = '{}' WHERE id = ?").run(row.thread_id);
       ctx.db.prepare("UPDATE boards SET storage_bytes = MAX(0, storage_bytes - ?) WHERE id = ?").run(row.body_bytes, row.board_id);
+      freed.push(...releaseMessageAttachments(ctx, row.id, row.board_id));
       recordEvent(ctx, emit, { boardId: row.board_id, type: "message.deleted", threadId: row.thread_id, messageId: row.id, actorId: actor.id });
     }
-    return { message: presentMessage(ctx, ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(row.id) as MessageRow) };
+    return { message: presentMessage(ctx, ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(row.id) as MessageRow, actor.id) };
   });
+  removeFiles(ctx, freed);
+  return result;
 }
 
 // ---------- reads ----------
@@ -440,7 +582,7 @@ export function getThread(
     const last = pageRows[pageRows.length - 1];
     return {
       thread: presentThread(ctx, thread, actor.id),
-      messages: presentMessages(ctx, pageRows),
+      messages: presentMessages(ctx, pageRows, actor.id),
       next_page_cursor: more && last ? encodePage(`msgs:${thread.id}`, last.created_at, last.id) : null,
       as_of: boardCursor(ctx, thread.board_id),
     };
@@ -510,7 +652,7 @@ export function listThreads(ctx: AppContext, actor: Actor, boardId: string, inpu
       sql += " AND t.task_for_id = ?";
       params.push(input.for === "me" ? actor.id : input.for);
     }
-    sql += labelClauses(input.labels, params);
+    sql += threadLabelFilter(validateLabels(input.labels ?? {}), params, "t");
     const after = decodePage(input.page_cursor, `threads:${boardId}`);
     if (after) {
       sql += " AND (t.last_activity_at < ? OR (t.last_activity_at = ? AND t.id < ?))";
@@ -545,10 +687,16 @@ export function setLabels(ctx: AppContext, actor: Actor, threadId: string, input
     const t = requireThread(ctx, actor, threadId, "contributor");
     const { thread } = t;
     requireChannelPermission(t, "label");
-    const current = JSON.parse(thread.labels) as Record<string, string>;
     rejectReservedLabels([...Object.keys(input.set ?? {}), ...(input.remove ?? [])]);
     const both = (input.remove ?? []).filter((k) => input.set && k in input.set);
     if (both.length) throw invalid(`Label ${both.map((k) => `"${k}"`).join(", ")} is in both set and remove`);
+    // A thread's labels are its root message's labels.
+    const root = ctx.db.prepare("SELECT * FROM messages WHERE thread_id = ? AND is_root = 1").get(thread.id) as MessageRow | undefined;
+    if (root) {
+      applyLabelChange(ctx, emit, actor, root, { set: input.set, unset: input.remove });
+      return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id) };
+    }
+    const current = JSON.parse(thread.labels) as Record<string, string>;
     for (const k of input.remove ?? []) delete current[k];
     const next = validateLabels({ ...current, ...(input.set ?? {}) });
     const before = JSON.parse(thread.labels) as Record<string, string>;

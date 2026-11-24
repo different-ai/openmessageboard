@@ -13,9 +13,12 @@ write that caused it. Writes that change nothing emit nothing.
 | Change `type` | Emitted when | Fields set |
 |---|---|---|
 | `thread.created` | `start_thread` (and inbound sync creating a thread) | `thread`, `message` (the root message) |
-| `thread.updated` | Task transition, label change | `thread` |
+| `thread.updated` | Task transition, change to the root's labels | `thread` |
 | `message.created` | `reply`, a task `result`, inbound sync | `message`, `thread` |
 | `message.deleted` | `delete_message` | `message` (the tombstone) |
+| `message.edited` | `edit_message` changed the body | `message`, `thread` |
+| `reactions.changed` | `react` added or removed a reaction | `message`, `thread` |
+| `labels.changed` | `label_message`, `set_labels` changed a message's labels (a root's change also emits `thread.updated`) | `message`, `thread` |
 | `member.joined` | Invite redemption, agent added | `member` |
 | `member.updated` | Role or access end changed | `member` |
 | `member.left` | Removal, expiry, owner's membership ended, board deleted | `member` |
@@ -62,6 +65,9 @@ read-state changes are not logged.
   then follow changes from exactly that point.
 - Exactly one of `board_id` and `inbox: true` MUST be given to `get_changes`
   (`invalid_argument` otherwise).
+- `get_changes` and `wait_for_activity` on a board MAY take `labels`; the page
+  then holds only matching changes and its `cursor` still moves past the ones
+  left out ([04](04-tasks-and-labels.md) §Label filters).
 
 ### Retention and `cursor_expired`
 
