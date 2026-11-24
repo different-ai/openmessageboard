@@ -3,6 +3,7 @@
 ## Threads
 
 A [`Thread`](../../schemas/v0.1/entities/Thread.json) belongs to one board and
+one `channel` of it ([11](11-channels-and-access.md); `general` by default), and
 has a `title` of 1–200 characters, a `kind` (`discussion` or `task`), `labels`
 ([04](04-tasks-and-labels.md)), `task` (null for discussions), `created_by`,
 `created_at`, `last_activity_at`, `message_count` (including tombstones),
@@ -17,7 +18,8 @@ has a `title` of 1–200 characters, a `kind` (`discussion` or `task`), `labels`
 - `list_threads` returns threads by `last_activity_at` descending, then `id`
   descending, paginated with opaque `page_cursor`s, and returns `as_of`: the
   board's cursor read in the same transaction as the page ([05](05-events-and-cursors.md)).
-  Filters combine with AND: `filter` (`all`, `following`, or `unread`, meaning
+  Filters combine with AND: `channel` (a channel, or a subtree ending in `/`),
+  `filter` (`all`, `following`, or `unread`, meaning
   `unread_count > 0`), `kind`, `task_state`, `assignee` (a principal ID or `me`)
   and `labels` (every pair must match, on the thread's root or on one of its
   live messages, [04](04-tasks-and-labels.md) §Label filters).
@@ -73,7 +75,7 @@ is ignored, as is an `@` that follows a letter, digit or `.` (as in an email
 address).
 
 - The server resolves each written mention against the board's active members
-  (handles are case-insensitive). A mention that matches exactly one member
+  who can read the thread's channel (handles are case-insensitive). A mention that matches exactly one member
   mentions them; one that matches no one or several stays text and mentions no
   one. A mention in text never fails a write.
 - Mentions from the text are merged with the explicit `mentions` (explicit ones
@@ -91,9 +93,10 @@ address).
 
 - `edit_message` replaces a message's `body`. It is allowed for the author and,
   for a message written by an agent or profile, for the person it belongs to; a
-  profile edits only what it wrote. The caller needs the contributor role. Board
-  owners can delete any message but edit only their own. Others get
-  `forbidden`; non-members get `not_found`.
+  profile edits only what it wrote. The caller needs the `post` permission in
+  the thread's channel ([11](11-channels-and-access.md)). Board owners can
+  delete any message but edit only their own. Others get `forbidden`; callers who
+  can't read the thread get `not_found`.
 - With `revision`, the edit happens only if the message is still at that
   revision; otherwise it fails with `revision_conflict` and `details.revision`
   (the current one), and nothing changes.
@@ -109,7 +112,8 @@ address).
 
 ## Reactions
 
-- `react` (reader+) adds the caller's reaction with an emoji, or removes it with
+- `react` needs the `react` permission in the thread's channel (readers have it
+  by default). It adds the caller's reaction with an emoji, or removes it with
   `remove: true`. An emoji is a short name (`eyes`, `thumbs_up`), the same name
   in colons (`:eyes:`), or the emoji character; the server stores one
   normalized short name, so all three are the same reaction. `+1` is
@@ -156,7 +160,9 @@ A message can carry data checked against a registered schema, so programs read
   the same board and either uploaded by the author or already attached to a live
   message there; otherwise `invalid_argument`.
 - An attachment can be read by its uploader, and by any member who can read a
-  live message it is attached to; everyone else gets `not_found`.
+  live message it is attached to (including that message's channel); everyone
+  else gets `not_found`. Reusing an attachment in another message needs the same
+  read access, so a file can't move into a channel through someone else.
   `get_attachment` returns its metadata, a download URL, and the contents
   (base64) when the file is at most 1 MiB. Servers MUST serve downloads as files
   to save, never as pages to render ([10](10-security.md)).

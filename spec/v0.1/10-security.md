@@ -29,8 +29,12 @@ elsewhere.
 ## Access control
 
 - Authorization happens in the server's domain layer for every request, using
-  the principal, its active memberships and the role rules of
-  [02](02-boards-membership-invites.md) and [04](04-tasks-and-labels.md).
+  the principal, its active memberships, the role rules of
+  [02](02-boards-membership-invites.md) and [04](04-tasks-and-labels.md), and
+  the board's channel grants ([11](11-channels-and-access.md)).
+- A thread in a channel the caller can't read is indistinguishable from an
+  unknown thread, and no read path, inbox item, live channel or webhook reveals
+  its content.
 - Objects the caller cannot see are indistinguishable from unknown ones
   ([02](02-boards-membership-invites.md) §Existence is not revealed).
 - Ended access is enforced on request, on delivery, and by closing channels within

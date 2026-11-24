@@ -15,6 +15,7 @@ import { exportBoard } from "../src/domain/portability.ts";
 import { findMentions } from "../src/domain/mentions.ts";
 import { actorFromPrincipal, getPrincipal } from "../src/domain/access.ts";
 import { ensureProfile, profileActor } from "../src/domain/profiles.ts";
+import { createChannel, createGrant } from "../src/domain/channels.ts";
 import { OmbError } from "../src/errors.ts";
 import type { AppContext } from "../src/context.ts";
 import type { Actor } from "../src/domain/model.ts";
@@ -184,9 +185,9 @@ test("labels on messages: root labels are thread labels, conditions, reserved ke
   assert.deepEqual(ids({ state: "fixing" }), [t.thread.id]);
   assert.deepEqual(ids({ kind: "bug", state: "fixing" }), [t.thread.id]);
   assert.deepEqual(ids({ state: "review" }), []);
-  assert.equal(searchMessages(ctx, owner, boardId, "review", 20, { state: "fixing" }).results.length, 1);
-  assert.equal(searchMessages(ctx, owner, boardId, "times", 20, { kind: "bug" }).results.length, 1);
-  assert.equal(searchMessages(ctx, owner, boardId, "nothing", 20, { kind: "bug" }).results.length, 0);
+  assert.equal(searchMessages(ctx, owner, boardId, "review", 20, undefined, { state: "fixing" }).results.length, 1);
+  assert.equal(searchMessages(ctx, owner, boardId, "times", 20, undefined, { kind: "bug" }).results.length, 1);
+  assert.equal(searchMessages(ctx, owner, boardId, "nothing", 20, undefined, { kind: "bug" }).results.length, 0);
   const filtered = getChanges(ctx, owner, { board_id: boardId, cursor: c0, labels: { kind: "bug" } });
   assert.ok("changes" in filtered && filtered.changes.length > 0 && filtered.changes.every((c) => c.thread_id === t.thread.id));
   reply(ctx, owner, other.thread.id, { body: "noise", idempotency_key: key() });
@@ -350,4 +351,30 @@ test("attachments: upload, attach, read rules, storage, delete frees, cleanup, e
   runMaintenance(ctx, () => {});
   ctx.now = realNow;
   assert.equal(getUsage(ctx, owner, boardId).allowances.find((a) => a.allowance === "attachments")!.used, 0);
+});
+
+test("channels: react, label and edit follow the thread's channel permissions; private files stay private", async () => {
+  const { ctx, owner, maya, reader, boardId } = await setup();
+  // Readers react by default; a grant can take that away in one channel.
+  const open = startThread(ctx, owner, boardId, { title: "Open", body: "hello", idempotency_key: key() });
+  react(ctx, reader, open.message.id, { emoji: "eyes" });
+  await rejects(() => labelMessage(ctx, reader, open.message.id, { set: { a: "b" } }), "forbidden");
+  createGrant(ctx, owner, boardId, { principals: [{ kind: "readers" }], can: { "quiet/": ["read"] } });
+  createGrant(ctx, owner, boardId, { principals: [{ kind: "contributors" }], can: { "quiet/": ["read", "post", "react"] } });
+  const quiet = startThread(ctx, owner, boardId, { channel: "quiet", title: "Quiet", body: "read only for readers", idempotency_key: key() });
+  await rejects(() => react(ctx, reader, quiet.message.id, { emoji: "eyes" }), "forbidden");
+  await rejects(() => labelMessage(ctx, maya, quiet.message.id, { set: { a: "b" } }), "forbidden");
+  react(ctx, maya, quiet.message.id, { emoji: "eyes" });
+
+  // A private channel hides its messages and their files from everyone else.
+  createChannel(ctx, owner, boardId, { path: "security", private: true });
+  const { attachment } = await uploadAttachment(ctx, owner, boardId, { name: "key.txt", data: new TextEncoder().encode("secret") });
+  const secret = startThread(ctx, owner, boardId, { channel: "security", title: "Incident", body: "rotate @maya", attachments: [attachment.id], idempotency_key: key() });
+  assert.equal(secret.mentions_resolved?.[0]?.principal, null, "a member who can't read the channel stays text");
+  await rejects(() => react(ctx, maya, secret.message.id, { emoji: "eyes" }), "not_found");
+  await rejects(() => editMessage(ctx, maya, secret.message.id, { body: "x" }), "not_found");
+  await rejects(readAttachment(ctx, maya, attachment.id), "not_found");
+  // Nor can a file be moved into a readable channel through someone else's message.
+  await rejects(() => startThread(ctx, maya, boardId, { title: "Copy", body: "copy", attachments: [attachment.id], idempotency_key: key() }), "invalid_argument");
+  assert.equal((await readAttachment(ctx, owner, attachment.id)).attachment.id, attachment.id);
 });

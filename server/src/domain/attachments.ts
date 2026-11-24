@@ -15,6 +15,7 @@ import { nowIso, requireMember } from "./access.js";
 import { checkWriteRate } from "./conversation.js";
 import type { Actor } from "./model.js";
 import { boardLimits } from "./plans.js";
+import { ChannelAccess } from "./grants.js";
 
 /** Where attachment bytes live. The reference server keeps files under `$OMB_DATA_DIR/attachments`. */
 export interface AttachmentStore {
@@ -159,6 +160,21 @@ function isAttached(ctx: AppContext, attachmentId: string): boolean {
     .get(attachmentId);
 }
 
+/** Whether the caller can read a live message the attachment is attached to (its thread's channel included). */
+function readableViaMessage(ctx: AppContext, actor: Actor, attachmentId: string, boardId: string): boolean {
+  const channels = (
+    ctx.db
+      .prepare(
+        `SELECT DISTINCT t.channel FROM message_attachments ma JOIN messages m ON m.id = ma.message_id JOIN threads t ON t.id = m.thread_id
+         WHERE ma.attachment_id = ? AND m.deleted_at IS NULL`,
+      )
+      .all(attachmentId) as { channel: string }[]
+  ).map((r) => r.channel);
+  if (channels.length === 0) return false;
+  const access = ChannelAccess.load(ctx, boardId, actor);
+  return channels.some((c) => access.can(c, "read"));
+}
+
 /**
  * Who may read an attachment: members who can read a message it is attached to, and its uploader.
  * Everyone else gets not_found.
@@ -167,7 +183,7 @@ function readable(ctx: AppContext, actor: Actor, attachmentId: string): Attachme
   const row = ctx.db.prepare("SELECT * FROM attachments WHERE id = ?").get(attachmentId) as AttachmentRow | undefined;
   if (!row) throw notFound("Attachment");
   requireMember(ctx, actor, row.board_id, "reader", "Attachment");
-  if (row.uploader_id !== actor.id && !isAttached(ctx, row.id)) throw notFound("Attachment");
+  if (row.uploader_id !== actor.id && !readableViaMessage(ctx, actor, row.id, row.board_id)) throw notFound("Attachment");
   return row;
 }
 
@@ -195,8 +211,9 @@ export async function getAttachment(ctx: AppContext, actor: Actor, attachmentId:
 }
 
 /**
- * Links attachments to a new message. Each must be on the board and either uploaded by the author or already
- * attached to a live message there. Caller holds a transaction.
+ * Links attachments to a new message. Each must be on the board and either uploaded by the author or attached to
+ * a live message the author can read, so a file can't move into a channel through someone else. Caller holds a
+ * transaction.
  */
 export function attachToMessage(ctx: AppContext, actor: Actor, boardId: string, messageId: string, ids: string[] | undefined): void {
   const unique = [...new Set(ids ?? [])];
@@ -205,7 +222,7 @@ export function attachToMessage(ctx: AppContext, actor: Actor, boardId: string, 
   const now = nowIso(ctx);
   unique.forEach((id, position) => {
     const row = ctx.db.prepare("SELECT * FROM attachments WHERE id = ? AND board_id = ?").get(id, boardId) as AttachmentRow | undefined;
-    if (!row || (row.uploader_id !== actor.id && !isAttached(ctx, row.id))) throw invalid(`Attachment ${id} was not found on this board`, { attachment_id: id });
+    if (!row || (row.uploader_id !== actor.id && !readableViaMessage(ctx, actor, row.id, boardId))) throw invalid(`Attachment ${id} was not found on this board`, { attachment_id: id });
     ctx.db.prepare("INSERT INTO message_attachments (message_id, attachment_id, position) VALUES (?, ?, ?)").run(messageId, id, position);
     if (!row.attached_at) ctx.db.prepare("UPDATE attachments SET attached_at = ? WHERE id = ?").run(now, id);
   });
@@ -217,7 +234,7 @@ export function checkAttachable(ctx: AppContext, actor: Actor, boardId: string, 
   if (unique.length > MAX_ATTACHMENTS_PER_MESSAGE) throw invalid(`Up to ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message`);
   for (const id of unique) {
     const row = ctx.db.prepare("SELECT * FROM attachments WHERE id = ? AND board_id = ?").get(id, boardId) as AttachmentRow | undefined;
-    if (!row || (row.uploader_id !== actor.id && !isAttached(ctx, row.id))) throw invalid(`Attachment ${id} was not found on this board`, { attachment_id: id });
+    if (!row || (row.uploader_id !== actor.id && !readableViaMessage(ctx, actor, row.id, boardId))) throw invalid(`Attachment ${id} was not found on this board`, { attachment_id: id });
   }
 }
 

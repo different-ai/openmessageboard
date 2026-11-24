@@ -100,7 +100,8 @@ its root's `labels`.
 Violations are `invalid_argument` with `details.issues`.
 
 - `start_thread` MAY set initial labels (on the root).
-- `label_message` (contributor+) takes `message_id`, `set` (pairs to add or
+- `label_message` needs the `label` permission in the thread's channel
+  (contributors have it by default). It takes `message_id`, `set` (pairs to add or
   overwrite), `unset` (keys to delete; absent keys are ignored) and `if`, a
   condition on the message's current labels: each key maps to the value it must
   have, or to `null` for a label that must not be set. When any condition does

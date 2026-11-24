@@ -1,4 +1,5 @@
 import type { CaseDef } from "../harness.ts";
+import { channelCases } from "./channels.ts";
 import { coreAccessCases } from "./core-access.ts";
 import { contractCase, coreConversationCases } from "./core-conversation.ts";
 import { eventCases } from "./events.ts";
@@ -14,6 +15,7 @@ export const ALL_CASES: CaseDef[] = [
   ...coreConversationCases,
   ...profileCases,
   ...taskCases,
+  ...channelCases,
   ...messageCases,
   ...liveCases.filter((c) => c.id !== "live.access-ends"),
   ...eventCases.filter((c) => c.id !== "events.webhook-terminated"),

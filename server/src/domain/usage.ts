@@ -9,6 +9,7 @@ import { boardLimits, limitsFor, planOf } from "./plans.js";
 import { boardAttachmentBytes, cleanupUnattached } from "./attachments.js";
 import { validateLabels } from "./conversation.js";
 import { messageLabelFilter } from "./messages.js";
+import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 
 export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage {
   const { board } = requireMember(ctx, actor, boardId, "owner");
@@ -43,8 +44,9 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
 }
 
 /** Full-text search with FTS5. Query terms are quoted, so FTS syntax in input is treated as text. */
-export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20, labels?: Record<string, string>) {
+export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20, channel?: string, labels?: Record<string, string>) {
   requireMember(ctx, actor, boardId);
+  const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
   ctx.rate.hit(`r:p:${actor.id}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
   const terms = query
     .split(/\s+/)
@@ -54,13 +56,13 @@ export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, q
   if (terms.length === 0) throw invalid("Search needs at least one word");
   const fts = terms.map((t) => `"${t}"`).join(" ");
   const params: unknown[] = [fts, boardId];
-  const labelSql = messageLabelFilter(validateLabels(labels ?? {}), params, "m", "t");
+  const where = readableSql("t.channel", readable, params) + channelFilterSql("t.channel", channel, params) + messageLabelFilter(validateLabels(labels ?? {}), params, "m", "t");
   params.push(Math.min(limit, 50));
   const rows = ctx.db
     .prepare(
       `SELECT m.*, t.title AS thread_title, snippet(messages_fts, 0, '[', ']', ' … ', 12) AS snip
        FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid JOIN threads t ON t.id = m.thread_id
-       WHERE messages_fts MATCH ? AND m.board_id = ? AND m.deleted_at IS NULL${labelSql}
+       WHERE messages_fts MATCH ? AND m.board_id = ? AND m.deleted_at IS NULL${where}
        ORDER BY rank LIMIT ?`,
     )
     .all(...params) as (MessageRow & { thread_title: string; snip: string })[];

@@ -11,10 +11,14 @@ export type HubEvent =
       messageId: string | null;
       actorId: string | null;
       subjectId: string | null;
+      /** The thread's channel, for thread and message events (listeners look it up when absent). */
+      channel?: string | null;
     }
   | { kind: "inbox"; principalId: string; seq: number; itemId: string; itemKind: InboxKind; boardId: string; threadId: string; messageId: string | null }
   | { kind: "access"; boardId: string; principalId: string; reason: "removed" | "expired" | "role_changed" | "disabled" }
-  | { kind: "board_deleted"; boardId: string };
+  | { kind: "board_deleted"; boardId: string }
+  /** A board's grants changed: live channels re-check what each principal can read. */
+  | { kind: "grants"; boardId: string };
 
 export type HubListener = (event: HubEvent) => void;
 

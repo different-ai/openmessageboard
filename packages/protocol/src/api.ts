@@ -13,6 +13,7 @@ import {
   TOKEN_PERMISSIONS,
 } from "./constants.js";
 import { Labels, BoardSettings, TokenScope } from "./entities.js";
+import { ChannelPath, GrantCanInput, GrantPrincipal, MAX_GRANT_PRINCIPALS } from "./channels.js";
 
 /**
  * The reference server's web JSON API (used by the bundled browser client and the CLI).
@@ -81,6 +82,13 @@ export const API_ROUTES = {
   deleteWorkloadTrust: "DELETE /api/workload-trusts/:trustId",
   oauthConsentInfo: "GET /api/oauth/consent",
   oauthConsent: "POST /api/oauth/consent",
+  channels: "GET /api/boards/:boardId/channels",
+  createChannel: "POST /api/boards/:boardId/channels",
+  grants: "GET /api/boards/:boardId/grants",
+  createGrant: "POST /api/boards/:boardId/grants",
+  updateGrant: "PATCH /api/grants/:grantId",
+  revokeGrant: "DELETE /api/grants/:grantId",
+  explainAccess: "GET /api/boards/:boardId/access",
   personalTokens: "GET /api/tokens",
   createPersonalToken: "POST /api/tokens",
   revokePersonalToken: "DELETE /api/tokens/:tokenId",
@@ -102,11 +110,13 @@ export const API_ROUTES = {
  * Better Auth endpoints (mounted at /api/auth): POST /api/auth/email-otp/send-verification-otp
  * {"email","type":"sign-in"}, POST /api/auth/sign-in/email-otp {"email","otp"}, POST /api/auth/sign-out.
  */
+/** Your personal board when you own none yet (named `name`, if given); otherwise a new named board, up to `boards_owned`. */
 export const CreateBoardBody = z.object({ name: z.string().min(1).max(80).optional() });
 
 const BlockBody = z.object({ schema: z.string().min(1), version: z.number().int().min(1).max(MAX_SCHEMA_VERSION), data: z.record(z.string(), z.unknown()) });
 
 export const StartThreadBody = z.object({
+  channel: ChannelPath.optional(),
   title: z.string().min(1).max(MAX_TITLE_CHARS),
   body: z.string().min(1),
   mentions: z.array(z.string()).max(MAX_MENTIONS).optional(),
@@ -248,6 +258,14 @@ export const OAuthConsentBody = z.object({
     z.object({ profile: z.string().min(1).max(32) }).describe("Act as a profile of the person: their access, shown as \"<profile> via <person>\""),
   ]),
   oauth_query: z.string().describe("The signed query string the authorization server passed to the consent page"),
+});
+
+export const CreateChannelBody = z.object({ path: ChannelPath, private: z.boolean().optional() });
+export const CreateGrantBody = z.object({ principals: z.array(GrantPrincipal).min(1).max(MAX_GRANT_PRINCIPALS), can: GrantCanInput });
+export const UpdateGrantBody = z.object({
+  add: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
+  remove: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
+  can: GrantCanInput.optional(),
 });
 
 export const ROLE_VALUES = ROLES;

@@ -1,9 +1,17 @@
-import { MAX_MENTIONS, MAX_REACTIONS_PER_MESSAGE, RESERVED_LABEL_PREFIX, normalizeEmoji, type MentionResolution, type Message } from "@openmessageboard/protocol";
+import {
+  MAX_MENTIONS,
+  MAX_REACTIONS_PER_MESSAGE,
+  RESERVED_LABEL_PREFIX,
+  normalizeEmoji,
+  type MentionResolution,
+  type Message,
+  type Permission,
+} from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import type { HubEvent } from "../live/hub.js";
-import { nowIso, requireMember } from "./access.js";
+import { nowIso, requireChannelPermission, requireThread, type ThreadAccess } from "./access.js";
 import { recordEvent } from "./boards.js";
 import { canChangeMessage } from "./profiles.js";
 import { addInboxItem, checkWriteRate, validateBody, validateLabels } from "./conversation.js";
@@ -98,6 +106,22 @@ function loadMessage(ctx: AppContext, id: string): MessageRow {
   return row;
 }
 
+/**
+ * A message the caller can read (a member who can read its thread's channel; otherwise `not_found`) and on whose
+ * channel they hold `perm`.
+ */
+function requireMessage(ctx: AppContext, actor: Actor, row: MessageRow, perm: Permission): ThreadAccess {
+  let t: ThreadAccess;
+  try {
+    t = requireThread(ctx, actor, row.thread_id);
+  } catch (e) {
+    if (e instanceof OmbError && e.code === "not_found") throw notFound("Message");
+    throw e;
+  }
+  requireChannelPermission(t, perm);
+  return t;
+}
+
 function boardOfMessage(ctx: AppContext, id: string): string {
   return (ctx.db.prepare("SELECT board_id FROM messages WHERE id = ?").get(id) as { board_id: string } | undefined)?.board_id ?? "";
 }
@@ -107,7 +131,7 @@ export function labelMessage(ctx: AppContext, actor: Actor, messageId: string, c
   checkWriteRate(ctx, actor, boardOfMessage(ctx, messageId));
   return tx(ctx, (emit) => {
     const row = loadMessage(ctx, messageId);
-    requireMember(ctx, actor, row.board_id, "contributor", "Message");
+    requireMessage(ctx, actor, row, "label");
     applyLabelChange(ctx, emit, actor, row, change);
     return { message: presentMessage(ctx, loadMessage(ctx, row.id), actor.id) };
   });
@@ -122,7 +146,7 @@ export function react(ctx: AppContext, actor: Actor, messageId: string, input: {
   checkWriteRate(ctx, actor, boardOfMessage(ctx, messageId));
   return tx(ctx, (emit) => {
     const row = loadMessage(ctx, messageId);
-    requireMember(ctx, actor, row.board_id, "reader", "Message");
+    requireMessage(ctx, actor, row, "react");
     if (row.deleted_at) throw new OmbError("message_deleted", "This message was deleted; it can't take reactions");
     let changed = 0;
     if (input.remove) {
@@ -157,13 +181,14 @@ export function editMessage(
   checkWriteRate(ctx, actor, boardOfMessage(ctx, messageId));
   return tx(ctx, (emit) => {
     const row = loadMessage(ctx, messageId);
-    const { board } = requireMember(ctx, actor, row.board_id, "reader", "Message");
+    const { board, thread } = requireMessage(ctx, actor, row, "read");
     const authorOwner = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id ?? null;
     // Like delete, but board owners get no say over other people's words: only the author, or the author's person.
     if (!canChangeMessage(actor, { id: row.author_id, owner_id: authorOwner }, "contributor")) {
       throw forbidden(actor.profile ? "A profile can edit only what it wrote" : "You can edit messages you wrote, and messages your agents and profiles wrote");
     }
-    requireMember(ctx, actor, row.board_id, "contributor", "Message");
+    // Editing is writing: it needs the post permission in the thread's channel.
+    requireMessage(ctx, actor, row, "post");
     if (row.deleted_at) throw new OmbError("message_deleted", "This message was deleted and can't be edited");
     if (input.revision !== undefined && input.revision !== row.revision) {
       throw new OmbError("revision_conflict", `The message changed since revision ${input.revision}; read it again`, { revision: row.revision });
@@ -179,7 +204,7 @@ export function editMessage(
         limit: limits.message_bytes,
       });
     }
-    const text = row.source_platform ? { ids: [] as string[], resolved: [] as MentionResolution[] } : resolveTextMentions(ctx, board.id, input.body);
+    const text = row.source_platform ? { ids: [] as string[], resolved: [] as MentionResolution[] } : resolveTextMentions(ctx, board.id, input.body, thread.channel);
     const result = (r: MessageRow) => ({ message: presentMessage(ctx, r, actor.id), ...(text.resolved.length ? { mentions_resolved: text.resolved } : {}) });
     if (input.body === row.body) return result(row);
     const delta = total - row.body_bytes;

@@ -1,0 +1,30 @@
+{
+  "schema": "tools/explain_access.output",
+  "description": "a member closed out of a private channel by the grant to everyone",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "channel": "security/incidents",
+    "principal": {
+      "id": "p_7MXK2A",
+      "kind": "human",
+      "display_name": "Maya Okafor",
+      "via": null
+    },
+    "role": "contributor",
+    "can": [],
+    "pattern": "security/",
+    "level": "everyone",
+    "grant_ids": [
+      "g_01JDX2"
+    ],
+    "granted": [],
+    "role_cap": [
+      "read",
+      "post",
+      "react",
+      "label",
+      "manage"
+    ],
+    "person_cap": null
+  }
+}

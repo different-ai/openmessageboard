@@ -1,6 +1,7 @@
 import { parseResourceUri, inboxUrl, boardUrl, threadUrl, MCP_PROTOCOL_VERSION } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { activeMembership } from "../domain/access.js";
+import { ChannelAccess } from "../domain/grants.js";
 import type { Actor } from "../domain/model.js";
 import type { CloseReason } from "../live/connections.js";
 import { OmbError } from "../errors.js";
@@ -38,6 +39,14 @@ export function serveListen(ctx: AppContext, actor: Actor, req: ListenRequest, s
   const base = ctx.config.publicUrl;
   // Canonicalize and authorize each requested URI; unknown or unreadable URIs are left out of the acknowledgment.
   const honored = new Map<string, { kind: "board" | "thread" | "inbox"; boardId?: string; threadId?: string }>();
+  // Channel access per board, resolved once and rebuilt when the board's grants or the caller's role change.
+  const access = new Map<string, ChannelAccess>();
+  const accessFor = (boardId: string) => {
+    let a = access.get(boardId);
+    if (!a) access.set(boardId, (a = ChannelAccess.load(ctx, boardId, actor)));
+    return a;
+  };
+  const threadChannel = (threadId: string) => (ctx.db.prepare("SELECT channel FROM threads WHERE id = ?").get(threadId) as { channel: string } | undefined)?.channel;
   for (const uri of requested) {
     const p = parseResourceUri(base, uri);
     if (!p) continue;
@@ -47,8 +56,8 @@ export function serveListen(ctx: AppContext, actor: Actor, req: ListenRequest, s
     }
     if (!activeMembership(ctx, p.boardId, actor)) continue;
     if (p.kind === "thread") {
-      const t = ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(p.threadId) as { board_id: string } | undefined;
-      if (!t || t.board_id !== p.boardId) continue;
+      const t = ctx.db.prepare("SELECT board_id, channel FROM threads WHERE id = ?").get(p.threadId) as { board_id: string; channel: string } | undefined;
+      if (!t || t.board_id !== p.boardId || !accessFor(p.boardId).can(t.channel, "read")) continue;
       honored.set(threadUrl(base, p.boardId, p.threadId), { kind: "thread", boardId: p.boardId, threadId: p.threadId });
     } else honored.set(boardUrl(base, p.boardId), { kind: "board", boardId: p.boardId });
   }
@@ -136,10 +145,29 @@ export function serveListen(ctx: AppContext, actor: Actor, req: ListenRequest, s
       unsub = ctx.hub.subscribe((e) => {
         if (closed) return;
         if (e.kind === "board") {
+          if (!boards.has(e.boardId)) return;
+          // A change in a channel the caller can't read is never announced.
+          if (e.threadId) {
+            const channel = e.channel ?? threadChannel(e.threadId);
+            if (!channel || !accessFor(e.boardId).can(channel, "read")) return;
+          }
           for (const [uri, h] of honored) {
             if (h.boardId !== e.boardId) continue;
             if (h.kind === "board" || (h.kind === "thread" && h.threadId === e.threadId)) queue(uri);
           }
+        } else if ((e.kind === "grants" || (e.kind === "access" && e.principalId === actor.id && e.reason === "role_changed")) && boards.has(e.boardId)) {
+          // Re-resolve access; drop thread URIs the caller can no longer read, and end the stream if nothing is left.
+          access.delete(e.boardId);
+          for (const [uri, h] of honored) {
+            if (h.kind !== "thread" || h.boardId !== e.boardId) continue;
+            const channel = threadChannel(h.threadId!);
+            if (!channel || !accessFor(e.boardId).can(channel, "read")) honored.delete(uri);
+          }
+          if (![...honored.values()].some((h) => h.boardId === e.boardId)) {
+            boards.delete(e.boardId);
+            conn?.boards.delete(e.boardId);
+          }
+          if (honored.size === 0) teardown(true);
         } else if (e.kind === "inbox" && e.principalId === actor.id) {
           const uri = inboxUrl(base);
           if (honored.has(uri)) queue(uri);

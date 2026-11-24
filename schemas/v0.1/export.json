@@ -77,6 +77,10 @@
           "title": {
             "type": "string"
           },
+          "channel": {
+            "description": "Channel path; general when absent",
+            "type": "string"
+          },
           "kind": {
             "type": "string",
             "enum": [

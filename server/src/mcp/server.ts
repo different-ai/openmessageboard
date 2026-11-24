@@ -11,6 +11,7 @@ import * as usage from "../domain/usage.js";
 import * as messages from "../domain/messages.js";
 import * as attachments from "../domain/attachments.js";
 import * as schemas from "../domain/schemas.js";
+import * as channels from "../domain/channels.js";
 import { holderId, requireMember } from "../domain/access.js";
 import { listActors } from "../domain/profiles.js";
 import { createScopedToken } from "../domain/tokens.js";
@@ -36,6 +37,9 @@ const READ_ONLY: ReadonlySet<ToolName> = new Set([
   "list_members",
   "get_usage",
   "list_actors",
+  "list_channels",
+  "list_grants",
+  "explain_access",
   "get_attachment",
   "list_schemas",
   "get_schema",
@@ -107,7 +111,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     mark_read: (a, x) => changes.markRead(ctx, a, x),
     get_changes: (a, x) => changes.getChanges(ctx, a, x),
     wait_for_activity: (a, x, s) => changes.waitForActivity(ctx, a, x, s.mcpReq.signal),
-    search_messages: (a, x) => usage.searchMessages(ctx, a, x.board_id, x.query, x.limit, x.labels),
+    search_messages: (a, x) => usage.searchMessages(ctx, a, x.board_id, x.query, x.limit, x.channel, x.labels),
     list_members: (a, x) => ({ members: boards.listMembers(ctx, a, x.board_id) }),
     claim_task: (a, x) => convo.claimTask(ctx, a, x),
     update_task: (a, x) => convo.updateTask(ctx, a, x.thread_id, x),
@@ -117,6 +121,14 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     get_usage: (a, x) => usage.getUsage(ctx, a, x.board_id),
     list_actors: (a, x) => ({ actors: listActors(ctx, a, x.board_id) }),
     create_scoped_token: (a, x) => createScopedToken(ctx, a, x),
+    list_channels: (a, x) => channels.listChannels(ctx, a, x.board_id),
+    create_channel: (a, x) => channels.createChannel(ctx, a, x.board_id, x),
+    create_board: (a, x) => ({ board: boards.createNamedBoard(ctx, a, x.name) }),
+    list_grants: (a, x) => channels.listGrants(ctx, a, x.board_id),
+    create_grant: (a, x) => channels.createGrant(ctx, a, x.board_id, x),
+    update_grant: (a, x) => channels.updateGrant(ctx, a, x.grant_id, x),
+    revoke_grant: (a, x) => channels.revokeGrant(ctx, a, x.grant_id),
+    explain_access: (a, x) => channels.explainAccess(ctx, a, x.board_id, x.channel, x.principal_id),
   };
 
   const runTool = async (name: ToolName, args: unknown, sctx: ServerContext) => {
@@ -148,7 +160,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
         ...(outputIsObject ? { outputSchema: def.output as z.ZodObject } : {}),
         annotations: {
           readOnlyHint: READ_ONLY.has(name),
-          destructiveHint: name === "delete_message",
+          destructiveHint: name === "delete_message" || name === "revoke_grant",
           idempotentHint:
             READ_ONLY.has(name) || ["set_follow", "set_labels", "mark_read", "start_thread", "reply", "react", "label_message", "register_schema"].includes(name),
           openWorldHint: false,

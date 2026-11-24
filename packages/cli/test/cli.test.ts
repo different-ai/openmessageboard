@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
 import type { Change, Message, Thread, Usage } from "@openmessageboard/sdk";
-import { UsageError, boardIdFrom, helpText, parseCommandLine, parseDurationSeconds, parseLabels, parseTime, splitOptionalBoard, threadIdFrom } from "../src/args.ts";
+import { UsageError, boardIdFrom, helpText, isBoardArg, parseCan, parseCommandLine, parseDurationSeconds, parseLabels, parseTime, splitOptionalBoard, threadIdFrom } from "../src/args.ts";
 import { configPath, readConfig, resolveConnection, writeConfig } from "../src/config.ts";
-import { authorName, formatChange, formatMessage, formatTable, formatTasks, formatUsage, relativeTime } from "../src/format.ts";
+import { authorName, formatAccess, formatChange, formatChannels, formatGrants, formatMessage, formatTable, formatTasks, formatUsage, relativeTime } from "../src/format.ts";
 import type { Io } from "../src/io.ts";
 import { main } from "../src/main.ts";
 
@@ -41,6 +41,7 @@ function task(id: string, state: "open" | "claimed" | "done", title: string, lab
   return {
     id,
     board_id: "b_1",
+    channel: "general",
     url: `https://board.example.com/b/b_1/t/${id}`,
     title,
     kind: "task",
@@ -57,6 +58,36 @@ function task(id: string, state: "open" | "claimed" | "done", title: string, lab
 }
 
 describe("argument parsing", () => {
+  it("parses channel, grant and board groups, with list as the default subcommand", () => {
+    assert.equal(parseCommandLine(["channels"]).command, "channels list");
+    const listOn = parseCommandLine(["channels", "b_1"]);
+    assert.equal(listOn.command, "channels list");
+    assert.deepEqual(listOn.positionals, ["b_1"]);
+    const create = parseCommandLine(["channels", "create", "security", "--private"]);
+    assert.equal(create.command, "channels create");
+    assert.deepEqual(create.positionals, ["security"]);
+    assert.equal(create.values.private, true);
+    assert.equal(parseCommandLine(["boards"]).command, "boards list");
+    assert.deepEqual(parseCommandLine(["boards", "create", "Security"]).positionals, ["Security"]);
+    const g = parseCommandLine(["grants", "create", "--member", "@omar", "--everyone", "--can", "security/=all", "--can", "*=read,post"]);
+    assert.equal(g.command, "grants create");
+    assert.deepEqual(g.values.can, ["security/=all", "*=read,post"]);
+    assert.equal(parseCommandLine(["grants", "explain", "security/incidents", "--member", "p_omar"]).command, "grants explain");
+  });
+
+  it("tells boards from channels and parses --can", () => {
+    assert.equal(isBoardArg("b_1"), true);
+    assert.equal(isBoardArg("https://board.example.com/b/b_8f2k1"), true);
+    assert.equal(isBoardArg("dev"), false);
+    assert.equal(isBoardArg("www/"), false);
+    assert.equal(isBoardArg("www/production"), false);
+    assert.equal(isBoardArg("NotAChannel"), true);
+    assert.deepEqual(parseCan(["security/=all", "*=read, post", "ops=none"]), { "security/": "all", "*": ["read", "post"], ops: "none" });
+    assert.throws(() => parseCan(["security/=fly"]), UsageError);
+    assert.throws(() => parseCan(["Bad=all"]), UsageError);
+    assert.throws(() => parseCan([]), UsageError);
+  });
+
   it("finds the command with global flags anywhere", () => {
     const p = parseCommandLine(["--server", "https://board.example.com", "read", "b_1", "--unread", "--json"]);
     assert.equal(p.command, "read");
@@ -205,6 +236,48 @@ describe("config", () => {
 });
 
 describe("formatting", () => {
+  it("formats channels, grants and access explanations", () => {
+    const out = formatChannels(
+      [
+        { board_id: "b_1", path: "general", thread_count: 3, last_activity_at: "2026-11-23T11:55:00Z", private: false, my_permissions: ["read", "post"], created_at: "2026-11-01T00:00:00Z" },
+        { board_id: "b_1", path: "security", thread_count: 0, last_activity_at: null, private: true, my_permissions: ["read", "post", "react", "label", "manage"], created_at: "2026-11-01T00:00:00Z" },
+      ],
+      NOW,
+    );
+    assert.match(out, /general\s+3\s+5m ago\s+read,post/);
+    assert.match(out, /security\s+0\s+-\s+read,post,react,label,manage\s+private/);
+    const grants = formatGrants(
+      [
+        {
+          id: "g_1",
+          board_id: "b_1",
+          principals: [{ kind: "member", principal_id: "p_maya" }, { kind: "everyone" }],
+          can: { "security/": [], "*": ["read"] },
+          created_by: maya,
+          created_at: "2026-11-01T00:00:00Z",
+          updated_at: "2026-11-01T00:00:00Z",
+        },
+      ],
+      [{ principal: maya, role: "contributor", joined_at: "2026-11-01T00:00:00Z", access_ends_at: null, handle: "maya" }],
+    );
+    assert.match(grants, /g_1\s+@maya, everyone\s+security\/=none \*=read/);
+    const why = formatAccess({
+      board_id: "b_1",
+      channel: "security/incidents",
+      principal: agent,
+      role: "contributor",
+      can: [],
+      pattern: "security/",
+      level: "everyone",
+      grant_ids: ["g_2"],
+      granted: [],
+      role_cap: ["read", "post", "react", "label", "manage"],
+      person_cap: [],
+    });
+    assert.match(why, /release-agent \(via Maya\) \(contributor\) in security\/incidents: nothing/);
+    assert.match(why, /Decided by g_2 at security\/ \(everyone\)/);
+  });
+
   it("shows agents with the person they act for", () => {
     assert.equal(authorName(agent), "release-agent (via Maya)");
     assert.equal(authorName(maya), "Maya");

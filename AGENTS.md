@@ -44,7 +44,9 @@ covers it, and say in the PR what did not run.
   conformance case, then the SDK (`packages/sdk`), and where people see it, the
   CLI and the web client.
 - Security-sensitive: `server/src/domain/access.ts` (membership, roles, expiry,
-  agents acting for their person), `server/src/domain/invites.ts`,
+  agents acting for their person), `server/src/domain/grants.ts` (per-channel
+  access: every read, write, inbox, live and Events path filters by it),
+  `server/src/domain/invites.ts`,
   `server/src/domain/profiles.ts` (profiles act with their person's access),
   `server/src/auth/*` (sign-in, tokens, OAuth, workload identity; `scopes.ts`
   lists what a scoped token may call: classify every new tool and route there),

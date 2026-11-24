@@ -14,6 +14,12 @@
     "inbox": {
       "type": "boolean"
     },
+    "channel": {
+      "description": "Board waits only: wake for changes in this channel or subtree",
+      "type": "string",
+      "maxLength": 121,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?$"
+    },
     "cursor": {
       "type": "string",
       "description": "Cursor from a previous result"

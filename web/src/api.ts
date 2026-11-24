@@ -1,8 +1,13 @@
 import type {
+  AccessExplanation,
   AddAgentToBoardBody,
   Agent,
   Board,
   BoardActor,
+  Channel,
+  CreateGrantBody,
+  Grant,
+  UpdateGrantBody,
   ClaimTaskBody,
   CreateIntegrationBody,
   CreateInviteBody,
@@ -57,6 +62,8 @@ export type LinkThreadInput = Out<typeof LinkThreadBody>;
 export type CreateWorkloadTrustInput = Out<typeof CreateWorkloadTrustBody>;
 export type ConsentInfo = Out<typeof OAuthConsentInfo>;
 export type ConsentInput = Out<typeof OAuthConsentBody>;
+export type CreateGrantInput = Out<typeof CreateGrantBody>;
+export type UpdateGrantInput = Out<typeof UpdateGrantBody>;
 
 export type Whoami = ToolOutput<"whoami">;
 export type ThreadList = ToolOutput<"list_threads">;
@@ -175,6 +182,7 @@ function unwrapBoard(res: { board: Board } | Board): Board {
 }
 
 export type ThreadQuery = {
+  channel?: string;
   filter?: "all" | "following" | "unread";
   kind?: "discussion" | "task";
   task_state?: "open" | "claimed" | "done" | "cancelled";
@@ -218,6 +226,7 @@ export const api = {
   threads: (boardId: string, q: ThreadQuery = {}, signal?: AbortSignal) =>
     get<ThreadList>(
       `/api/boards/${enc(boardId)}/threads${qs({
+        channel: q.channel,
         filter: q.filter && q.filter !== "all" ? q.filter : undefined,
         kind: q.kind,
         task_state: q.task_state,
@@ -253,6 +262,17 @@ export const api = {
     post<ToolOutput<"set_labels">>(`/api/threads/${enc(threadId)}/labels`, body),
   search: (boardId: string, query: string) =>
     get<ToolOutput<"search_messages">>(`/api/boards/${enc(boardId)}/search${qs({ query })}`),
+
+  // Channels and access
+  channels: (boardId: string, signal?: AbortSignal) => get<{ channels: Channel[] }>(`/api/boards/${enc(boardId)}/channels`, signal),
+  createChannel: (boardId: string, body: { path: string; private?: boolean }) =>
+    post<{ channel: Channel; created: boolean; grants: Grant[] }>(`/api/boards/${enc(boardId)}/channels`, body),
+  grants: (boardId: string, signal?: AbortSignal) => get<{ grants: Grant[] }>(`/api/boards/${enc(boardId)}/grants`, signal),
+  createGrant: (boardId: string, body: CreateGrantInput) => post<{ grant: Grant }>(`/api/boards/${enc(boardId)}/grants`, body),
+  updateGrant: (grantId: string, body: UpdateGrantInput) => patch<{ grant: Grant }>(`/api/grants/${enc(grantId)}`, body),
+  revokeGrant: (grantId: string) => del<{ grant_id: string; revoked: boolean }>(`/api/grants/${enc(grantId)}`),
+  explainAccess: (boardId: string, channel: string, principalId?: string) =>
+    get<AccessExplanation>(`/api/boards/${enc(boardId)}/access${qs({ channel, principal_id: principalId })}`),
 
   // Tasks
   updateTask: (threadId: string, body: UpdateTaskInput) =>

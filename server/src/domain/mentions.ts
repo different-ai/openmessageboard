@@ -2,6 +2,7 @@ import type { MentionResolution, PrincipalRef } from "@openmessageboard/protocol
 import type { AppContext } from "../context.js";
 import { activeMembership } from "./access.js";
 import { findProfile } from "./profiles.js";
+import { ChannelAccess } from "./grants.js";
 import type { Actor } from "./model.js";
 import { principalRefs } from "./present.js";
 
@@ -54,10 +55,10 @@ export function findMentions(body: string): WrittenMention[] {
 }
 
 /**
- * Resolves the mentions written in a body against the board's active members. A handle that matches no one, or
- * several, stays text and mentions no one; a mention never fails a write.
+ * Resolves the mentions written in a body against the board's active members (who can read `channel`, when given).
+ * A handle that matches no one, or several, stays text and mentions no one; a mention never fails a write.
  */
-export function resolveTextMentions(ctx: AppContext, boardId: string, body: string): { ids: string[]; resolved: MentionResolution[] } {
+export function resolveTextMentions(ctx: AppContext, boardId: string, body: string, channel?: string): { ids: string[]; resolved: MentionResolution[] } {
   const written = findMentions(body);
   if (written.length === 0) return { ids: [], resolved: [] };
   const matches: { written: string; ids: string[] }[] = [];
@@ -80,7 +81,11 @@ export function resolveTextMentions(ctx: AppContext, boardId: string, body: stri
         }
       }
     }
-    const active = candidates.filter((p) => activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name }));
+    const active = candidates.filter((p) => {
+      const who = { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name };
+      if (!activeMembership(ctx, boardId, who)) return false;
+      return channel === undefined || ChannelAccess.load(ctx, boardId, who).can(channel, "read");
+    });
     matches.push({ written: w.written, ids: active.map((p) => p.id) });
   }
   const refs: Map<string, PrincipalRef> = principalRefs(ctx, matches.flatMap((m) => m.ids));

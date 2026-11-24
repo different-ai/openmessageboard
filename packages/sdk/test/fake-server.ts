@@ -121,6 +121,7 @@ export class FakeServer {
     const thread: Thread = {
       id,
       board_id: this.boardId,
+      channel: "general",
       url: this.threadUri(id),
       title,
       kind: opts.task ? "task" : "discussion",
@@ -208,6 +209,7 @@ export class FakeServer {
     this.tools.whoami = () => ({
       principal: { id: this.me.id, kind: this.me.kind, display_name: this.me.display_name, email: null, owner: null },
       owned_board: null,
+      owned_boards: [],
       memberships: [],
       server: {
         spec_version: "0.1",

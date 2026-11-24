@@ -38,6 +38,8 @@ because it bulk-copies content into a model-driven path.
 
 Required by the `import` profile; off by default on shared hosted services.
 
+- Threads keep their `channel` (absent or invalid channels import as
+  `general`). Grants are not exported.
 - Import creates a **new** board owned by the importing human. It never merges
   into an existing board. If the person already owns `boards_owned` boards, the
   import is refused.
