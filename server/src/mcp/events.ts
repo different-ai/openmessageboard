@@ -5,6 +5,7 @@ import type { AppContext } from "../context.js";
 import { OmbError } from "../errors.js";
 import { decrypt, encrypt, newId, sha256 } from "../ids.js";
 import { activeMembership, actorFromPrincipal, getBoardRow, getPrincipal, nowIso, requireMember } from "../domain/access.js";
+import { boardInScope } from "../auth/scopes.js";
 import { decodeCursor, encodeCursor } from "../domain/cursors.js";
 import { presentChanges } from "../domain/changes.js";
 import type { Actor, EventRow, InboxRow, MessageRow, ThreadRow } from "../domain/model.js";
@@ -99,7 +100,8 @@ export function occurrencesAfter(
       params.push(minTime);
     }
     const rows = ctx.db.prepare(sql + " ORDER BY seq LIMIT ?").all(...params, max + 1) as InboxRow[];
-    const page = rows.slice(0, max);
+    // A board-scoped token sees only items from its boards.
+    const page = rows.slice(0, max).filter((r) => boardInScope(actor, r.board_id));
     const items = presentInbox(ctx, page);
     return {
       events: items.map((it, i) => {
@@ -112,7 +114,7 @@ export function occurrencesAfter(
           cursor: encodeCursor(scope.kind, scope.id, page[i]!.seq),
         };
       }),
-      lastSeq: page.length ? page[page.length - 1]!.seq : afterSeq,
+      lastSeq: rows.length ? rows.slice(0, max)[Math.min(rows.length, max) - 1]!.seq : afterSeq,
       hasMore: rows.length > max,
     };
   }

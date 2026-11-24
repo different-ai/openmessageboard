@@ -49,6 +49,7 @@ import {
 } from "./conversation.js";
 import type { Actor, BoardRow, MembershipRow, ThreadRow } from "./model.js";
 import { presentThread, presentThreads, refOf } from "./present.js";
+import { coveredPrincipalIds } from "./profiles.js";
 import { boardLimits } from "./plans.js";
 
 type Emit = (e: HubEvent) => void;
@@ -95,9 +96,14 @@ function requireTask(thread: ThreadRow): asserts thread is ThreadRow & { task_st
   if (thread.kind !== "task" || !thread.task_state) throw new OmbError("task_not_claimable", "This thread is not a task", { state: null });
 }
 
-/** The task's owner (its creator, or the person an agent creator acts for) or the board owner. */
+/**
+ * Who manages a task: its creator; the person for the tasks their agents and profiles created; the board owner.
+ * A profile manages only the tasks it created, whatever its person's role (as with messages).
+ */
 function isTaskOwner(ctx: AppContext, actor: Actor, thread: ThreadRow, membership: MembershipRow): boolean {
-  if (membership.role === "owner" || thread.created_by === actor.id) return true;
+  if (thread.created_by === actor.id) return true;
+  if (actor.profile) return false;
+  if (membership.role === "owner") return true;
   return getPrincipal(ctx, thread.created_by)?.owner_id === actor.id;
 }
 
@@ -115,11 +121,11 @@ function conflict(thread: ThreadRow, action: string): OmbError {
   return new OmbError("conflict", `Can't ${action} a ${thread.task_state} task`, { state: thread.task_state, action });
 }
 
-/** Resolves `for`: a member or agent of the board who can claim (contributor or owner). */
+/** Resolves `for`: a member, agent or profile of the board who can claim (contributor or owner). */
 function resolveClaimant(ctx: AppContext, actor: Actor, boardId: string, value: string): string {
   const id = value === "me" ? actor.id : value;
   const p = getPrincipal(ctx, id);
-  const m = p ? activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id }) : undefined;
+  const m = p ? activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name }) : undefined;
   if (!p || !m || p.disabled_at) throw invalid(`Principal ${id} is not a member of this board`, { principal_id: id });
   if (p.kind === "integration") throw invalid("Tasks can't be kept for an integration", { principal_id: id });
   if (ROLE_RANK[m.role] < ROLE_RANK.contributor) throw invalid(`Principal ${id} is a reader and can't claim tasks`, { principal_id: id });
@@ -368,9 +374,12 @@ export function expireTaskLeases(ctx: AppContext, scope: { boardId?: string; thr
   return tx(ctx, (emit) => expireLeasesInTx(ctx, emit, scope));
 }
 
-/** Ends the claims a principal holds on a board (their membership ended). Caller holds a transaction. */
+/** Ends the claims a principal (and, for a person, their profiles) holds on a board: their membership ended. Caller holds a transaction. */
 export function releaseClaimsOf(ctx: AppContext, emit: Emit, boardId: string, principalId: string): void {
-  const rows = ctx.db.prepare("SELECT * FROM threads WHERE board_id = ? AND task_state = 'claimed' AND task_assignee_id = ?").all(boardId, principalId) as ThreadRow[];
+  const ids = coveredPrincipalIds(ctx, principalId);
+  const rows = ctx.db
+    .prepare(`SELECT * FROM threads WHERE board_id = ? AND task_state = 'claimed' AND task_assignee_id IN (${ids.map(() => "?").join(",")})`)
+    .all(boardId, ...ids) as ThreadRow[];
   const now = nowIso(ctx);
   for (const t of rows) {
     ctx.db

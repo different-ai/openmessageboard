@@ -11,6 +11,9 @@ import {
   TASK_STATE_FILTERS,
   THREAD_KINDS,
   WAIT_MAX_SECONDS,
+  MAX_TOKEN_BOARDS,
+  SCOPED_TOKEN_MAX_SECONDS,
+  TOKEN_PERMISSIONS,
 } from "./constants.js";
 import {
   Board,
@@ -28,6 +31,8 @@ import {
   Thread,
   Usage,
   AllowanceUsage,
+  BoardActor,
+  TokenScope,
 } from "./entities.js";
 
 const id = (what: string) => z.string().min(1).describe(`${what} ID`);
@@ -243,6 +248,33 @@ export const TOOLS = {
     input: z.object({ board_id: id("Board") }),
     output: Usage,
   },
+  list_actors: {
+    description:
+      "People, agents, profiles and synced authors who belong to or have written on a board, with the handle to mention or filter by. A profile shows as \"fx via ada\" with handle ada/fx.",
+    input: z.object({ board_id: id("Board") }),
+    output: z.object({ actors: z.array(BoardActor) }),
+  },
+  create_scoped_token: {
+    description:
+      "People only: create a short-lived token narrowed to some boards, to read only, or to one of your profiles, to hand to a sandboxed agent. The token is returned once; it can't create invites, tokens, agents or webhooks.",
+    input: z.object({
+      boards: z.array(z.string().min(1)).min(1).max(MAX_TOKEN_BOARDS).optional().describe("Board IDs the token can reach. Default: every board you can"),
+      can: z
+        .array(z.enum(TOKEN_PERMISSIONS))
+        .min(1)
+        .optional()
+        .describe("[\"read\"] for a read-only token, or [\"read\",\"post\",\"react\",\"label\"] (the default)"),
+      profile: z.string().optional().describe("The profile the token always writes as. Default: your profile when you call as one"),
+      expires_in_seconds: z.number().int().min(1).max(SCOPED_TOKEN_MAX_SECONDS).optional().describe("Default 3600, at most 86400"),
+      label: z.string().max(60).optional(),
+    }),
+    output: z.object({
+      id: z.string(),
+      token: z.string().describe("Shown once. Hand it to the agent; never post it on a board"),
+      prefix: z.string(),
+      scope: TokenScope,
+    }),
+  },
 } as const;
 
 export type ToolName = keyof typeof TOOLS;
@@ -264,4 +296,5 @@ export const WRITE_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>([
   "set_labels",
   "create_invite",
   "redeem_invite",
+  "create_scoped_token",
 ]);

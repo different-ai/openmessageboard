@@ -11,6 +11,7 @@ import { claimTask, createTasks, expireTaskLeases, renewTask, updateTask } from 
 import { getChanges, getInbox } from "../src/domain/changes.ts";
 import { actorFromPrincipal, getPrincipal } from "../src/domain/access.ts";
 import { migrate, openDatabase } from "../src/db/index.ts";
+import { ensureProfile, profileActor } from "../src/domain/profiles.ts";
 import { OmbError } from "../src/errors.ts";
 import type { AppContext } from "../src/context.ts";
 import type { Actor } from "../src/domain/model.ts";
@@ -332,7 +333,8 @@ test("tasks v2 migration maps stored states and keeps every message", async () =
   const db = openDatabase(":memory:");
   const dir = join(dirname(fileURLToPath(import.meta.url)), "../src/db/migrations");
   db.exec("CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)");
-  for (const file of readdirSync(dir).filter((f) => /^000[1-5]_.*\.ts$/.test(f)).sort()) {
+  // Every migration before tasks v2, applied by hand, then migrate() applies tasks v2 (and anything after it).
+  for (const file of readdirSync(dir).filter((f) => /^\d{4}_[a-z0-9_]+\.ts$/.test(f) && f < "0006_tasks_v2.ts").sort()) {
     const m = (await import(pathToFileURL(join(dir, file)).href)) as { sql?: string; up?: (d: typeof db) => void };
     if (m.sql) db.exec(m.sql);
     m.up?.(db);
@@ -355,7 +357,7 @@ test("tasks v2 migration maps stored states and keeps every message", async () =
     db.prepare("INSERT INTO messages (id, board_id, thread_id, author_id, body, created_at) VALUES (?, 'b1', ?, 'p1', 'hello', ?)").run(`m_${id}`, id, now);
     db.prepare("INSERT INTO follows (principal_id, thread_id, created_at) VALUES ('p1', ?, ?)").run(id, now);
   }
-  assert.deepEqual(await migrate(db), ["0006_tasks_v2"]);
+  assert.ok((await migrate(db)).includes("0006_tasks_v2"));
   const rows = db.prepare("SELECT id, task_state, task_assignee_id, task_for_id FROM threads ORDER BY id").all();
   assert.deepEqual(rows, [
     { id: "t_cancelled", task_state: "canceled", task_assignee_id: null, task_for_id: null },
@@ -370,4 +372,31 @@ test("tasks v2 migration maps stored states and keeps every message", async () =
   db.prepare("DELETE FROM threads WHERE id = 't_open'").run();
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM messages").get() as { n: number }).n, 4, "messages still cascade with their thread");
   assert.throws(() => db.prepare("UPDATE threads SET task_state = 'open' WHERE id = 't_done'").run(), /CHECK constraint/);
+});
+
+test("tasks: a profile manages only the tasks it created; its person manages any of their profiles' tasks", async () => {
+  const { ctx, owner, board, w1, w2, task } = await setup();
+  const asProfile = (person: Actor, name: string) => profileActor(person, ensureProfile(ctx, getPrincipal(ctx, person.id)!, name));
+  const fixer = asProfile(w1, "fixer");
+  const other = asProfile(w1, "reviewer");
+  const byFixer = task(fixer, "Fixer's task");
+  assert.equal(byFixer.thread.task?.owner.id, fixer.id);
+  await rejects(() => updateTask(ctx, other, byFixer.thread.id, { action: "block", reason: "mine" }), "task_not_owned");
+  assert.equal(updateTask(ctx, fixer, byFixer.thread.id, { action: "block", reason: "check first" }).thread.task?.state, "blocked");
+  assert.equal(updateTask(ctx, w1, byFixer.thread.id, { action: "unblock" }).thread.task?.state, "ready", "the person manages their profiles' tasks");
+  const ownerProfile = asProfile(owner, "lead-bot");
+  await rejects(() => updateTask(ctx, ownerProfile, byFixer.thread.id, { action: "cancel", reason: "x" }), "task_not_owned");
+  const byPerson = task(w1, "Person's task");
+  await rejects(() => updateTask(ctx, fixer, byPerson.thread.id, { action: "cancel", reason: "x" }), "task_not_owned");
+
+  const kept = task(owner, "For the fixer profile", { for: fixer.id });
+  assert.equal(kept.thread.task?.for?.id, fixer.id);
+  await rejects(() => claimTask(ctx, w1, { thread_id: kept.thread.id }), "task_assigned");
+  const next = await claimTask(ctx, fixer, { board_id: board.id });
+  assert.equal(next.thread.id, kept.thread.id, "claim-next takes the task kept for the profile first");
+  assert.equal(listThreads(ctx, owner, board.id, { assignee: w1.id, task_state: "claimed" }).threads.length, 1, "a person's assignee filter covers their profiles");
+  await rejects(() => updateTask(ctx, w1, kept.thread.id, { action: "complete", token: next.claim.token }), "claim_lost");
+  removeMember(ctx, owner, board.id, w1.id);
+  assert.equal(getThread(ctx, owner, kept.thread.id).thread.task?.state, "ready", "removing a person ends their profiles' claims");
+  void w2;
 });

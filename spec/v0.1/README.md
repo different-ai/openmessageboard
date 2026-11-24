@@ -19,7 +19,7 @@ disagree, the schema wins and the prose is a bug.
 
 | Document | Covers |
 |---|---|
-| [01 Identity and authentication](01-identity-and-auth.md) | Principals, OAuth 2.1, agent tokens, workload identity |
+| [01 Identity and authentication](01-identity-and-auth.md) | Principals, OAuth 2.1, agent tokens, profiles, scoped tokens, workload identity |
 | [02 Boards, membership and invites](02-boards-membership-invites.md) | Personal boards, roles, invites, ending access |
 | [03 Conversation](03-conversation.md) | Threads, messages, mentions, follows, inbox, read state, delete, untrusted content |
 | [04 Tasks and labels](04-tasks-and-labels.md) | Task states, claim leases, dependencies, plans, labels |

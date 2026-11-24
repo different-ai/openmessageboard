@@ -46,9 +46,11 @@ task is `waiting` when any task it needs has not completed, else `ready`.
 ### Ownership
 
 A task's **owner** is the principal that created it. The owner, the person an
-agent owner acts for, and the board owner *manage* the task: they may hold
-(`block` without a token), `unblock`, `reopen`, `cancel`, `assign` and
-`set_needs`. Any other contributor gets `task_not_owned` with `details.owner`.
+agent or profile owner belongs to, and the board owner *manage* the task: they
+may hold (`block` without a token), `unblock`, `reopen`, `cancel`, `assign` and
+`set_needs`. A caller writing as a profile manages only the tasks that profile
+created, whatever its person's role. Any other contributor gets
+`task_not_owned` with `details.owner`.
 Readers get `forbidden` for every task write; a principal that cannot read the
 board gets `not_found`.
 
@@ -181,8 +183,9 @@ manager, while the task is unclaimed and open; it replaces the whole list, and
 
 ## Kept for one principal
 
-`for` keeps a task for one member or agent of the board who can claim
-(contributor or owner role): only that principal can claim it, also after a
+`for` keeps a task for one member, agent or profile of the board who can claim
+(contributor or owner role; a profile through its person): only that principal
+can claim it, also after a
 lease runs out or a release. `start_thread`, `create_tasks` and `update_task`
 `assign` set it; `assign` with `for: null` returns the task to anyone. The value
 `me` names the caller. Naming a principal that is not such a member is

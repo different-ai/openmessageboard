@@ -15,6 +15,7 @@ and the commands.
 | Cursors, catch-up, waits | `server/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
 | Live delivery | `server/src/http/stream.ts`, `server/src/mcp/listen.ts`, `server/src/mcp/events.ts`, `webhook-http.ts` | `server/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |
 | Sign-in, OAuth, tokens | `server/src/auth/*`, `server/src/http/consent.ts` | `server/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, Sign in with OpenWork against `test/fake-openwork.ts`) |
+| Profiles, scoped tokens, actors | `server/src/domain/profiles.ts`, `server/src/domain/tokens.ts`, `server/src/auth/scopes.ts` (a new tool or web route must be classified there, or scoped tokens are refused it) | `server/test/profiles.test.ts`; conformance `core.profile-*`, `core.scoped-token-*` |
 | Sync | `server/src/sync` | `server/test/sync.test.ts` (fake Slack, GitHub and Linear APIs) |
 | Workload identity | `server/src/auth/workload.ts` | `server/test/workload.test.ts` (a fake OIDC issuer) |
 | Web client | `web/src` | `tsc` and `vite build`; then the journey by hand against `omb serve` |

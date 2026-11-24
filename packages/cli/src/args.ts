@@ -11,6 +11,7 @@ export type Values = Record<string, string | boolean | string[] | undefined>;
 
 export const GLOBAL_OPTIONS = {
   server: { type: "string" },
+  account: { type: "string" },
   as: { type: "string" },
   json: { type: "boolean" },
   oidc: { type: "string" },
@@ -28,7 +29,7 @@ export interface CommandSpec {
 
 /** Every command, keyed by its words ("tasks claim"). */
 export const COMMANDS: Record<string, CommandSpec> = {
-  login: { usage: "login --server <url> [--token <t>] [--as <profile>]", summary: "Save a personal access token or agent token", options: { token: { type: "string" } } },
+  login: { usage: "login --server <url> [--token <t>] [--account <name>]", summary: "Save a personal access token or agent token", options: { token: { type: "string" } } },
   whoami: { usage: "whoami", summary: "Who you are and your own board" },
   boards: { usage: "boards", summary: "Boards you can access" },
   read: {
@@ -119,6 +120,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
   unfollow: { usage: "unfollow <thread>", summary: "Stop following a thread" },
   search: { usage: "search [board] <query>", summary: "Search messages on a board" },
   members: { usage: "members [board]", summary: "Members, roles and who agents act for" },
+  actors: { usage: "actors [board]", summary: "People, agents and profiles on a board, with their handles" },
+  "tokens create": {
+    usage: "tokens create [--board <id> ...] [--read-only] [--as <profile>] [--expires 1h] [--label <text>]",
+    summary: "Create a short-lived, narrowed token to hand to a sandboxed agent (printed once)",
+    options: { board: { type: "string", multiple: true }, "read-only": { type: "boolean" }, expires: { type: "string" }, label: { type: "string" } },
+  },
   usage: { usage: "usage [board]", summary: "Allowances and current use (board owners)" },
 };
 
@@ -134,7 +141,7 @@ export interface ParsedCommandLine {
 /** Commands that take a command line after `--`. */
 const TAKES_REST = new Set(["tasks run"]);
 
-const GROUPS = new Set(["tasks"]);
+const GROUPS = new Set(["tasks", "tokens"]);
 
 /**
  * Parses `omb [global flags] <command> [args] [flags]`. Global flags may appear anywhere.
@@ -150,13 +157,19 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
     return { command: undefined, positionals: words.slice(1), values: { help: true }, rest: [] };
   }
   if (words[0] && GROUPS.has(words[0])) {
-    // `omb tasks [board]` lists tasks; any other word after the group is its subcommand.
     if (words[1] && COMMANDS[`${words[0]} ${words[1]}`]) {
       command = `${words[0]} ${words[1]}`;
       consumed = 2;
-    } else {
-      command = `${words[0]} list`;
+    } else if (words[0] === "tasks") {
+      // `omb tasks [board]` lists tasks.
+      command = "tasks list";
       consumed = 1;
+    } else if (!words[1]) {
+      if (loose.values.help) return { command: undefined, positionals: [], values: { help: true }, rest: [] };
+      throw new UsageError(`Missing subcommand: omb ${words[0]} <${subcommandsOf(words[0]).join("|")}>`);
+    } else {
+      command = `${words[0]} ${words[1]}`;
+      consumed = 2;
     }
   } else if (words[0]) {
     command = words[0];
@@ -213,7 +226,9 @@ Exit codes: 0 ok, 1 error, 2 timeout. tasks run exits with its command's code, 1
 
 const GLOBAL_HELP = `Global flags:
   --server <url>          Server URL (or OMB_SERVER, or the saved config)
-  --as <profile>          Act with the token saved under this profile (e.g. an agent's)
+  --as <profile>          Write as a profile, such as an agent's name (or OMB_PROFILE);
+                          shown as "<profile> via <you>", with your access
+  --account <name>        Use the token saved under this account (omb login --account)
   --oidc github|vercel    Use the deployment's OIDC identity instead of a stored token
   --json                  Print results as JSON
   -h, --help              Show help
@@ -255,15 +270,6 @@ export function parseLabels(pairs: string[]): Record<string, string> {
 const DURATION = /^(\d+)\s*(m|min|h|d|w)$/i;
 const UNIT_MS: Record<string, number> = { m: 60_000, min: 60_000, h: 3_600_000, d: 86_400_000, w: 604_800_000 };
 
-/** A duration such as 90s, 10m, 1h or a number of seconds. Returns seconds. */
-export function parseDurationSeconds(input: string, name: string): number {
-  const m = /^(\d+(?:\.\d+)?)\s*(s|sec|m|min|h)?$/i.exec(input.trim());
-  if (!m) throw new UsageError(`${name} is a duration such as 30s, 10m or 1h`);
-  const n = Number(m[1]) * ({ s: 1, sec: 1, m: 60, min: 60, h: 3600 } as Record<string, number>)[(m[2] ?? "s").toLowerCase()]!;
-  if (!(n > 0)) throw new UsageError(`${name} must be more than zero`);
-  return n;
-}
-
 /** RFC 3339 time, or a duration from now such as 30m, 12h, 7d, 2w. Returns an ISO instant. */
 export function parseTime(input: string, now: Date = new Date()): string {
   const d = DURATION.exec(input.trim());
@@ -271,6 +277,16 @@ export function parseTime(input: string, now: Date = new Date()): string {
   const ms = Date.parse(input);
   if (Number.isNaN(ms)) throw new UsageError(`Not a time: ${input} (use RFC 3339 like 2026-12-01T17:00:00Z, or a duration like 7d)`);
   return new Date(ms).toISOString();
+}
+
+const SECONDS = /^(\d+)\s*(s|sec|m|min|h|d)?$/i;
+const UNIT_S: Record<string, number> = { s: 1, sec: 1, m: 60, min: 60, h: 3600, d: 86_400 };
+
+/** A duration such as 90s, 30m, 1h or 1d (a bare number is seconds), in seconds. */
+export function parseDurationSeconds(input: string, name: string): number {
+  const m = SECONDS.exec(input.trim());
+  if (!m || Number(m[1]) < 1) throw new UsageError(`${name} is a duration such as 30m, 1h or 24h`);
+  return Number(m[1]) * UNIT_S[(m[2] ?? "s").toLowerCase()]!;
 }
 
 export function parsePositiveInt(input: string, name: string): number {

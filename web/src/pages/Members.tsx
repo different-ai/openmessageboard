@@ -1,13 +1,15 @@
 import type { Member } from "@openmessageboard/protocol";
-import { useId, useState, type FormEvent } from "react";
+import { Fragment, useId, useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useBoard } from "../board";
+import { ProfileRows, useActors } from "../profiles";
 import { formatDate, formatZoned, fromLocalInput, toLocalInput } from "../format";
 import { useTitle } from "../router";
 import { Author, Avatar, ConfirmDialog, ErrorNote, useToast } from "../ui";
 
 export function Members() {
   const { board, members, isOwner, meId } = useBoard();
+  const actors = useActors(board.id);
   useTitle(`Members · ${board.name}`);
   const sorted = [...members].sort((a, b) => {
     const rank = { owner: 0, contributor: 1, reader: 2 } as const;
@@ -23,7 +25,8 @@ export function Members() {
       <p className="muted">
         {isOwner
           ? "Change roles, set when access ends, or remove members. Removing a person also removes their agents."
-          : "Everyone who can see this board. Only the owner can change roles."}
+          : "Everyone who can see this board. Only the owner can change roles."}{" "}
+        Profiles under a person write with that person's access.
       </p>
       <section aria-labelledby="people-title">
         <h2 id="people-title" className="section-title">
@@ -31,7 +34,10 @@ export function Members() {
         </h2>
         <ul className="rows">
           {people.map((m) => (
-            <MemberRow key={m.principal.id} m={m} canManage={isOwner && m.role !== "owner"} isMe={m.principal.id === meId} />
+            <Fragment key={m.principal.id}>
+              <MemberRow m={m} canManage={isOwner && m.role !== "owner"} isMe={m.principal.id === meId} />
+              <ProfileRows actors={actors} personId={m.principal.id} />
+            </Fragment>
           ))}
         </ul>
       </section>

@@ -20,13 +20,17 @@ import { read, tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, currentMonth, getBoardRow, nextMonthStart, nowIso, requireMember, requireThread } from "./access.js";
+import { activeMembership, currentMonth, getBoardRow, holderId, nextMonthStart, nowIso, requireMember, requireThread } from "./access.js";
+import { canChangeMessage, coveredPrincipalIds } from "./profiles.js";
 import { recordEvent } from "./boards.js";
 import { encodeCursor, encodePage, decodePage } from "./cursors.js";
 import type { Actor, BoardRow, MessageRow, ThreadRow } from "./model.js";
 import { presentMessage, presentMessages, presentThread, presentThreads } from "./present.js";
 import { boardLimits } from "./plans.js";
 import { finishTaskCreation, prepareTask, taskStateClause, type NewTask } from "./tasks.js";
+
+// Task writes live in tasks.ts; these re-exports keep existing imports from this module working.
+export { claimTask, createTasks, renewTask, updateTask } from "./tasks.js";
 
 type Emit = (e: HubEvent) => void;
 
@@ -80,12 +84,14 @@ export function rejectReservedLabels(keys: Iterable<string>): void {
   }
 }
 
+type MentionRow = { id: string; kind: Actor["kind"]; owner_id: string | null; profile_name: string | null };
+
 function resolveMentions(ctx: AppContext, boardId: string, ids: string[] | undefined): string[] {
   const unique = [...new Set(ids ?? [])];
   if (unique.length > MAX_MENTIONS) throw invalid(`Up to ${MAX_MENTIONS} mentions per message`);
   for (const id of unique) {
-    const p = ctx.db.prepare("SELECT id, kind, owner_id FROM principals WHERE id = ?").get(id) as { id: string; kind: Actor["kind"]; owner_id: string | null } | undefined;
-    if (!p || !activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id })) {
+    const p = ctx.db.prepare("SELECT id, kind, owner_id, profile_name FROM principals WHERE id = ?").get(id) as MentionRow | undefined;
+    if (!p || !activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name })) {
       throw invalid(`Mentioned principal ${id} is not a member of this board`, { principal_id: id });
     }
   }
@@ -168,7 +174,7 @@ export function usageWarnings(ctx: AppContext, boardId: string): AllowanceUsage[
 export function checkWriteRate(ctx: AppContext, actor: Actor, boardId: string, opts?: WriteOptions): void {
   if (opts?.internal) return;
   const r = ctx.config.rateLimits;
-  if (actor.kind !== "integration") ctx.rate.hit(`w:p:${actor.id}`, r.writes_per_minute_principal, 60_000);
+  if (actor.kind !== "integration") ctx.rate.hit(`w:p:${holderId(actor)}`, r.writes_per_minute_principal, 60_000);
   ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
 }
 
@@ -179,8 +185,8 @@ export function addInboxItem(
   emit: Emit,
   item: { principalId: string; kind: "mention" | "reply" | "task_assigned"; boardId: string; threadId: string; messageId: string | null },
 ): void {
-  const p = ctx.db.prepare("SELECT id, kind, owner_id FROM principals WHERE id = ?").get(item.principalId) as { id: string; kind: Actor["kind"]; owner_id: string | null } | undefined;
-  if (!p || !activeMembership(ctx, item.boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id })) return;
+  const p = ctx.db.prepare("SELECT id, kind, owner_id, profile_name FROM principals WHERE id = ?").get(item.principalId) as MentionRow | undefined;
+  if (!p || !activeMembership(ctx, item.boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name })) return;
   const id = newId("ix");
   const info = ctx.db
     .prepare("INSERT INTO inbox_items (id, principal_id, kind, board_id, thread_id, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -373,8 +379,10 @@ export function deleteMessage(ctx: AppContext, actor: Actor, messageId: string):
     const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId) as MessageRow | undefined;
     if (!row) throw notFound("Message");
     const { membership } = requireMember(ctx, actor, row.board_id, "reader", "Message");
-    const ownsAuthorAgent = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id === actor.id;
-    if (row.author_id !== actor.id && membership.role !== "owner" && !ownsAuthorAgent) throw forbidden("You can delete your own messages; owners can delete any");
+    const ownerId = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id ?? null;
+    if (!canChangeMessage(actor, { id: row.author_id, owner_id: ownerId }, membership.role)) {
+      throw forbidden(actor.profile ? "A profile can delete only what it wrote" : "You can delete your own messages; owners can delete any");
+    }
     if (!row.deleted_at) {
       const now = nowIso(ctx);
       ctx.db.prepare("UPDATE messages SET body = NULL, deleted_at = ?, body_bytes = 0 WHERE id = ?").run(now, row.id);
@@ -473,8 +481,10 @@ export function listThreads(ctx: AppContext, actor: Actor, boardId: string, inpu
     }
     if (input.task_state) sql += taskStateClause("board.task", input.task_state, params) ?? "";
     if (input.assignee) {
-      sql += " AND t.task_assignee_id = ?";
-      params.push(input.assignee === "me" ? actor.id : input.assignee);
+      // A person's ID covers their profiles; "me" as a profile is just that profile.
+      const ids = input.assignee === "me" && actor.profile ? [actor.id] : coveredPrincipalIds(ctx, input.assignee === "me" ? actor.id : input.assignee);
+      sql += ` AND t.task_assignee_id IN (${ids.map(() => "?").join(",")})`;
+      params.push(...ids);
     }
     if (input.for) {
       sql += " AND t.task_for_id = ?";

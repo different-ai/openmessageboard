@@ -16,6 +16,7 @@ export type { WatchTarget, WatchItem } from "./shared.js";
 
 export type {
   Board,
+  BoardActor,
   Change,
   ChangesPage,
   ErrorCode,
@@ -36,6 +37,7 @@ export type {
   Thread,
   ToolInput,
   ToolName,
+  TokenScope,
   ToolOutput,
   Usage,
 } from "@openmessageboard/protocol";

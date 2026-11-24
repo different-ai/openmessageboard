@@ -2,7 +2,7 @@ import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { constants } from "node:os";
 import { MAX_PLAN_TASKS, TASK_STATE_FILTERS, type TaskAction, type TaskStateFilter } from "@openmessageboard/protocol";
-import { OmbError, createIdempotencyKey, isOmbError, type ClaimedTask, type OmbErrorCode, type PlanTask, type Thread } from "@openmessageboard/sdk";
+import { OmbError, createIdempotencyKey, isOmbError, type ClaimedTask, type OmbErrorCode, type PlanTask, type TaskClaim, type Thread } from "@openmessageboard/sdk";
 import { UsageError, flag, list, parseDurationSeconds, parseLabels, parsePositiveInt, splitOptionalBoard, str, threadIdFrom, type Values } from "./args.js";
 import { forgetClaim, loadClaim, saveClaim } from "./claims.js";
 import type { Context } from "./commands.js";
@@ -37,29 +37,44 @@ function interruptSignal(ctx: Context): { signal: AbortSignal; dispose: () => vo
   return { signal: abort.signal, dispose };
 }
 
-/** The token for a task: `--token`, else the claim this machine stored when it claimed. */
+/** Who a stored claim belongs to: the credential and the profile this command runs as. */
+function holderOf(ctx: Context): string {
+  const c = ctx.connection();
+  const credential = c.source === "account" ? `account:${c.account}` : c.source;
+  return `${credential}/${c.profile ?? ""}`;
+}
+
+function remember(ctx: Context, threadId: string, claim: TaskClaim): void {
+  saveClaim(ctx.configPath, ctx.connection().server, holderOf(ctx), threadId, claim);
+}
+
+function forget(ctx: Context, threadId: string): void {
+  forgetClaim(ctx.configPath, ctx.connection().server, holderOf(ctx), threadId);
+}
+
+/** The token for a task: `--token`, else the claim this machine stored when it claimed as the same holder. */
 function storedToken(ctx: Context, threadId: string, values: Values): string | undefined {
-  return str(values, "token") ?? loadClaim(ctx.configPath, ctx.connection().server, threadId)?.token;
+  return str(values, "token") ?? loadClaim(ctx.configPath, ctx.connection().server, holderOf(ctx), threadId)?.token;
 }
 
 function requireToken(ctx: Context, threadId: string, values: Values): string {
   const token = storedToken(ctx, threadId, values);
-  if (!token) throw cliError("claim_not_held", `You hold no claim on ${threadId} here. Claim it with omb tasks claim ${threadId}, or pass --token.`);
+  if (!token) {
+    const as = ctx.connection().profile;
+    throw cliError("claim_not_held", `You hold no claim on ${threadId} here${as ? ` as ${as}` : ""}. Claim it with omb tasks claim ${threadId}, or pass --token.`);
+  }
   return token;
 }
 
-function remember(ctx: Context, claimed: ClaimedTask): void {
-  saveClaim(ctx.configPath, ctx.connection().server, claimed.id, claimed.claim);
-}
 
 /** Runs a settle call; forgets the stored claim when it succeeds or the claim turns out to be over. */
 async function settling<T>(ctx: Context, threadId: string, fn: () => Promise<T>): Promise<T> {
   try {
     const out = await fn();
-    forgetClaim(ctx.configPath, threadId);
+    forget(ctx, threadId);
     return out;
   } catch (err) {
-    if (isOmbError(err, "claim_lost")) forgetClaim(ctx.configPath, threadId);
+    if (isOmbError(err, "claim_lost")) forget(ctx, threadId);
     throw err;
   }
 }
@@ -154,7 +169,7 @@ async function tasksCreate(ctx: Context, args: string[], values: Values): Promis
     ...(forArg ? { for: forArg } : {}),
     ...(flag(values, "claim") ? { claim: true } : {}),
   });
-  if (res.claim) saveClaim(ctx.configPath, ctx.connection().server, res.thread.id, res.claim);
+  if (res.claim) remember(ctx, res.thread.id, res.claim);
   if (ctx.json) return ctx.printJson(res);
   const state = res.thread.task?.state;
   ctx.out(
@@ -209,7 +224,7 @@ async function tasksClaim(ctx: Context, args: string[], values: Values): Promise
     ctx.info(`${noTask(values)} within ${waited}s`);
     return 2;
   }
-  remember(ctx, claimed);
+  remember(ctx, claimed.id, claimed.claim);
   if (ctx.json) {
     ctx.printJson({ thread: claimed.thread, claim: claimed.claim });
     return 0;
@@ -239,10 +254,10 @@ async function tasksRenew(ctx: Context, args: string[], values: Values): Promise
   try {
     res = await ctx.client().renewTask({ thread_id: threadId, token, ...(leaseSeconds ? { lease_seconds: leaseSeconds } : {}) });
   } catch (err) {
-    if (isOmbError(err, "claim_lost")) forgetClaim(ctx.configPath, threadId);
+    if (isOmbError(err, "claim_lost")) forget(ctx, threadId);
     throw err;
   }
-  saveClaim(ctx.configPath, ctx.connection().server, threadId, res.claim);
+  remember(ctx, threadId, res.claim);
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Renewed ${threadId} until ${res.claim.until} (lease ends in ${timeLeft(res.claim.until, ctx.now())})`);
 }
@@ -324,7 +339,7 @@ async function tasksCancel(ctx: Context, args: string[]): Promise<void> {
   need(args, 2, "tasks cancel <thread> <reason>");
   const threadId = threadIdFrom(args[0]!);
   const res = await ctx.client().updateTask({ thread_id: threadId, action: "cancel", reason: args[1]! });
-  forgetClaim(ctx.configPath, threadId);
+  forget(ctx, threadId);
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Canceled ${threadId}: ${args[1]}`);
 }
@@ -356,7 +371,7 @@ async function tasksRun(ctx: Context, args: string[], values: Values, rest: stri
     ctx.info(`${noTask(values)} within ${waited}s`);
     return 2;
   }
-  remember(ctx, claimed);
+  remember(ctx, claimed.id, claimed.claim);
   const id = claimed.id;
   ctx.info(`Claimed ${id} (lease ends in ${timeLeft(claimed.until)}); running ${rest.join(" ")}`);
 
@@ -374,7 +389,7 @@ async function tasksRun(ctx: Context, args: string[], values: Values, rest: stri
       if (lost || stopping) return;
       try {
         await claimed.renew();
-        remember(ctx, claimed);
+        remember(ctx, claimed.id, claimed.claim);
       } catch (err) {
         if (isOmbError(err, "claim_lost")) {
           lost = true;
@@ -403,7 +418,7 @@ async function tasksRun(ctx: Context, args: string[], values: Values, rest: stri
     return code;
   };
   if (lost) {
-    forgetClaim(ctx.configPath, id);
+    forget(ctx, id);
     return report("claim_lost", 1);
   }
   if (stopping) {
