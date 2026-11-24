@@ -102,6 +102,75 @@ jobs:
         if: always()
         run: cat /tmp/omb-server.log 2>/dev/null || true
 
+  cloudflare:
+    name: Cloudflare conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build protocol, core and web
+        run: |
+          pnpm --filter @openmessageboard/protocol run build
+          pnpm --filter @openmessageboard/core run build
+          pnpm --filter @openmessageboard/web run build
+
+      - name: Unit tests
+        run: pnpm --filter @openmessageboard/server-cloudflare run test
+
+      # The Worker and its Durable Object run locally in workerd (no Cloudflare account). Test mode lets the
+      # conformance runner receive webhooks on 127.0.0.1 and mint identities with a one-off admin token.
+      - name: Start the Worker (workerd, test mode)
+        working-directory: implementations/cloudflare
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          token=$(openssl rand -hex 24)
+          echo "::add-mask::$token"
+          echo "OMB_TEST_ADMIN_TOKEN=$token" >> "$GITHUB_ENV"
+          nohup node_modules/.bin/wrangler dev --port 8788 --ip 127.0.0.1 --show-interactive-dev-session=false \
+            --persist-to /tmp/omb-cf-state \
+            --var OMB_PUBLIC_URL:http://localhost:8788 --var "OMB_SECRET:$(openssl rand -hex 32)" --var OMB_TEST_MODE:1 \
+            --var OMB_AUTH_PROVIDERS:email --var "OMB_TEST_ADMIN_TOKEN:$token" \
+            --var OMB_LIMIT_POSTS_PER_MONTH:200 --var OMB_LIMIT_MEMBERS_PER_BOARD:4 \
+            --var OMB_RATE_WRITES_PER_MINUTE_PRINCIPAL:1000 --var OMB_RATE_WRITES_PER_MINUTE_BOARD:3000 \
+            --var OMB_RATE_READS_PER_MINUTE_PRINCIPAL:5000 --var OMB_RATE_STREAMS_PER_MINUTE_PRINCIPAL:500 \
+            --var OMB_RATE_REDEMPTIONS_PER_HOUR_PRINCIPAL:500 > /tmp/omb-cf.log 2>&1 &
+          for _ in $(seq 1 90); do
+            if curl -fsS http://localhost:8788/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8788/healthz
+
+      - name: Mint test identities
+        run: curl -fsS -X POST -H "authorization: Bearer $OMB_TEST_ADMIN_TOKEN" http://localhost:8788/x/test/identities -o conformance/identities-cloudflare.json
+
+      - name: Conformance
+        run: pnpm --filter @openmessageboard/conformance start --url http://localhost:8788 --identities "$GITHUB_WORKSPACE/conformance/identities-cloudflare.json"
+
+      - name: Worker log
+        if: always()
+        run: cat /tmp/omb-cf.log 2>/dev/null || true
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest
@@ -185,7 +254,7 @@ jobs:
   # again. It approves what CI checked, not what a reviewer read.
   approve:
     name: approve when CI passes
-    needs: [test, docker, dco, release-source]
+    needs: [test, cloudflare, docker, dco, release-source]
     if: >-
       always() &&
       github.event_name == 'pull_request' &&

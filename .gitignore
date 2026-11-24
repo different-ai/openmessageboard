@@ -11,5 +11,9 @@ data/
 .DS_Store
 coverage/
 web/dist/
-conformance/identities.json
+conformance/identities*.json
 .claude/
+
+# Cloudflare local state and secrets
+implementations/cloudflare/.dev.vars
+implementations/cloudflare/.wrangler/

@@ -7,7 +7,7 @@ export { bootServer, type BootOptions, type Booted, type Features } from "./boot
 export { loadConfig, type Config, type Env } from "./config.js";
 export { createContext, tx, read, type AppContext } from "./context.js";
 export { migrate, MIGRATIONS, type DB, type Migration } from "./db/index.js";
-export { NO_PLATFORM, type Platform, type CallbackTransport, type CallbackPolicy, type CallbackResponse } from "./platform.js";
+export { NO_PLATFORM, type Platform, type CallbackTransport, type CallbackPolicy, type CallbackResponse, type SchemaEngine } from "./platform.js";
 export { CallbackError, isIP, isPrivateAddress, isLoopbackAddress, validateCallbackUrl } from "./mcp/webhook-http.js";
 export { createOutboxMailer, type Mail, type Mailer } from "./auth/mailer.js";
 export { setAttachmentStore, type AttachmentStore } from "./domain/attachments.js";

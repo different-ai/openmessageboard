@@ -17,15 +17,7 @@ import { registerChannelRoutes } from "./channels.js";
 import { registerOAuthConsentRoutes } from "./consent.js";
 import { clientMetadataDocument } from "../auth/openwork.js";
 import type { AppEnv, RouteModule } from "./util.js";
-
-/** Content security policy for the browser client's HTML. */
-export const WEB_CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
-
-/** Paths the server owns; everything else may be the browser client. */
-export function isServerPath(p: string): boolean {
-  return p.startsWith("/api/") || p === "/mcp" || p.startsWith("/.well-known/") || p.startsWith("/hooks/");
-}
+export { WEB_CSP, isServerPath } from "./paths.js";
 
 export interface AppOptions {
   /** Registers the browser client's routes (static files and the HTML shell). Runtimes serve it their own way. */

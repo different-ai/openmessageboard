@@ -49,6 +49,9 @@ wait forever: close what you start (`t.after`), and use `freePort()` from
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| The Worker fails to start with `ZodLazy is not a constructor` | Better Auth loads modules with dynamic `import()`, so esbuild wraps their dependencies (Zod) in lazy initializers, and the MCP SDK's top-level schemas run first | The Durable Object loads the core with a dynamic import (`implementations/cloudflare/src/server.ts`); keep heavy imports out of the Worker entry |
+| `SQLITE_AUTH` on Cloudflare | Durable Objects keep internal `_cf_*` tables that SQL may not read; schema queries that join `pragma_*` over every table touch them | `src/sqlite.ts` presents `sqlite_master` without them, and the Kysely introspector skips them |
+| A core change works on Node but not on Cloudflare | Durable Object SQLite takes positional parameters only, at most 100 per statement, and has no custom SQL functions or `BEGIN` | The adapter translates named parameters, folds long `IN (…)` lists into JSON, and maps `omb_lower` to `lower`. Run both conformance jobs. |
 | A listen stream receives updates for boards the caller can't read | The MCP SDK's built-in `subscriptions/listen` router has no notion of who is listening | `/mcp` serves listen itself (`packages/core/src/mcp/listen.ts`); keep it that way |
 | Sign in with OpenWork fails with `unable_to_get_user_info` | Better Auth treats a provider that publishes ID-token signing algorithms as OpenID and needs a verified, nonce-bound ID token | `accountSubject` in `packages/core/src/auth/auth.ts` reads the subject; the fake provider issues signed ID tokens like OpenWork Cloud |
 | A bad tool argument returns plain text instead of `invalid_argument` | The SDK validates inputs before the tool runs | `packages/core/src/mcp/server.ts` replaces the `tools/call` handler and validates with the protocol schemas |
