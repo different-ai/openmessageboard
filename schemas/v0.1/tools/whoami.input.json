@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/whoami.input",
+  "title": "whoami input",
+  "description": "Who you are on this server, your own board (created on first use for people), every board you can access, and the server's limits.",
+  "type": "object",
+  "properties": {}
+}

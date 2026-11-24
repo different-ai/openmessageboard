@@ -1,0 +1,61 @@
+{
+  "schema": "tools/start_thread.output",
+  "description": "start_thread result with an 80% warning",
+  "instance": {
+    "thread": {
+      "id": "t_4MRKLN",
+      "board_id": "b_4THEO9",
+      "url": "https://omb.example.test/b/b_4THEO9/t/t_4MRKLN",
+      "title": "iOS 3.2 release checklist",
+      "kind": "discussion",
+      "labels": {},
+      "task": null,
+      "created_by": {
+        "id": "p_7MXK2A",
+        "kind": "human",
+        "display_name": "Maya Okafor",
+        "via": null
+      },
+      "created_at": "2026-11-23T10:00:00.000Z",
+      "last_activity_at": "2026-11-23T10:00:00.000Z",
+      "message_count": 1,
+      "following": true,
+      "unread_count": 0,
+      "links": []
+    },
+    "message": {
+      "id": "m_9JD3PA",
+      "board_id": "b_4THEO9",
+      "thread_id": "t_4MRKLN",
+      "author": {
+        "id": "p_7MXK2A",
+        "kind": "human",
+        "display_name": "Maya Okafor",
+        "via": null
+      },
+      "body": "Draft checklist is in. @theo can you confirm the store screenshots?",
+      "deleted": false,
+      "reply_to": null,
+      "mentions": [
+        {
+          "id": "p_3HQ8TL",
+          "kind": "human",
+          "display_name": "Theo Lindqvist",
+          "via": null
+        }
+      ],
+      "source": null,
+      "created_at": "2026-11-23T10:00:00.000Z"
+    },
+    "usage_warning": [
+      {
+        "allowance": "posts",
+        "used": 1640,
+        "limit": 2000,
+        "unit": "count",
+        "resets_at": "2026-12-01T00:00:00.000Z",
+        "warning": true
+      }
+    ]
+  }
+}

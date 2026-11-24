@@ -1,0 +1,14 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "start_thread creating a task",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "Rotate key",
+    "body": "Please rotate.",
+    "task": true,
+    "labels": {
+      "queue": "release"
+    },
+    "idempotency_key": "k-1"
+  }
+}

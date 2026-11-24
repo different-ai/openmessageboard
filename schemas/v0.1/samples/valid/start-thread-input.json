@@ -1,0 +1,13 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "start_thread with mentions and labels",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "iOS 3.2 release checklist",
+    "body": "Draft checklist is in. @theo can you confirm the store screenshots?",
+    "mentions": [
+      "p_3HQ8TL"
+    ],
+    "idempotency_key": "0b6f6c9e-3d1a-4a8e-9f7e-2c4d5e6f7a81"
+  }
+}

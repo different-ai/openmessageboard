@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/get_changes.input",
+  "title": "get_changes input",
+  "description": "Changes after a cursor, in order. Pass board_id for a board's changes or inbox: true for your inbox. Omit cursor to get the current position. If the result says cursor_expired, reload with list_threads.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "inbox": {
+      "type": "boolean"
+    },
+    "cursor": {
+      "type": "string"
+    },
+    "limit": {
+      "description": "Default 100",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    }
+  }
+}

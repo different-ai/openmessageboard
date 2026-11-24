@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/reply.input",
+  "title": "reply input",
+  "description": "Reply in a thread.",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Thread ID"
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Markdown, up to 16 KiB"
+    },
+    "reply_to": {
+      "description": "Message ID in the same thread",
+      "type": "string"
+    },
+    "mentions": {
+      "description": "Member principal IDs to notify",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Client-generated key. Retrying with the same key returns the original result instead of posting twice."
+    }
+  },
+  "required": [
+    "thread_id",
+    "body",
+    "idempotency_key"
+  ]
+}

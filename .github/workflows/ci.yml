@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck, test and conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          pnpm --version
+          echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build protocol and SDK
+        run: |
+          pnpm --filter @openmessageboard/protocol run build
+          pnpm --filter @openmessageboard/sdk run build
+
+      - name: Typecheck
+        run: |
+          pnpm -r run typecheck
+          server/node_modules/.bin/tsc -p loadtest/tsconfig.json
+
+      - name: Test
+        run: pnpm -r run test
+
+      - name: Build web and server
+        run: |
+          pnpm --filter @openmessageboard/web run build
+          pnpm --filter @openmessageboard/server run build
+
+      # CI can't reach OpenWork Cloud, so the server signs people in by email code (test mode mints tokens).
+      - name: Start server (test mode)
+        env:
+          OMB_TEST_MODE: "1"
+          OMB_AUTH_PROVIDERS: email
+          OMB_LIMIT_POSTS_PER_MONTH: "150"
+          OMB_LIMIT_MEMBERS_PER_BOARD: "4"
+          # Generous burst limits keep the conformance run fast; quota cases read limits from discovery.
+          OMB_RATE_WRITES_PER_MINUTE_PRINCIPAL: "1000"
+          OMB_RATE_WRITES_PER_MINUTE_BOARD: "3000"
+          OMB_RATE_READS_PER_MINUTE_PRINCIPAL: "5000"
+          OMB_RATE_STREAMS_PER_MINUTE_PRINCIPAL: "500"
+          OMB_RATE_REDEMPTIONS_PER_HOUR_PRINCIPAL: "500"
+          OMB_DATA_DIR: /tmp/omb-ci-data
+        run: |
+          mkdir -p "$OMB_DATA_DIR"
+          nohup node server/dist/cli.js serve > /tmp/omb-server.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8787/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8787/healthz
+
+      - name: Mint test identities
+        env:
+          OMB_TEST_MODE: "1"
+          OMB_AUTH_PROVIDERS: email
+          OMB_DATA_DIR: /tmp/omb-ci-data
+        run: node server/dist/cli.js admin test-identities --out conformance/identities.json
+
+      - name: Conformance
+        # pnpm hands every argument after the script name to the script (a "--" would be passed on too).
+        run: pnpm --filter @openmessageboard/conformance start --url http://localhost:8787 --identities "$GITHUB_WORKSPACE/conformance/identities.json"
+
+      - name: Server log
+        if: always()
+        run: cat /tmp/omb-server.log 2>/dev/null || true
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: openmessageboard:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the image
+        run: |
+          test "$(docker inspect --format '{{.Config.User}}' openmessageboard:ci)" = node
+          docker run -d --name omb -p 8787:8787 -e OMB_AUTH_PROVIDERS=email -e OMB_METRICS_TOKEN=ci-metrics openmessageboard:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8787/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8787/healthz
+          curl -fsS http://localhost:8787/.well-known/openmessageboard > /dev/null
+          curl -fsS -H "x-omb-metrics-token: ci-metrics" http://localhost:8787/metrics
+          docker exec omb omb --help > /dev/null
+          docker exec omb litestream version
+
+      - name: Container log
+        if: always()
+        run: docker logs omb 2>/dev/null || true

@@ -1,0 +1,26 @@
+{
+  "schema": "entities/Principal",
+  "description": "whoami principal with its plan and effective limits",
+  "instance": {
+    "id": "p_7MXK2A",
+    "kind": "human",
+    "display_name": "Maya Okafor",
+    "email": "maya@example.test",
+    "owner": null,
+    "plan": "openwork",
+    "limits": {
+      "boards_owned": 3,
+      "members_per_board": 25,
+      "posts_per_month": 10000,
+      "live_connections_per_board": 50,
+      "message_bytes": 32768,
+      "storage_bytes": 1073741824,
+      "webhook_subscriptions_per_principal": 25,
+      "webhook_subscriptions_per_board": 100,
+      "agent_posts_per_day": 1000,
+      "agent_consecutive_limit": 20,
+      "event_retention_days": 30,
+      "waits_per_principal": 4
+    }
+  }
+}

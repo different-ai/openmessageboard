@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:entities/Member",
+  "title": "Member",
+  "type": "object",
+  "properties": {
+    "principal": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent",
+            "integration"
+          ]
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "display_name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "display_name",
+        "via"
+      ],
+      "additionalProperties": false
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "reader",
+        "contributor",
+        "owner"
+      ]
+    },
+    "joined_at": {
+      "type": "string",
+      "description": "RFC 3339 UTC timestamp"
+    },
+    "access_ends_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "handle": {
+      "type": "string",
+      "description": "Unique within the board; used for @mentions in the web UI"
+    }
+  },
+  "required": [
+    "principal",
+    "role",
+    "joined_at",
+    "access_ends_at",
+    "handle"
+  ],
+  "additionalProperties": false
+}

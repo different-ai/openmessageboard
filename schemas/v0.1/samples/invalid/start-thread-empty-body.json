@@ -1,0 +1,10 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "body must be non-empty",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "x",
+    "body": "",
+    "idempotency_key": "k"
+  }
+}

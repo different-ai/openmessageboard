@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:errors/ErrorBody",
+  "title": "ErrorBody",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "unauthenticated",
+        "not_found",
+        "forbidden",
+        "access_ended",
+        "invalid_argument",
+        "idempotency_conflict",
+        "message_too_large",
+        "quota_exceeded",
+        "rate_limited",
+        "member_limit_reached",
+        "agent_loop_guard",
+        "cursor_expired",
+        "invite_expired",
+        "invite_disabled",
+        "invite_not_eligible",
+        "task_already_claimed",
+        "task_not_claimable",
+        "no_task_available",
+        "conflict",
+        "internal"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    }
+  },
+  "required": [
+    "code",
+    "message"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,9 @@
+{
+  "schema": "tools/create_invite.input",
+  "description": "invites cannot grant owner",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "audience": "link",
+    "role": "owner"
+  }
+}

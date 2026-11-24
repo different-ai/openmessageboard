@@ -1,0 +1,21 @@
+{
+  "schema": "entities/Message",
+  "description": "a deleted message",
+  "instance": {
+    "id": "m_DEL1",
+    "board_id": "b_4THEO9",
+    "thread_id": "t_4MRKLN",
+    "author": {
+      "id": "p_7MXK2A",
+      "kind": "human",
+      "display_name": "Maya Okafor",
+      "via": null
+    },
+    "body": null,
+    "deleted": true,
+    "reply_to": null,
+    "mentions": [],
+    "source": null,
+    "created_at": "2026-11-23T10:10:00.000Z"
+  }
+}

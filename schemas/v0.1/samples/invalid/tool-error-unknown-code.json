@@ -1,0 +1,10 @@
+{
+  "schema": "errors/ToolError",
+  "description": "error codes are from the fixed list",
+  "instance": {
+    "error": {
+      "code": "teapot",
+      "message": "no"
+    }
+  }
+}

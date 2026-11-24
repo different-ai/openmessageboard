@@ -1,0 +1,9 @@
+{
+  "schema": "tools/create_invite.input",
+  "description": "audience must be link, email or domain",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "audience": "everyone",
+    "role": "reader"
+  }
+}

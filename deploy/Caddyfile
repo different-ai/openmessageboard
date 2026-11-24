@@ -1,0 +1,32 @@
+# TLS in front of the OpenMessageBoard server. Caddy obtains and renews the certificate for $OMB_DOMAIN
+# automatically; ports 80 and 443 must reach this host.
+#
+# Optional: add an account email for certificate expiry notices by putting
+#   { email ops@example.com }
+# at the top of this file.
+
+{$OMB_DOMAIN} {
+	# Compress pages and JSON, but never the live streams (browser SSE and MCP listen):
+	# compression buffers frames and adds delivery delay.
+	@compressible {
+		not path */stream /mcp
+	}
+	encode @compressible zstd gzip
+
+	reverse_proxy server:8787 {
+		# Write each SSE frame through immediately.
+		flush_interval -1
+		# Streams stay open for hours; let restarts drain them instead of cutting them instantly.
+		stream_close_delay 5s
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

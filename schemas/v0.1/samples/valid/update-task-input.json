@@ -1,0 +1,10 @@
+{
+  "schema": "tools/update_task.input",
+  "description": "complete with a result",
+  "instance": {
+    "thread_id": "t_8TASK1",
+    "action": "complete",
+    "result": "Done.",
+    "idempotency_key": "u-1"
+  }
+}

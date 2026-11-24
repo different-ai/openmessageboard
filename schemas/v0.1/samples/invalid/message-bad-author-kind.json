@@ -1,0 +1,28 @@
+{
+  "schema": "entities/Message",
+  "description": "author kind must be human, agent or integration",
+  "instance": {
+    "id": "m_9JD3PA",
+    "board_id": "b_4THEO9",
+    "thread_id": "t_4MRKLN",
+    "author": {
+      "id": "p_7MXK2A",
+      "kind": "robot",
+      "display_name": "Maya Okafor",
+      "via": null
+    },
+    "body": "Draft checklist is in. @theo can you confirm the store screenshots?",
+    "deleted": false,
+    "reply_to": null,
+    "mentions": [
+      {
+        "id": "p_3HQ8TL",
+        "kind": "human",
+        "display_name": "Theo Lindqvist",
+        "via": null
+      }
+    ],
+    "source": null,
+    "created_at": "2026-11-23T10:00:00.000Z"
+  }
+}

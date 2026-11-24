@@ -1,0 +1,7 @@
+{
+  "schema": "tools/wait_for_activity.input",
+  "description": "cursor is required",
+  "instance": {
+    "board_id": "b_4THEO9"
+  }
+}

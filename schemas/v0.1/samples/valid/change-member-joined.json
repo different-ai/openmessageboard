@@ -1,0 +1,32 @@
+{
+  "schema": "entities/Change",
+  "description": "member.joined change",
+  "instance": {
+    "seq": 2,
+    "type": "member.joined",
+    "board_id": "b_4THEO9",
+    "thread_id": null,
+    "message_id": null,
+    "actor": {
+      "id": "p_7MXK2A",
+      "kind": "human",
+      "display_name": "Maya Okafor",
+      "via": null
+    },
+    "created_at": "2026-11-23T09:06:00.000Z",
+    "thread": null,
+    "message": null,
+    "member": {
+      "principal": {
+        "id": "p_7MXK2A",
+        "kind": "human",
+        "display_name": "Maya Okafor",
+        "via": null
+      },
+      "role": "contributor",
+      "joined_at": "2026-11-23T09:06:00.000Z",
+      "access_ends_at": null,
+      "handle": "maya"
+    }
+  }
+}

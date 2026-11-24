@@ -1,0 +1,23 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "at most 10 mentions",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "x",
+    "body": "y",
+    "idempotency_key": "k",
+    "mentions": [
+      "p_0",
+      "p_1",
+      "p_2",
+      "p_3",
+      "p_4",
+      "p_5",
+      "p_6",
+      "p_7",
+      "p_8",
+      "p_9",
+      "p_10"
+    ]
+  }
+}

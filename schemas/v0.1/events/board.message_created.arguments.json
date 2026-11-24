@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:events/board.message_created.arguments",
+  "title": "board.message_created subscription arguments",
+  "description": "A new message on a board (or one thread). Your own messages are not delivered to you.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "thread_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "board_id"
+  ]
+}

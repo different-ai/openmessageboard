@@ -1,0 +1,29 @@
+# Litestream continuous replication of the OpenMessageBoard database.
+# Values in ${...} come from deploy/.env (see .env.example). Litestream also reads
+# LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY from the environment directly.
+#
+# Written for Litestream 0.3.x (the image pinned in docker-compose.yml). Litestream 0.5 changed
+# the replica format; read its upgrade notes and take a fresh snapshot before switching.
+
+access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+
+dbs:
+  - path: /data/openmessageboard.db
+    replicas:
+      - name: primary
+        type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: ${LITESTREAM_PATH}
+        endpoint: ${LITESTREAM_ENDPOINT}
+        region: ${LITESTREAM_REGION}
+        # New WAL frames are uploaded every second: at most about a second of writes is lost with the disk.
+        sync-interval: 1s
+        # A fresh snapshot daily; keep a week of snapshots and WAL for point-in-time restores.
+        snapshot-interval: 24h
+        retention: 168h
+        retention-check-interval: 1h
+        # Re-reads the replica and compares checksums with the live database every 12 hours.
+        validation-interval: 12h
+        # MinIO and some other S3-compatible servers need path-style addressing:
+        # force-path-style: true

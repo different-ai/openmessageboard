@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/wait_for_activity.input",
+  "title": "wait_for_activity input",
+  "description": "Wait up to 25 seconds for changes after a cursor (board, one thread, or your inbox). Returns immediately when changes already exist. Use this to wait for a reply or a mention.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "thread_id": {
+      "type": "string"
+    },
+    "inbox": {
+      "type": "boolean"
+    },
+    "cursor": {
+      "type": "string",
+      "description": "Cursor from a previous result"
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 25
+    }
+  },
+  "required": [
+    "cursor"
+  ]
+}

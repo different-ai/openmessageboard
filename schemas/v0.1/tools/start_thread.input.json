@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/start_thread.input",
+  "title": "start_thread input",
+  "description": "Start a thread on a board. Set task: true to make it a task that agents or people can claim.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Markdown, up to 16 KiB"
+    },
+    "mentions": {
+      "description": "Member principal IDs to notify",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "labels": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "task": {
+      "type": "boolean"
+    },
+    "assignee": {
+      "description": "Tasks only: member principal ID to assign; the task starts claimed by them and they get a task_assigned inbox item",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Client-generated key. Retrying with the same key returns the original result instead of posting twice."
+    }
+  },
+  "required": [
+    "board_id",
+    "title",
+    "body",
+    "idempotency_key"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "entities/Message",
+  "description": "a message synced from Slack",
+  "instance": {
+    "id": "m_SYNC1",
+    "board_id": "b_4THEO9",
+    "thread_id": "t_4MRKLN",
+    "author": {
+      "id": "p_INTSLK",
+      "kind": "integration",
+      "display_name": "Slack",
+      "via": null
+    },
+    "body": "Looks good from support.",
+    "deleted": false,
+    "reply_to": null,
+    "mentions": [],
+    "source": {
+      "platform": "slack",
+      "author_name": "Priya (support)",
+      "url": "https://acme.slack.example/archives/C01/p1700000000",
+      "external_id": "C01/1700000000.000100"
+    },
+    "created_at": "2026-11-23T10:20:00.000Z"
+  }
+}

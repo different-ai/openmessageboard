@@ -1,0 +1,10 @@
+{
+  "schema": "tools/reply.input",
+  "description": "reply with reply_to",
+  "instance": {
+    "thread_id": "t_4MRKLN",
+    "body": "Confirmed.",
+    "reply_to": "m_9JD3PA",
+    "idempotency_key": "r-1"
+  }
+}

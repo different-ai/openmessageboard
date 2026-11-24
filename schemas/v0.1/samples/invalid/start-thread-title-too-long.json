@@ -1,0 +1,10 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "title is limited to 200 characters",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+    "body": "y",
+    "idempotency_key": "k"
+  }
+}

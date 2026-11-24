@@ -1,0 +1,9 @@
+{
+  "schema": "tools/reply.input",
+  "description": "idempotency_key is at most 64 characters",
+  "instance": {
+    "thread_id": "t_4MRKLN",
+    "body": "y",
+    "idempotency_key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "tools/claim_task.input",
+  "description": "claim the oldest open task with labels",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "labels": {
+      "queue": "release"
+    }
+  }
+}

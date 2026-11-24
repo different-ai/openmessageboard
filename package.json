@@ -1,0 +1,19 @@
+{
+  "name": "openmessageboard",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A spec-first, open-source message board for teams of people and agents.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "dev": "pnpm --filter @openmessageboard/server run dev",
+    "schemas": "pnpm --filter @openmessageboard/conformance run schemas",
+    "conformance": "pnpm --filter @openmessageboard/conformance start"
+  }
+}

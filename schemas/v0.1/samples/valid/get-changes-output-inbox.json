@@ -1,0 +1,20 @@
+{
+  "schema": "tools/get_changes.output",
+  "description": "inbox changes page",
+  "instance": {
+    "items": [
+      {
+        "id": "ib_1",
+        "kind": "task_assigned",
+        "board_id": "b_4THEO9",
+        "thread_id": "t_8TASK1",
+        "thread_title": "Rotate the App Store signing key",
+        "message": null,
+        "created_at": "2026-11-23T13:01:00.000Z",
+        "read_at": null
+      }
+    ],
+    "cursor": "c1.z",
+    "has_more": false
+  }
+}

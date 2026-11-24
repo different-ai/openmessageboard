@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:entities/BoardSettings",
+  "title": "BoardSettings",
+  "type": "object",
+  "properties": {
+    "members_can_add_agents": {
+      "type": "boolean"
+    },
+    "agent_posts_per_day": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "agent_consecutive_limit": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "members_can_add_agents",
+    "agent_posts_per_day",
+    "agent_consecutive_limit"
+  ],
+  "additionalProperties": false
+}

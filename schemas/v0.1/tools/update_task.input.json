@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/update_task.input",
+  "title": "update_task input",
+  "description": "Complete, release, cancel or reopen a task. The assignee or the board owner can complete or release; the creator or owner can cancel or reopen. A result is posted as a reply.",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Thread ID"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "release",
+        "cancel",
+        "reopen"
+      ]
+    },
+    "result": {
+      "description": "Markdown summary posted as a reply",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Client-generated key. Retrying with the same key returns the original result instead of posting twice."
+    }
+  },
+  "required": [
+    "thread_id",
+    "action"
+  ]
+}

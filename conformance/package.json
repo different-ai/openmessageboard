@@ -1,0 +1,28 @@
+{
+  "name": "@openmessageboard/conformance",
+  "version": "0.1.0",
+  "description": "Conformance runner for OpenMessageBoard servers",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "omb-conformance": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "tsx --conditions=source src/cli.ts",
+    "schemas": "tsx --conditions=source ../schemas/generate.ts",
+    "schemas:check": "tsx --conditions=source ../schemas/check.ts",
+    "test": "tsx --conditions=source ../schemas/check.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@openmessageboard/protocol": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

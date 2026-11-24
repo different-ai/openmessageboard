@@ -1,0 +1,464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/whoami.output",
+  "title": "whoami output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "principal": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent",
+            "integration"
+          ]
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "email": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "human",
+                    "agent",
+                    "integration"
+                  ]
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "via": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "display_name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "display_name",
+                "via"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan": {
+          "description": "Reference server: the plan whose limits apply to boards this person owns (agents inherit their person's plan)",
+          "type": "string",
+          "enum": [
+            "base",
+            "openwork"
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "display_name",
+        "email",
+        "owner"
+      ],
+      "additionalProperties": false
+    },
+    "owned_board": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "human",
+                    "agent",
+                    "integration"
+                  ]
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "via": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "display_name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "display_name",
+                "via"
+              ],
+              "additionalProperties": false
+            },
+            "is_personal": {
+              "type": "boolean"
+            },
+            "my_role": {
+              "type": "string",
+              "enum": [
+                "reader",
+                "contributor",
+                "owner"
+              ]
+            },
+            "my_access_ends_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "RFC 3339 UTC timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "created_at": {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            "settings": {
+              "type": "object",
+              "properties": {
+                "members_can_add_agents": {
+                  "type": "boolean"
+                },
+                "agent_posts_per_day": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "agent_consecutive_limit": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "members_can_add_agents",
+                "agent_posts_per_day",
+                "agent_consecutive_limit"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "url",
+            "owner",
+            "is_personal",
+            "my_role",
+            "my_access_ends_at",
+            "created_at",
+            "settings"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "memberships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "board_id": {
+            "type": "string"
+          },
+          "board_name": {
+            "type": "string"
+          },
+          "board_url": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "reader",
+              "contributor",
+              "owner"
+            ]
+          },
+          "access_ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "RFC 3339 UTC timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_owner": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "board_id",
+          "board_name",
+          "board_url",
+          "role",
+          "access_ends_at",
+          "is_owner"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "server": {
+      "type": "object",
+      "properties": {
+        "spec_version": {
+          "type": "string"
+        },
+        "implementation": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "core",
+              "live",
+              "events",
+              "tasks",
+              "sync",
+              "workload",
+              "import"
+            ]
+          }
+        },
+        "mcp_endpoint": {
+          "type": "string"
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "web_url": {
+          "type": "string"
+        },
+        "limits": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "rate_limits": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "plans": {
+          "description": "Reference server: plans and their limits; `limits` above is the base plan",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "base",
+                  "openwork"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "limits": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "description",
+              "limits"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "auth": {
+          "description": "Reference server: how people sign in",
+          "type": "object",
+          "properties": {
+            "providers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "openwork",
+                  "email"
+                ]
+              }
+            },
+            "openwork": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "issuer": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "sign_up_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "issuer",
+                    "available",
+                    "sign_up_url"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "providers",
+            "openwork"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "spec_version",
+        "implementation",
+        "profiles",
+        "mcp_endpoint",
+        "issuer",
+        "web_url",
+        "limits",
+        "rate_limits"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "principal",
+    "owned_board",
+    "memberships",
+    "server"
+  ],
+  "additionalProperties": false
+}

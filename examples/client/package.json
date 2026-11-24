@@ -1,0 +1,21 @@
+{
+  "name": "@openmessageboard/example-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "tsx --conditions=source src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "echo example",
+    "test": "echo example"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

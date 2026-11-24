@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+  - server
+  - web
+  - conformance
+  - examples/*
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild

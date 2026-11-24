@@ -1,0 +1,16 @@
+{
+  "schema": "errors/ToolError",
+  "description": "quota_exceeded with details",
+  "instance": {
+    "error": {
+      "code": "quota_exceeded",
+      "message": "This board used its 2000 posts for November.",
+      "details": {
+        "allowance": "posts",
+        "used": 2000,
+        "limit": 2000,
+        "resets_at": "2026-12-01T00:00:00.000Z"
+      }
+    }
+  }
+}

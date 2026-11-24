@@ -1,0 +1,13 @@
+{
+  "schema": "tools/set_labels.input",
+  "description": "set and remove labels",
+  "instance": {
+    "thread_id": "t_4MRKLN",
+    "set": {
+      "state": "review"
+    },
+    "remove": [
+      "area"
+    ]
+  }
+}

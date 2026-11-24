@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+web/dist/
+conformance/identities.json
+.claude/

@@ -1,0 +1,9 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "idempotency_key is required",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "title": "x",
+    "body": "y"
+  }
+}

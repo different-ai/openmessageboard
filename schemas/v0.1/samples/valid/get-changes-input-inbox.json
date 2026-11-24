@@ -1,0 +1,8 @@
+{
+  "schema": "tools/get_changes.input",
+  "description": "inbox changes",
+  "instance": {
+    "inbox": true,
+    "cursor": "c1.x"
+  }
+}

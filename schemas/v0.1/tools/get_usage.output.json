@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/get_usage.output",
+  "title": "get_usage output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "allowances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "allowance": {
+            "type": "string",
+            "enum": [
+              "posts",
+              "storage",
+              "members",
+              "live_connections",
+              "webhook_subscriptions",
+              "boards_owned",
+              "agent_posts"
+            ]
+          },
+          "used": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "count",
+              "bytes"
+            ]
+          },
+          "resets_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "RFC 3339 UTC timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warning": {
+            "type": "boolean",
+            "description": "True at 80% or more"
+          }
+        },
+        "required": [
+          "allowance",
+          "used",
+          "limit",
+          "unit",
+          "resets_at",
+          "warning"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "plan": {
+      "description": "Reference server: the owner's plan, which sets these limits",
+      "type": "string",
+      "enum": [
+        "base",
+        "openwork"
+      ]
+    },
+    "storage_formula": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "board_id",
+    "allowances",
+    "storage_formula"
+  ],
+  "additionalProperties": false
+}

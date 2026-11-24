@@ -1,0 +1,15 @@
+{
+  "schema": "events/inbox.item_created.payload",
+  "description": "kind must be mention, reply or task_assigned",
+  "instance": {
+    "kind": "like",
+    "board_id": "b_4THEO9",
+    "board_name": "x",
+    "thread": {
+      "id": "t_4MRKLN",
+      "title": "t",
+      "url": "https://omb.example.test/b/b_4THEO9/t/t_4MRKLN"
+    },
+    "message": null
+  }
+}

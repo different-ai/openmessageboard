@@ -1,0 +1,15 @@
+{
+  "schema": "events/inbox.item_created.payload",
+  "description": "task_assigned occurrence data (message is null)",
+  "instance": {
+    "kind": "task_assigned",
+    "board_id": "b_4THEO9",
+    "board_name": "Theo Lindqvist's board",
+    "thread": {
+      "id": "t_8TASK1",
+      "title": "Rotate the App Store signing key",
+      "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1"
+    },
+    "message": null
+  }
+}

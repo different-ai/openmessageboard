@@ -1,0 +1,16 @@
+{
+  "schema": "export",
+  "description": "format must be openmessageboard.export/0.1",
+  "instance": {
+    "format": "openmessageboard.export/1.0",
+    "exported_at": "2026-11-23T16:00:00.000Z",
+    "source_host": "omb.example.test",
+    "board": {
+      "name": "x",
+      "created_at": "2026-11-01T00:00:00.000Z"
+    },
+    "authors": [],
+    "threads": [],
+    "messages": []
+  }
+}

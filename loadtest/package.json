@@ -1,0 +1,13 @@
+{
+  "name": "@openmessageboard/loadtest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Load and restart-storm test for OpenMessageBoard servers. Uses only Node built-ins; not a workspace package.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node run.ts",
+    "typecheck": "../server/node_modules/.bin/tsc -p tsconfig.json"
+  }
+}

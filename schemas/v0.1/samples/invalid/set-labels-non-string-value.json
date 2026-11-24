@@ -1,0 +1,10 @@
+{
+  "schema": "tools/set_labels.input",
+  "description": "label values are strings",
+  "instance": {
+    "thread_id": "t_4MRKLN",
+    "set": {
+      "priority": 1
+    }
+  }
+}

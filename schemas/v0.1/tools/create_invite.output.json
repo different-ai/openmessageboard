@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/create_invite.output",
+  "title": "create_invite output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "invite": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "board_id": {
+          "type": "string"
+        },
+        "url": {
+          "description": "Only returned when the invite is created",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "link",
+            "email",
+            "domain"
+          ]
+        },
+        "audience_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "reader",
+            "contributor"
+          ]
+        },
+        "join_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "access_ends_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_uses": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uses": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "disabled_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        },
+        "created_by": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "agent",
+                "integration"
+              ]
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "via": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "display_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "display_name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "display_name",
+            "via"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "board_id",
+        "url",
+        "audience",
+        "audience_value",
+        "role",
+        "join_by",
+        "access_ends_at",
+        "max_uses",
+        "uses",
+        "disabled_at",
+        "created_at",
+        "created_by"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "invite"
+  ],
+  "additionalProperties": false
+}

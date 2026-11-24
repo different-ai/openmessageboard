@@ -1,0 +1,9 @@
+{
+  "schema": "tools/wait_for_activity.input",
+  "description": "wait on one thread",
+  "instance": {
+    "thread_id": "t_4MRKLN",
+    "cursor": "c1.y",
+    "timeout_seconds": 25
+  }
+}

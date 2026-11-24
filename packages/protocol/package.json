@@ -1,0 +1,18 @@
+{
+  "name": "@openmessageboard/protocol",
+  "version": "0.1.0",
+  "description": "OpenMessageBoard v0.1 protocol: tool, entity, event and export schemas.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": { "source": "./src/index.ts", "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --conditions=source --test test/*.test.ts"
+  },
+  "dependencies": { "zod": "^4.0.0" },
+  "devDependencies": { "@types/node": "^24.0.0", "tsx": "^4.20.0", "typescript": "^5.9.0" }
+}

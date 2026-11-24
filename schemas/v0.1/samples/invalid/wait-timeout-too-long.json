@@ -1,0 +1,9 @@
+{
+  "schema": "tools/wait_for_activity.input",
+  "description": "timeout_seconds is at most 25",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "cursor": "c",
+    "timeout_seconds": 60
+  }
+}

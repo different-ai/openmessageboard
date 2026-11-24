@@ -1,0 +1,7 @@
+{
+  "schema": "tools/mark_read.input",
+  "description": "mark up to a cursor",
+  "instance": {
+    "up_to_cursor": "c1.i"
+  }
+}

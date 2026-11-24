@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:events/board.task_updated.arguments",
+  "title": "board.task_updated subscription arguments",
+  "description": "A task was created, claimed, released, completed, cancelled or relabelled. Filter by labels to watch a work queue.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "labels": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "open",
+        "claimed",
+        "done",
+        "cancelled"
+      ]
+    }
+  },
+  "required": [
+    "board_id"
+  ]
+}

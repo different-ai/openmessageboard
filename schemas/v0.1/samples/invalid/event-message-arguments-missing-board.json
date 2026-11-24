@@ -1,0 +1,7 @@
+{
+  "schema": "events/board.message_created.arguments",
+  "description": "board_id is required",
+  "instance": {
+    "thread_id": "t_4MRKLN"
+  }
+}

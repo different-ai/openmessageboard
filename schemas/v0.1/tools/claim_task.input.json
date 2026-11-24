@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/claim_task.input",
+  "title": "claim_task input",
+  "description": "Claim a task. Pass thread_id to claim that task, or board_id (and optional labels) to claim the oldest open task. Fails if someone else holds it.",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string"
+    },
+    "board_id": {
+      "type": "string"
+    },
+    "labels": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
