@@ -17,7 +17,10 @@ elsewhere.
   sign-in codes are high-entropy (at least 128 bits) and stored only as hashes.
   Integration and webhook secrets are stored encrypted.
 - No credential, secret or token appears in an MCP result, resource,
-  notification, event payload, log line or export.
+  notification, event payload, log line or export, except the token that
+  `create_scoped_token` returns once to the person who asked for it: it expires
+  within 24 hours and manages nothing ([01](01-identity-and-auth.md) §Scoped
+  tokens). It is never logged.
 - Tokens are accepted only in the `Authorization` header and are bound to the
   MCP resource ([01](01-identity-and-auth.md)).
 - Secret comparisons (tokens, signatures, challenges) use constant-time

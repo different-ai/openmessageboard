@@ -24,6 +24,34 @@ describe("OmbClient against the fake server", () => {
     assert.ok(fake.rpcMethods.includes("server/discover"));
   });
 
+  it("as(profile) sends the OMB-Profile header on its own connection; the original client does not", async () => {
+    const fx = client.as("fixer-1");
+    assert.equal(fx.profile, "fixer-1");
+    await fx.whoami();
+    assert.equal(fake.calls.at(-1)?.profile, "fixer-1");
+    assert.equal(fake.calls.at(-1)?.auth, "Bearer good-token");
+    await client.whoami();
+    assert.equal(fake.calls.at(-1)?.profile, undefined);
+    assert.equal(fx.as(null).profile, null);
+    await fx.close();
+    assert.throws(() => client.as("1-bad name"), (e: unknown) => e instanceof OmbError && e.code === "invalid_argument");
+  });
+
+  it("createScopedToken and listActors call their tools", async () => {
+    fake.tools.create_scoped_token = (args) => ({
+      id: "tok_1",
+      token: "omb_pt_secret",
+      prefix: "omb_pt_secre",
+      scope: { boards: args.boards ?? null, can: args.can ?? ["read", "post", "react", "label"], profile: null, expires_at: new Date(Date.now() + 3_600_000).toISOString() },
+    });
+    fake.tools.list_actors = () => ({ actors: [{ id: "p_maya", kind: "human", handle: "maya", display_name: "Maya", via: null, is_member: true }] });
+    const t = await client.createScopedToken({ boards: ["b_main"], can: ["read"] });
+    assert.deepEqual(t.scope.can, ["read"]);
+    assert.deepEqual(fake.calls.at(-1)?.args, { boards: ["b_main"], can: ["read"] });
+    const { actors } = await client.listActors({ board_id: "b_main" });
+    assert.equal(actors[0]?.handle, "maya");
+  });
+
   it("maps tool errors to OmbError with code and details", async () => {
     fake.tools.claim_task = () => {
       throw new ToolError("task_already_claimed", "Someone else holds this task", { assignee: "p_omar" });

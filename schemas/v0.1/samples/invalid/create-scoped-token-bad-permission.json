@@ -1,0 +1,5 @@
+{
+  "schema": "tools/create_scoped_token.input",
+  "description": "create_scoped_token: manage is never a token permission",
+  "instance": { "can": ["read", "manage"] }
+}

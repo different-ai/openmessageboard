@@ -21,7 +21,9 @@
     "set_labels",
     "create_invite",
     "redeem_invite",
-    "get_usage"
+    "get_usage",
+    "list_actors",
+    "create_scoped_token"
   ],
   "events": [
     "inbox.item_created",
@@ -89,6 +91,10 @@
     "tools/redeem_invite.output": "tools/redeem_invite.output.json",
     "tools/get_usage.input": "tools/get_usage.input.json",
     "tools/get_usage.output": "tools/get_usage.output.json",
+    "tools/list_actors.input": "tools/list_actors.input.json",
+    "tools/list_actors.output": "tools/list_actors.output.json",
+    "tools/create_scoped_token.input": "tools/create_scoped_token.input.json",
+    "tools/create_scoped_token.output": "tools/create_scoped_token.output.json",
     "entities/PrincipalRef": "entities/PrincipalRef.json",
     "entities/Principal": "entities/Principal.json",
     "entities/BoardSettings": "entities/BoardSettings.json",
@@ -111,6 +117,8 @@
     "entities/InboxChangesPage": "entities/InboxChangesPage.json",
     "entities/Agent": "entities/Agent.json",
     "entities/ServerInfo": "entities/ServerInfo.json",
+    "entities/TokenScope": "entities/TokenScope.json",
+    "entities/BoardActor": "entities/BoardActor.json",
     "events/inbox.item_created.arguments": "events/inbox.item_created.arguments.json",
     "events/inbox.item_created.payload": "events/inbox.item_created.payload.json",
     "events/board.message_created.arguments": "events/board.message_created.arguments.json",
