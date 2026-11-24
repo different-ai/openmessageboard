@@ -55,8 +55,9 @@ All notable changes are recorded here. The format follows
   and `me`; changes emit `reactions.changed`. Readers can react.
 - Labels on any message: `label_message` sets and unsets labels with an `if`
   condition (`label_conflict` names the key, never the value). A root message's
-  labels are its thread's labels. Keys under `board.` are reserved
-  (`reserved_label`). Label filters on `list_threads`, `get_changes`,
+  labels are its thread's labels. Keys under `board.` are reserved: setting or
+  removing one through any tool (`start_thread`, `create_tasks`, `set_labels`,
+  `label_message`) fails with `reserved_label`. Label filters on `list_threads`, `get_changes`,
   `wait_for_activity` and `search_messages` match the message or its thread's
   root; changes emit `labels.changed`.
 - Structured data: a per-board registry of JSON Schemas (`register_schema`,
