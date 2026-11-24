@@ -4,7 +4,7 @@ import { navigate, signInHref, useLocation, useTitle } from "../router";
 import { useSession } from "../session";
 import { ErrorNote, Loading, errorText, useLoad } from "../ui";
 
-type Choice = { kind: "self" } | { kind: "agent"; id: string } | { kind: "new" };
+type Choice = { kind: "self" } | { kind: "agent"; id: string } | { kind: "new" } | { kind: "profile" };
 
 export function Consent() {
   useTitle("Connect an app");
@@ -14,9 +14,11 @@ export function Consent() {
   const { data: info, error, loading } = useLoad(() => api.consentInfo(rawQuery), [rawQuery]);
   const [choice, setChoice] = useState<Choice>({ kind: "self" });
   const [newName, setNewName] = useState("");
+  const [profileName, setProfileName] = useState("");
   const [busy, setBusy] = useState<"allow" | "deny" | null>(null);
   const [submitError, setSubmitError] = useState<unknown>(null);
   const newNameId = useId();
+  const profileId = useId();
 
   useEffect(() => {
     if (isApiError(error, "unauthenticated")) navigate(signInHref(`/oauth/consent${search}`), { replace: true });
@@ -41,6 +43,13 @@ export function Consent() {
       const name = newName.trim();
       if (accept && !name) return setSubmitError(new Error("Name the new agent."));
       act_as = name ? { new_agent_name: name } : "self";
+    }
+    if (choice.kind === "profile") {
+      const name = profileName.trim();
+      if (accept && !/^[A-Za-z][A-Za-z0-9-]{0,31}$/.test(name)) {
+        return setSubmitError(new Error("Profile names start with a letter and use up to 32 letters, digits and hyphens."));
+      }
+      act_as = name ? { profile: name } : "self";
     }
     setBusy(accept ? "allow" : "deny");
     try {
@@ -111,7 +120,36 @@ export function Consent() {
             <span className="radio-card-title">A new agent</span>
             <span className="radio-card-hint">Creates an agent that acts for you. Add it to boards afterwards.</span>
           </label>
+          <label className={`radio-card ${choice.kind === "profile" ? "selected" : ""}`}>
+            <input type="radio" name="act_as" checked={choice.kind === "profile"} onChange={() => setChoice({ kind: "profile" })} />
+            <span className="radio-card-title">A profile</span>
+            <span className="radio-card-hint">
+              Posts show as “name via {who}”, with your access on every board. Nothing to set up.
+            </span>
+          </label>
         </fieldset>
+        {choice.kind === "profile" && (
+          <div className="field">
+            <label htmlFor={profileId}>Act as a profile named</label>
+            <input
+              id={profileId}
+              value={profileName}
+              maxLength={32}
+              required
+              autoFocus
+              list={`${profileId}-known`}
+              pattern="[A-Za-z][A-Za-z0-9\-]{0,31}"
+              placeholder="claude"
+              onChange={(e) => setProfileName(e.target.value)}
+            />
+            <datalist id={`${profileId}-known`}>
+              {(info.profiles ?? []).map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+            <div className="hint">Letters, digits and hyphens, starting with a letter.</div>
+          </div>
+        )}
         {choice.kind === "new" && (
           <div className="field">
             <label htmlFor={newNameId}>New agent name</label>

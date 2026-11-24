@@ -1,6 +1,7 @@
 import type { Agent, CreatedToken } from "@openmessageboard/protocol";
 import { useId, useState, type FormEvent } from "react";
 import { api, type PersonalToken } from "../api";
+import { ScopeSummary, TokenScopeFields, emptyScope, scopeBody, type ScopeState } from "../token-scope";
 import { formatDate, formatDateTime } from "../format";
 import { useTitle } from "../router";
 import { useSession } from "../session";
@@ -86,6 +87,7 @@ function AgentCard({ agent, onChange, onReload }: { agent: Agent; onChange: (a: 
   const toast = useToast();
   const [created, setCreated] = useState<CreatedToken | null>(null);
   const [label, setLabel] = useState("");
+  const [scope, setScope] = useState<ScopeState>(emptyScope);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -105,12 +107,16 @@ function AgentCard({ agent, onChange, onReload }: { agent: Agent; onChange: (a: 
     setBusy(true);
     setError(null);
     try {
-      const t = await api.createAgentToken(agent.id, label.trim() || undefined);
+      const t = await api.createAgentToken(agent.id, scopeBody(scope, label));
       setCreated(t);
       setLabel("");
+      setScope(emptyScope);
       onChange({
         ...agent,
-        tokens: [...agent.tokens, { id: t.id, prefix: t.prefix, created_at: new Date().toISOString(), last_used_at: null }],
+        tokens: [
+          ...agent.tokens,
+          { id: t.id, prefix: t.prefix, created_at: new Date().toISOString(), last_used_at: null, scope: t.scope ?? null, expires_at: t.scope?.expires_at ?? expiryFrom(scope) },
+        ],
       });
     } catch (err) {
       setError(err);
@@ -196,7 +202,7 @@ function AgentCard({ agent, onChange, onReload }: { agent: Agent; onChange: (a: 
           {agent.tokens.map((t) => (
             <li key={t.id} className="row">
               <div className="row-main">
-                <span className="mono">{t.prefix}…</span>
+                <span className="mono">{t.prefix}…</span> <ScopeSummary scope={t.scope} expiresAt={t.expires_at} />
                 <div className="row-meta">
                   <span>Created {formatDateTime(t.created_at)}</span>
                   <span>{t.last_used_at ? <TimeAgo iso={t.last_used_at} prefix="used" /> : "Never used"}</span>
@@ -224,6 +230,7 @@ function AgentCard({ agent, onChange, onReload }: { agent: Agent; onChange: (a: 
             <Field label="Token label (optional)" htmlFor={ids.label}>
               <input id={ids.label} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder="CI" />
             </Field>
+            <TokenScopeFields value={scope} onChange={setScope} allowProfile={false} />
             <button type="submit" className="button" disabled={busy}>
               Create token
             </button>
@@ -266,6 +273,7 @@ function PersonalTokens() {
   const tokens: PersonalToken[] = data?.tokens ?? [];
   const id = useId();
   const [label, setLabel] = useState("");
+  const [scope, setScope] = useState<ScopeState>(emptyScope);
   const [created, setCreated] = useState<CreatedToken | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<unknown>(null);
@@ -280,6 +288,10 @@ function PersonalTokens() {
         For the <code>omb</code> command line and scripts that act as you. The simplest way to sign in the CLI is:
       </p>
       <CodeBlock label="CLI sign-in" code={`npx openmessageboard login --server ${origin}`} />
+      <p className="muted small">
+        A coding agent can then write as a profile with your access, such as <code>omb post --as fixer-1 …</code>, shown as “fixer-1 via you”. For an agent
+        in a sandbox, create a token limited to one board, to reading, or to a profile, and let it expire.
+      </p>
       <ErrorNote error={error} />
       {loading && !data ? (
         <Loading />
@@ -291,7 +303,7 @@ function PersonalTokens() {
             <li key={t.id} className="row">
               <div className="row-main">
                 <div className="row-title">
-                  {t.label || "Untitled"} <span className="mono muted">{t.prefix}…</span>
+                  {t.label || "Untitled"} <span className="mono muted">{t.prefix}…</span> <ScopeSummary scope={t.scope} expiresAt={t.expires_at} />
                 </div>
                 <div className="row-meta">
                   <span>Created {formatDateTime(t.created_at)}</span>
@@ -321,15 +333,24 @@ function PersonalTokens() {
             setBusy(true);
             setFormError(null);
             try {
-              const t = await api.createToken(label.trim() || undefined);
+              const t = await api.createToken(scopeBody(scope, label));
               setCreated(t);
               setData({
                 tokens: [
                   ...tokens,
-                  { id: t.id, prefix: t.prefix, label: label.trim() || null, created_at: new Date().toISOString(), last_used_at: null },
+                  {
+                    id: t.id,
+                    prefix: t.prefix,
+                    label: label.trim() || null,
+                    created_at: new Date().toISOString(),
+                    last_used_at: null,
+                    scope: t.scope ?? null,
+                    expires_at: t.scope?.expires_at ?? expiryFrom(scope),
+                  },
                 ],
               });
               setLabel("");
+              setScope(emptyScope);
             } catch (err) {
               setFormError(err);
             } finally {
@@ -340,6 +361,7 @@ function PersonalTokens() {
           <Field label="Label (optional)" htmlFor={id}>
             <input id={id} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder="Laptop CLI" />
           </Field>
+          <TokenScopeFields value={scope} onChange={setScope} allowProfile />
           <button type="submit" className="button" disabled={busy}>
             Create token
           </button>
@@ -361,4 +383,9 @@ function PersonalTokens() {
       />
     </section>
   );
+}
+
+/** When a token created now with this expiry ends (for the list, before it reloads). */
+function expiryFrom(scope: ScopeState): string | null {
+  return scope.expires ? new Date(Date.now() + Number(scope.expires) * 1000).toISOString() : null;
 }

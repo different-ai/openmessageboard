@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { MAX_IDEMPOTENCY_KEY, MAX_TITLE_CHARS, MAX_MENTIONS, SYNC_PLATFORMS, TASK_ACTIONS, ROLES } from "./constants.js";
-import { Labels, BoardSettings } from "./entities.js";
+import { MAX_IDEMPOTENCY_KEY, MAX_TITLE_CHARS, MAX_MENTIONS, SYNC_PLATFORMS, TASK_ACTIONS, ROLES, MAX_TOKEN_BOARDS, TOKEN_PERMISSIONS } from "./constants.js";
+import { Labels, BoardSettings, TokenScope } from "./entities.js";
 
 /**
  * The reference server's web JSON API (used by the bundled browser client and the CLI).
@@ -32,6 +32,7 @@ export const API_ROUTES = {
   inboxStream: "GET /api/inbox/stream",
   search: "GET /api/boards/:boardId/search",
   members: "GET /api/boards/:boardId/members",
+  actors: "GET /api/boards/:boardId/actors",
   updateMember: "PATCH /api/boards/:boardId/members/:principalId",
   removeMember: "DELETE /api/boards/:boardId/members/:principalId",
   invites: "GET /api/boards/:boardId/invites",
@@ -114,10 +115,36 @@ export const CreateInviteBody = z.object({
 });
 export const CreateAgentBody = z.object({ display_name: z.string().min(1).max(60) });
 export const AddAgentToBoardBody = z.object({ agent_id: z.string(), role: z.enum(["reader", "contributor"]) });
-export const CreateTokenBody = z.object({ label: z.string().max(60).optional() });
+/**
+ * A token, optionally scoped: `boards` (others look like they don't exist), `can` (["read"] acts as a reader),
+ * `profile` (personal tokens only: always writes as that profile) and `expires_in_seconds`.
+ */
+export const CreateTokenBody = z.object({
+  label: z.string().max(60).optional(),
+  boards: z.array(z.string().min(1)).min(1).max(MAX_TOKEN_BOARDS).optional(),
+  can: z.array(z.enum(TOKEN_PERMISSIONS)).min(1).optional(),
+  profile: z.string().optional(),
+  expires_in_seconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(366 * 86_400)
+    .optional(),
+});
 /** Returned once; the server stores only a hash. */
-export const CreatedToken = z.object({ id: z.string(), token: z.string(), prefix: z.string() });
+export const CreatedToken = z.object({ id: z.string(), token: z.string(), prefix: z.string(), scope: TokenScope.nullable().optional() });
 export type CreatedToken = z.infer<typeof CreatedToken>;
+/** A personal token as `GET /api/tokens` lists it (never the token itself). */
+export const PersonalToken = z.object({
+  id: z.string(),
+  prefix: z.string(),
+  label: z.string().nullable(),
+  created_at: z.string(),
+  last_used_at: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  scope: TokenScope.nullable(),
+});
+export type PersonalToken = z.infer<typeof PersonalToken>;
 
 export const Integration = z.object({
   id: z.string(),
@@ -168,10 +195,16 @@ export const OAuthConsentInfo = z.object({
   client_uri: z.string().nullable(),
   scopes: z.array(z.string()),
   agents: z.array(z.object({ id: z.string(), display_name: z.string() })),
+  profiles: z.array(z.string()).optional().describe("Profiles the person has written as"),
 });
 export const OAuthConsentBody = z.object({
   accept: z.boolean(),
-  act_as: z.union([z.literal("self"), z.object({ agent_id: z.string() }), z.object({ new_agent_name: z.string().min(1).max(60) })]),
+  act_as: z.union([
+    z.literal("self"),
+    z.object({ agent_id: z.string() }),
+    z.object({ new_agent_name: z.string().min(1).max(60) }),
+    z.object({ profile: z.string().min(1).max(32) }).describe("Act as a profile of the person: their access, shown as \"<profile> via <person>\""),
+  ]),
   oauth_query: z.string().describe("The signed query string the authorization server passed to the consent page"),
 });
 

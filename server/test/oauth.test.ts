@@ -149,6 +149,60 @@ test("MCP client OAuth: register, sign in, consent as a new agent, token, call t
   }
 });
 
+test("MCP client OAuth: consent as a profile gives the person's access, shown via the person", async () => {
+  const redirect = "http://127.0.0.1:43124/callback";
+  const reg = await fetch(`${base}/api/auth/oauth2/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_name: "Profile Client", redirect_uris: [redirect], token_endpoint_auth_method: "none", grant_types: ["authorization_code"], response_types: ["code"] }),
+  });
+  const { client_id } = (await reg.json()) as { client_id: string };
+  const jar = new Jar();
+  await signIn(jar, "lin@example.test");
+  const verifier = randomBytes(32).toString("base64url");
+  const authorize = new URL(`${base}/api/auth/oauth2/authorize`);
+  for (const [k, v] of Object.entries({
+    response_type: "code",
+    client_id,
+    redirect_uri: redirect,
+    scope: "boards",
+    state: "p",
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    code_challenge_method: "S256",
+    resource: `${base}/mcp`,
+  }))
+    authorize.searchParams.set(k, v);
+  const auth = await fetch(authorize, { headers: { cookie: jar.header(), accept: "text/html" }, redirect: "manual" });
+  let location = auth.headers.get("location");
+  if (!location && auth.status === 200) location = ((await auth.json()) as { url?: string }).url ?? null;
+  const query = new URL(location!, base).search.slice(1);
+  const consent = await fetch(`${base}/api/oauth/consent`, {
+    method: "POST",
+    headers: { cookie: jar.header(), "content-type": "application/json", origin: base },
+    body: JSON.stringify({ accept: true, act_as: { profile: "codex" }, oauth_query: query }),
+  });
+  assert.equal(consent.status, 200, await consent.clone().text());
+  const code = new URL(((await consent.json()) as { redirect_url: string }).redirect_url).searchParams.get("code")!;
+  const tokenRes = await fetch(`${base}/api/auth/oauth2/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirect, client_id, code_verifier: verifier, resource: `${base}/mcp` }),
+  });
+  const { access_token } = (await tokenRes.json()) as { access_token: string };
+  const client = new Client({ name: "oauth-profile", version: "1" }, { versionNegotiation: { mode: "auto" } });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${access_token}` } } }));
+  const me = (await client.callTool({ name: "whoami", arguments: {} })).structuredContent as {
+    principal: { kind: string; display_name: string; profile: string; owner: { display_name: string } | null };
+    memberships: unknown[];
+  };
+  assert.equal(me.principal.kind, "agent");
+  assert.equal(me.principal.profile, "codex");
+  assert.ok(me.principal.owner);
+  await client.close();
+  const info = (await (await fetch(`${base}/api/oauth/consent?${query}`, { headers: { cookie: jar.header() } })).json()) as { profiles?: string[] };
+  assert.deepEqual(info.profiles, ["codex"], "the consent page offers profiles the person already has");
+});
+
 test("Sign in with OpenWork Cloud: round trip, account created, OpenWork plan limits", async () => {
   const info = (await (await fetch(`${base}/.well-known/openmessageboard`)).json()) as {
     auth: { providers: string[]; openwork: { available: boolean } };

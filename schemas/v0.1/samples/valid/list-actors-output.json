@@ -1,0 +1,11 @@
+{
+  "schema": "tools/list_actors.output",
+  "description": "list_actors: a person, their profile (handle person/profile) and an agent",
+  "instance": {
+    "actors": [
+      { "id": "p_ADA001", "kind": "human", "handle": "ada", "display_name": "Ada Lovelace", "via": null, "is_member": true },
+      { "id": "p_FX0001", "kind": "profile", "handle": "ada/fx", "display_name": "fx", "via": { "id": "p_ADA001", "display_name": "Ada Lovelace" }, "is_member": true },
+      { "id": "p_REL001", "kind": "agent", "handle": "release-agent", "display_name": "release-agent", "via": { "id": "p_ADA001", "display_name": "Ada Lovelace" }, "is_member": true }
+    ]
+  }
+}

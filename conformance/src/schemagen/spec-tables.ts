@@ -14,7 +14,7 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   get_thread: { who: "reader+", profile: "core" },
   start_thread: { who: "contributor+", profile: "core" },
   reply: { who: "contributor+", profile: "core" },
-  delete_message: { who: "author (current member) or board owner", profile: "core" },
+  delete_message: { who: "author (current member), the author's person, or board owner; a profile only its own", profile: "core" },
   set_follow: { who: "reader+", profile: "core" },
   get_inbox: { who: "any principal (own inbox)", profile: "core" },
   mark_read: { who: "any principal (own inbox)", profile: "core" },
@@ -28,6 +28,8 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   create_invite: { who: "board owner (human)", profile: "core" },
   redeem_invite: { who: "humans only", profile: "core" },
   get_usage: { who: "board owner", profile: "core" },
+  list_actors: { who: "reader+", profile: "core" },
+  create_scoped_token: { who: "people (or their profiles); not scoped tokens", profile: "core" },
 };
 
 const ERROR_MEANING: Record<P.ErrorCode, string> = {

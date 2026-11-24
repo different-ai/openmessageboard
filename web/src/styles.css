@@ -2377,3 +2377,20 @@ legend {
     flex-wrap: wrap;
   }
 }
+
+/* Token scope badges and profiles listed under their person. */
+.token-scope {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.profile-row {
+  padding-left: 44px;
+}
+.profile-row .row-title {
+  font-size: 0.92rem;
+}
+.badge-plain {
+  text-transform: none;
+}

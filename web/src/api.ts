@@ -2,11 +2,13 @@ import type {
   AddAgentToBoardBody,
   Agent,
   Board,
+  BoardActor,
   ClaimTaskBody,
   CreateIntegrationBody,
   CreateInviteBody,
   CreateWorkloadTrustBody,
   CreatedToken,
+  CreateTokenBody,
   ErrorCode,
   ExternalLink,
   Integration,
@@ -18,6 +20,7 @@ import type {
   Member,
   OAuthConsentBody,
   OAuthConsentInfo,
+  PersonalToken,
   Principal,
   ReplyBody,
   ServerInfo,
@@ -53,7 +56,8 @@ export type Whoami = ToolOutput<"whoami">;
 export type ThreadList = ToolOutput<"list_threads">;
 export type ThreadPage = ToolOutput<"get_thread">;
 export type InboxPage = ToolOutput<"get_inbox">;
-export type PersonalToken = { id: string; prefix: string; label: string | null; created_at: string; last_used_at: string | null };
+export type { PersonalToken };
+export type CreateTokenInput = Out<typeof CreateTokenBody>;
 
 export type ClientErrorCode = ErrorCode | "network" | "http_error";
 
@@ -242,6 +246,7 @@ export const api = {
 
   // Members and invites
   members: (boardId: string) => get<{ members: Member[] }>(`/api/boards/${enc(boardId)}/members`),
+  actors: (boardId: string) => get<{ actors: BoardActor[] }>(`/api/boards/${enc(boardId)}/actors`),
   updateMember: (boardId: string, principalId: string, body: UpdateMemberInput) =>
     patch<{ member: Member }>(`/api/boards/${enc(boardId)}/members/${enc(principalId)}`, body),
   removeMember: (boardId: string, principalId: string) => del(`/api/boards/${enc(boardId)}/members/${enc(principalId)}`),
@@ -256,13 +261,12 @@ export const api = {
   agents: () => get<{ agents: Agent[] }>("/api/agents"),
   createAgent: (display_name: string) => post<{ agent: Agent }>("/api/agents", { display_name }),
   disableAgent: (agentId: string) => del(`/api/agents/${enc(agentId)}`),
-  createAgentToken: (agentId: string, label?: string) =>
-    post<CreatedToken>(`/api/agents/${enc(agentId)}/tokens`, label ? { label } : {}),
+  createAgentToken: (agentId: string, body: CreateTokenInput = {}) => post<CreatedToken>(`/api/agents/${enc(agentId)}/tokens`, body),
   revokeAgentToken: (agentId: string, tokenId: string) => del(`/api/agents/${enc(agentId)}/tokens/${enc(tokenId)}`),
   addAgentToBoard: (boardId: string, body: AddAgentToBoardInput) =>
     post<unknown>(`/api/boards/${enc(boardId)}/agents`, body),
   tokens: () => get<{ tokens: PersonalToken[] }>("/api/tokens"),
-  createToken: (label?: string) => post<CreatedToken>("/api/tokens", label ? { label } : {}),
+  createToken: (body: CreateTokenInput = {}) => post<CreatedToken>("/api/tokens", body),
   revokeToken: (tokenId: string) => del(`/api/tokens/${enc(tokenId)}`),
 
   // Sync integrations
