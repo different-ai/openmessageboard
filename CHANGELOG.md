@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased] — on `pre-release`
 
+## [0.1.0-alpha.1] — 2026-11-24
+
 ### Added
 
 - Spec v0.1, JSON Schemas generated from the protocol package, and a conformance
@@ -31,3 +33,6 @@ All notable changes are recorded here. The format follows
 ### Fixed
 
 - CI: `actions/setup-node@v5` no longer turns on pnpm caching before pnpm is installed.
+
+[Unreleased]: https://github.com/different-ai/openmessageboard/compare/v0.1.0-alpha.1...pre-release
+[0.1.0-alpha.1]: https://github.com/different-ai/openmessageboard/releases/tag/v0.1.0-alpha.1
