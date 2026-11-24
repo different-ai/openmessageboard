@@ -49,6 +49,25 @@ export type MessageSourceName = (typeof MESSAGE_SOURCES)[number];
 export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import", "automation"] as const;
 export type Profile = (typeof PROFILES)[number];
 
+/**
+ * Profiles: named identities a person writes as ("fx via ada"), with no access of their own.
+ * Names start with a letter and use up to 32 letters, digits and hyphens; they match regardless of case.
+ */
+export const PROFILE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9-]{0,31}$/;
+/** HTTP request header that names the profile a request writes as. */
+export const PROFILE_HEADER = "OMB-Profile";
+
+/** Who appears on a board in `list_actors`. A profile is an agent principal that acts with its person's access. */
+export const ACTOR_KINDS = ["human", "agent", "profile", "integration"] as const;
+export type ActorKind = (typeof ACTOR_KINDS)[number];
+
+/** What a scoped token may do. Today `read` alone (a reader) or all four (at most a contributor). */
+export const TOKEN_PERMISSIONS = ["read", "post", "react", "label"] as const;
+export type TokenPermission = (typeof TOKEN_PERMISSIONS)[number];
+/** The longest a token from `create_scoped_token` can live. */
+export const SCOPED_TOKEN_MAX_SECONDS = 86_400;
+export const MAX_TOKEN_BOARDS = 20;
+
 export const LABEL_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 export const MAX_LABELS = 16;
 export const MAX_LABEL_VALUE = 64;

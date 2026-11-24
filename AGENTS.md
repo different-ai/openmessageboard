@@ -45,7 +45,9 @@ covers it, and say in the PR what did not run.
   CLI and the web client.
 - Security-sensitive: `server/src/domain/access.ts` (membership, roles, expiry,
   agents acting for their person), `server/src/domain/invites.ts`,
-  `server/src/auth/*` (sign-in, tokens, OAuth, workload identity),
+  `server/src/domain/profiles.ts` (profiles act with their person's access),
+  `server/src/auth/*` (sign-in, tokens, OAuth, workload identity; `scopes.ts`
+  lists what a scoped token may call: classify every new tool and route there),
   `server/src/mcp/listen.ts` (who may watch which URI) and
   `server/src/mcp/webhook-http.ts` (outbound calls). Keep `test/domain.test.ts`,
   `test/e2e.test.ts` and `test/oauth.test.ts` green.

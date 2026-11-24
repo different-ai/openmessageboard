@@ -63,7 +63,8 @@ export class McpSession {
     readonly client: Client,
   ) {}
 
-  static async connect(name: string, endpoint: string, token: string, timeoutMs = 15_000): Promise<McpSession> {
+  /** `headers` are sent on every request, such as `OMB-Profile` to write as a profile. */
+  static async connect(name: string, endpoint: string, token: string, timeoutMs = 15_000, headers?: Record<string, string>): Promise<McpSession> {
     const client = new Client(CLIENT_INFO, {
       versionNegotiation: { mode: "auto" },
       jsonSchemaValidator: permissiveValidator,
@@ -71,6 +72,7 @@ export class McpSession {
     });
     const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
       authProvider: { token: async () => token },
+      ...(headers ? { requestInit: { headers } } : {}),
     });
     try {
       await client.connect(transport, { timeout: timeoutMs });

@@ -10,6 +10,7 @@ import { OmbError, toOmbError } from "../errors.js";
 import type { Auth } from "../auth/auth.js";
 import { OAUTH_SCOPES } from "../auth/auth.js";
 import type { Resolver } from "../auth/resolve.js";
+import { apiScopeNeed, requireScope } from "../auth/scopes.js";
 import type { EventSubscriptions } from "../mcp/events.js";
 import { createMcpServer } from "../mcp/server.js";
 import { isListenRequest, serveListen } from "../mcp/listen.js";
@@ -78,7 +79,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
     const path = c.req.path;
     if (!corsPaths.some((p) => path === p || path.startsWith(p))) return next();
     c.header("Access-Control-Allow-Origin", "*");
-    c.header("Access-Control-Allow-Headers", "authorization, content-type, accept, mcp-protocol-version, mcp-method, mcp-name, last-event-id");
+    c.header("Access-Control-Allow-Headers", "authorization, content-type, accept, mcp-protocol-version, mcp-method, mcp-name, last-event-id, omb-profile");
     c.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     c.header("Access-Control-Expose-Headers", "www-authenticate, mcp-protocol-version");
     if (c.req.method === "OPTIONS") return c.body(null, 204);
@@ -92,10 +93,21 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
       c.set("actor", null);
       return next();
     }
-    const { actor, source, invalidBearer } = await opts.resolver.fromRequest(c.req.raw);
+    const { actor, source, invalidBearer, error } = await opts.resolver.fromRequest(c.req.raw);
     if (invalidBearer && (path.startsWith("/api/") || path === "/mcp")) {
       c.header("WWW-Authenticate", `Bearer error="invalid_token", resource_metadata="${base}/.well-known/oauth-protected-resource/mcp"`);
       return c.json({ error: { code: "unauthenticated", message: "The bearer token is invalid or expired" } }, 401);
+    }
+    // A valid credential with an OMB-Profile header it can't use (an agent's, or another profile than the token's).
+    if (error) return c.json({ error: error.toBody() }, error.status as 400);
+    // Scoped tokens reach only the conversation routes they are allowed (fail closed for everything else).
+    if (actor?.scope && path.startsWith("/api/")) {
+      try {
+        requireScope(actor, apiScopeNeed(c.req.method, path));
+      } catch (e) {
+        const err = toOmbError(e);
+        return c.json({ error: err.toBody() }, err.status as 403);
+      }
     }
     // CSRF: cookie-authenticated writes must come from our own origin.
     if (source === "cookie" && !["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {

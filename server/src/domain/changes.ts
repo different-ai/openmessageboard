@@ -3,7 +3,8 @@ import type { AppContext } from "../context.js";
 import { read } from "../context.js";
 import { OmbError, invalid } from "../errors.js";
 import type { HubEvent } from "../live/hub.js";
-import { getMembership, nowIso, requireMember, requireThread } from "./access.js";
+import { activeMembership, getMembership, nowIso, requireMember, requireThread } from "./access.js";
+import { boardInScope } from "../auth/scopes.js";
 import { decodeCursor, decodePage, encodeCursor, encodePage } from "./cursors.js";
 import type { Actor, EventRow, InboxRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
 import { presentInbox, presentMember, presentMessages, presentThreads, principalRefs } from "./present.js";
@@ -117,7 +118,9 @@ export function inboxChanges(ctx: AppContext, actor: Actor, cursor: string | und
     const more = rows.length > n;
     const page = rows.slice(0, n);
     const last = page[page.length - 1];
-    return { items: presentInbox(ctx, page), cursor: encodeCursor("i", actor.id, last?.seq ?? s), has_more: more };
+    // A board-scoped token sees only items from its boards; the cursor still moves past the others.
+    const visible = page.filter((r) => boardInScope(actor, r.board_id));
+    return { items: presentInbox(ctx, visible), cursor: encodeCursor("i", actor.id, last?.seq ?? s), has_more: more };
   });
 }
 
@@ -247,6 +250,13 @@ export async function waitForActivity(
 
 // ---------- inbox ----------
 
+/** Unread inbox items; a board-scoped token counts only its boards. */
+function unreadCount(ctx: AppContext, actor: Actor): number {
+  const boards = actor.scope?.boards;
+  const extra = boards ? ` AND board_id IN (${boards.map(() => "?").join(",")})` : "";
+  return (ctx.db.prepare(`SELECT COUNT(*) AS n FROM inbox_items WHERE principal_id = ? AND read_at IS NULL${extra}`).get(actor.id, ...(boards ?? [])) as { n: number }).n;
+}
+
 export function getInbox(
   ctx: AppContext,
   actor: Actor,
@@ -268,14 +278,11 @@ export function getInbox(
     }
     sql += " ORDER BY seq DESC LIMIT ?";
     params.push(limit + 1);
-    const rows = (ctx.db.prepare(sql).all(...params) as InboxRow[]).filter((r) => {
-      const m = getMembership(ctx, r.board_id, actor.id);
-      return !!m && (m.access_ends_at === null || m.access_ends_at > nowIso(ctx));
-    });
+    const rows = (ctx.db.prepare(sql).all(...params) as InboxRow[]).filter((r) => !!activeMembership(ctx, r.board_id, actor));
     const more = rows.length > limit;
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];
-    const unread = (ctx.db.prepare("SELECT COUNT(*) AS n FROM inbox_items WHERE principal_id = ? AND read_at IS NULL").get(actor.id) as { n: number }).n;
+    const unread = unreadCount(ctx, actor);
     return {
       items: presentInbox(ctx, page),
       unread_count: unread,
@@ -288,16 +295,18 @@ export function getInbox(
 export function markRead(ctx: AppContext, actor: Actor, input: { item_ids?: string[] | undefined; up_to_cursor?: string | undefined }): { marked: number; unread_count: number } {
   const now = nowIso(ctx);
   let marked = 0;
+  const boards = actor.scope?.boards ?? null;
+  const inScope = boards ? ` AND board_id IN (${boards.map(() => "?").join(",")})` : "";
   if (input.item_ids?.length) {
     for (const id of input.item_ids) {
-      marked += ctx.db.prepare("UPDATE inbox_items SET read_at = ? WHERE id = ? AND principal_id = ? AND read_at IS NULL").run(now, id, actor.id).changes;
+      marked += ctx.db.prepare(`UPDATE inbox_items SET read_at = ? WHERE id = ? AND principal_id = ? AND read_at IS NULL${inScope}`).run(now, id, actor.id, ...(boards ?? [])).changes;
     }
   }
   if (input.up_to_cursor) {
     const { s } = decodeCursor(input.up_to_cursor, "i", actor.id);
-    marked += ctx.db.prepare("UPDATE inbox_items SET read_at = ? WHERE principal_id = ? AND seq <= ? AND read_at IS NULL").run(now, actor.id, s).changes;
+    marked += ctx.db.prepare(`UPDATE inbox_items SET read_at = ? WHERE principal_id = ? AND seq <= ? AND read_at IS NULL${inScope}`).run(now, actor.id, s, ...(boards ?? [])).changes;
   }
   if (!input.item_ids?.length && !input.up_to_cursor) throw invalid("Pass item_ids or up_to_cursor");
-  const unread = (ctx.db.prepare("SELECT COUNT(*) AS n FROM inbox_items WHERE principal_id = ? AND read_at IS NULL").get(actor.id) as { n: number }).n;
+  const unread = unreadCount(ctx, actor);
   return { marked, unread_count: unread };
 }

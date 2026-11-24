@@ -117,7 +117,7 @@ export function schedulePost(ctx: AppContext, actor: Actor, input: SchedulePostI
   const mentions = [...new Set(input.mentions ?? [])];
   for (const id of mentions) {
     const p = getPrincipal(ctx, id);
-    if (!p || !activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id })) {
+    if (!p || !activeMembership(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name ?? null })) {
       throw invalid(`Mentioned principal ${id} is not a member of this board`, { principal_id: id });
     }
   }
@@ -149,6 +149,16 @@ export function schedulePost(ctx: AppContext, actor: Actor, input: SchedulePostI
     const u = instant(input.until, "until");
     if (u < first) throw invalid("until is before the first run");
     until = new Date(u).toISOString();
+  }
+  // A scoped token's authority ends when the token expires; so must every run it schedules.
+  const expires = actor.scope?.expires_at ? Date.parse(actor.scope.expires_at) : null;
+  if (expires !== null) {
+    let last = first;
+    if (input.every_seconds !== undefined) {
+      const byTimes = input.times !== undefined ? first + (input.times - 1) * input.every_seconds * 1000 : Number.POSITIVE_INFINITY;
+      last = Math.min(byTimes, until !== null ? Date.parse(until) : Number.POSITIVE_INFINITY);
+    }
+    if (last > expires) throw invalid("This token is scoped and expires before the schedule would end; set times or until so every run is before it expires", { expires_at: actor.scope!.expires_at });
   }
 
   return tx(ctx, () => {
@@ -219,7 +229,9 @@ export function cancelSchedule(ctx: AppContext, actor: Actor, scheduleId: string
     if (!row) throw notFound("Schedule");
     const { membership } = requireMember(ctx, actor, row.board_id, "reader", "Schedule");
     const ownsCreator = getPrincipal(ctx, row.created_by)?.owner_id === actor.id;
-    if (row.created_by !== actor.id && membership.role !== "owner" && !ownsCreator) {
+    // A profile cancels only what it scheduled, whatever its person's role (like deleting messages).
+    const allowed = actor.profile ? row.created_by === actor.id : row.created_by === actor.id || membership.role === "owner" || ownsCreator;
+    if (!allowed) {
       throw forbidden("A scheduled post can be cancelled by its creator or the board owner");
     }
     if (row.state !== "pending") return { schedule: presentSchedules(ctx, [row])[0]!, cancelled: false };
@@ -270,7 +282,7 @@ export function fireSchedule(ctx: AppContext, row: ScheduleRow): "posted" | "ski
   // A mention of someone who has since left is dropped rather than failing the whole post.
   const mentions = (JSON.parse(row.mentions) as string[]).filter((id) => {
     const p = getPrincipal(ctx, id);
-    return !!p && !!activeMembership(ctx, row.board_id, { id: p.id, kind: p.kind, ownerId: p.owner_id });
+    return !!p && !!activeMembership(ctx, row.board_id, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name ?? null });
   });
   let messageId: string | null = null;
   let error: string | null = null;

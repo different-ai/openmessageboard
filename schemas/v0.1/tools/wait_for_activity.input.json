@@ -24,12 +24,12 @@
       "minLength": 1
     },
     "by": {
-      "description": "Author: a member handle, a principal ID, or 'me'. A person covers the agents that act for them",
+      "description": "Author: 'me', a handle (a profile's is person/profile) or a principal ID. A person covers their profiles and the agents that act for them",
       "type": "string",
       "minLength": 1
     },
     "mentions": {
-      "description": "Mentioning this member: 'me', a handle or a principal ID",
+      "description": "Mentioning this principal: 'me', a handle or a principal ID",
       "type": "string",
       "minLength": 1
     },

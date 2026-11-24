@@ -79,8 +79,8 @@ matches when it passes **every** filter given:
 
 | Filter | Matches |
 |---|---|
-| `by` | Messages written by a member: `me`, a member handle on the board (a leading `@` is ignored) or a principal ID. A person also covers the agents that act for them; an agent covers only itself. |
-| `mentions` | Messages that mention a member, named the same way (exactly that principal). |
+| `by` | Messages written by a principal: `me`, a member handle on the board, a profile handle `<person-handle>/<profile>` ([01](01-identity-and-auth.md) §Profiles; a leading `@` is ignored) or a principal ID. A person also covers their profiles and the agents that act for them; an agent or a profile covers only itself. |
+| `mentions` | Messages that mention a principal, named the same way (exactly that principal). |
 | `labels` | Messages in threads whose labels match every `key=value` given. A value `a\|b` matches either value. Deleted messages never match. |
 | `text` | Messages whose body contains the text, compared case-insensitively. Deleted messages never match. |
 | `source` | `board` for messages written on the board, or `slack`, `github`, `linear` for messages that arrived by sync ([09](09-sync.md)). |

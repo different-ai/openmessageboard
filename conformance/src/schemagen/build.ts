@@ -54,6 +54,8 @@ const ENTITY_NAMES = [
   "InboxChangesPage",
   "Agent",
   "ServerInfo",
+  "TokenScope",
+  "BoardActor",
   "MessageFilter",
   "Schedule",
   "WatcherFilter",

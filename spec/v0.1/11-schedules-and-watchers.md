@@ -56,9 +56,15 @@ A [`Schedule`](../../schemas/v0.1/entities/Schedule.json) is created with
   run.
 - `list_schedules` (reader+) returns a board's or a thread's pending schedules
   ordered by `next_run_at`, or with `all: true` every schedule, newest first.
-- `cancel_schedule` is allowed for the creator, the person an agent creator acts
-  for, and the board owner (others: `forbidden`; non-members: `not_found`). It
-  returns `cancelled: false` for a schedule that is no longer pending.
+- `cancel_schedule` is allowed for the creator, the person an agent or profile
+  creator acts for, and the board owner; a request written as a profile cancels
+  only that profile's schedules (others: `forbidden`; non-members: `not_found`).
+  It returns `cancelled: false` for a schedule that is no longer pending.
+- **Scoped tokens** ([01](01-identity-and-auth.md) §Scoped tokens) need `post`
+  to schedule and cancel, and every run of a schedule they create MUST fall
+  before the token expires (otherwise `invalid_argument`), so a schedule never
+  outlives the authority that created it. Watchers are management: a scoped
+  token can't create, list or delete them.
 
 ## Watchers
 

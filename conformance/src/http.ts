@@ -51,7 +51,7 @@ export async function rawRpc(
   token: string | null,
   method: string,
   params: Record<string, unknown> = {},
-  opts: { timeoutMs?: number; legacy?: boolean } = {},
+  opts: { timeoutMs?: number; legacy?: boolean; headers?: Record<string, string> } = {},
 ): Promise<RpcOutcome> {
   const id = `conf-${nextId++}`;
   const headers: Record<string, string> = {
@@ -63,6 +63,7 @@ export async function rawRpc(
   const name = typeof params.name === "string" ? params.name : typeof params.uri === "string" ? params.uri : undefined;
   if (name && !opts.legacy) headers["mcp-name"] = name;
   if (token) headers.authorization = `Bearer ${token}`;
+  Object.assign(headers, opts.headers ?? {});
   const body = opts.legacy
     ? { jsonrpc: "2.0", id, method, params }
     : {

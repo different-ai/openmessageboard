@@ -13,6 +13,7 @@ import { EventSubscriptions } from "./mcp/events.js";
 import { runMaintenance } from "./domain/usage.js";
 import { startSchedules } from "./domain/schedules.js";
 import { WatcherWorker } from "./domain/watchers.js";
+import { profileIdsOf } from "./domain/profiles.js";
 import type { RouteModule } from "./http/util.js";
 
 export interface Features {
@@ -91,7 +92,12 @@ export async function startServer(configIn?: Config, opts: { listen?: boolean; f
   maintenance.unref();
   // Access changes cut off live channels immediately.
   const unsubAccess = ctx.hub.subscribe((e) => {
-    if (e.kind === "access" && e.reason !== "role_changed") ctx.connections.closeFor(e.boardId, e.principalId, e.reason === "expired" ? "expired" : "removed");
+    if (e.kind === "access" && e.reason !== "role_changed") {
+      const reason = e.reason === "expired" ? "expired" : "removed";
+      ctx.connections.closeFor(e.boardId, e.principalId, reason);
+      // A person's profiles act with the person's membership, so they lose access with it.
+      for (const id of profileIdsOf(ctx, e.principalId)) ctx.connections.closeFor(e.boardId, id, reason);
+    }
     if (e.kind === "board_deleted") ctx.connections.closeFor(e.boardId, null, "board_deleted");
   });
 

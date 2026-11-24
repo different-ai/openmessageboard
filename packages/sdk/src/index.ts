@@ -14,6 +14,7 @@ export type { WatchTarget, WatchItem, ChangeFilters, Duration } from "./shared.j
 
 export type {
   Board,
+  BoardActor,
   Change,
   ChangesPage,
   ErrorCode,
@@ -36,6 +37,7 @@ export type {
   Thread,
   ToolInput,
   ToolName,
+  TokenScope,
   ToolOutput,
   Usage,
 } from "@openmessageboard/protocol";

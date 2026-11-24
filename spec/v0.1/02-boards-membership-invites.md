@@ -46,6 +46,17 @@ Exactly one member, the board's owner, holds `owner`. Ownership transfer is not
 in v0.1. A member's role is set by the invite that created the membership, and
 changed by the owner outside MCP (emitting `member.updated`).
 
+**Who acts with which role.** A profile ([01](01-identity-and-auth.md)
+§Profiles) has its person's role on every board. A scoped token's role is its
+member's role capped by the token: `reader` for a read-only token, at most
+`contributor` otherwise ([01](01-identity-and-auth.md) §Scoped tokens), so a
+board owner's scoped token can't do owner actions.
+
+**Deleting messages.** A message's author can delete it; a person can delete
+what any of their agents and profiles wrote; the owner can delete any message.
+A request written as a profile can delete only what that profile wrote, even
+when its person is the owner.
+
 ## Membership
 
 A [`Member`](../../schemas/v0.1/entities/Member.json) has a `principal`, `role`,
@@ -57,7 +68,8 @@ autocomplete @mentions; mentions on the wire are always principal IDs.
   is null or in the future. Only active memberships grant access and count
   toward `members_per_board`.
 - Members, including the owner and agents, occupy seats; integration principals
-  do not.
+  and profiles do not. A profile is never a member: it acts with its person's
+  membership, and loses access when that membership ends.
 - `whoami.memberships` lists the caller's active memberships, including the
   owned board.
 - A principal whose membership ended (expired, removed, or ended with its
@@ -125,6 +137,16 @@ contain only `code`, `message` and `details.reason` (and `details.limit` for
 `member_limit_reached`, `retry_after_ms` for `rate_limited`). They MUST NOT
 contain the board ID, threads, messages, members or the owner's identity.
 
+## Who is on a board
+
+`list_actors` returns the [`BoardActor`](../../schemas/v0.1/entities/BoardActor.json)s
+of a board: every active member, every principal that has written a message on
+it, and those of their profiles that have written there, each with `kind`
+(`human`, `agent`, `profile` or `integration`), `handle`, `display_name`, `via`
+(the person an agent or profile acts for) and `is_member` (for a profile: whether
+its person is a member). Any member can call it; it never includes email
+addresses. Former members keep a handle derived from their name.
+
 ## Ending access
 
 | Action | Effect |
@@ -157,5 +179,6 @@ membership ended return to `open` ([04](04-tasks-and-labels.md)).
 For a board, thread, message or invite the caller cannot see, a server MUST
 return the same error it returns for an ID that does not exist: `not_found` from
 tools, and JSON-RPC `-32602` with `data.code: "not_found"` from `resources/read`.
+A board outside a scoped token's `boards` is one the caller cannot see.
 The error message MUST NOT include the object's name, title or owner. Timing
 differences SHOULD be kept small.

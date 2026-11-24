@@ -9,6 +9,7 @@ import {
   type Change,
   type ChangeFilters,
   type InboxItem,
+  type TokenScope,
   type WatchItem,
   type WatchTarget,
 } from "@openmessageboard/sdk";
@@ -18,7 +19,7 @@ import {
   flag,
   isThreadUrl,
   list,
-  parseDuration,
+  parseDurationSeconds,
   parseLabels,
   parsePositiveInt,
   parseTime,
@@ -27,9 +28,10 @@ import {
   threadIdFrom,
   type Values,
 } from "./args.js";
-import { configPath, readConfig, resolveConnection, validateProfile, writeConfig, type Config, type ResolvedConnection } from "./config.js";
+import { configPath, readConfig, resolveConnection, validateAccount, validateProfileName, writeConfig, type Config, type ResolvedConnection } from "./config.js";
 import {
   authorName,
+  formatActors,
   formatBoards,
   formatChange,
   formatInboxItem,
@@ -87,7 +89,15 @@ export class Context {
   }
 
   connection(): ResolvedConnection {
-    this.#conn ??= resolveConnection({ server: str(this.values, "server"), as: str(this.values, "as"), oidc: str(this.values, "oidc") }, this.io.env, this.config);
+    if (!this.#conn) {
+      const as = str(this.values, "as");
+      const account = str(this.values, "account");
+      this.#conn = resolveConnection({ server: str(this.values, "server"), account, as, oidc: str(this.values, "oidc") }, this.io.env, this.config);
+      // `--as` used to pick a saved token; it now names a profile. Point people with such a saved token at --account.
+      if (as && account === undefined && this.config.accounts[as]?.token && !this.json) {
+        this.info(`omb: writing as profile "${as}" of your default credential. To use the token saved as "${as}", pass --account ${as}.`);
+      }
+    }
     return this.#conn;
   }
 
@@ -99,6 +109,7 @@ export class Context {
         token: c.token,
         tokenProvider: c.tokenProvider,
         clientInfo: { name: "omb", version: CLI_VERSION },
+        profile: c.profile,
       });
     }
     return this.#client;
@@ -176,11 +187,12 @@ function printWatchItem(ctx: Context, item: WatchItem): void {
 }
 
 async function login(ctx: Context, args: string[], values: Values): Promise<void> {
-  need(args, 0, "login --server <url> [--token <t>] [--as <profile>]");
+  need(args, 0, "login --server <url> [--token <t>] [--account <name>]");
+  if (str(values, "as") !== undefined) throw new UsageError("login saves a token under an account: use --account <name> (--as names a profile to write as)");
   const rawServer = str(values, "server") ?? ctx.io.env.OMB_SERVER ?? ctx.config.server;
-  if (!rawServer) throw new UsageError("Usage: omb login --server <url> [--token <t>] [--as <profile>]");
+  if (!rawServer) throw new UsageError("Usage: omb login --server <url> [--token <t>] [--account <name>]");
   const server = normalizeServer(rawServer);
-  const profile = validateProfile(str(values, "as") ?? "default");
+  const account = validateAccount(str(values, "account") ?? "default");
   let token = str(values, "token")?.trim();
   if (!token) {
     ctx.info(`Create a personal access token at ${server}/agents`);
@@ -192,11 +204,11 @@ async function login(ctx: Context, args: string[], values: Values): Promise<void
     const me = await client.whoami();
     const config = ctx.config;
     config.server = server;
-    config.profiles[profile] = { token };
+    config.accounts[account] = { token };
     writeConfig(ctx.configPath, config);
-    if (ctx.json) return ctx.printJson({ server, profile, principal: me.principal });
+    if (ctx.json) return ctx.printJson({ server, account, principal: me.principal });
     const who = me.principal.owner ? `${me.principal.display_name} (${me.principal.kind}, via ${me.principal.owner.display_name})` : `${me.principal.display_name} (${me.principal.kind})`;
-    ctx.out(`Logged in to ${server} as ${who}. Saved to profile "${profile}" in ${ctx.configPath}.`);
+    ctx.out(`Logged in to ${server} as ${who}. Saved to account "${account}" in ${ctx.configPath}.`);
   } finally {
     await client.close();
   }
@@ -206,8 +218,9 @@ async function whoami(ctx: Context): Promise<void> {
   const me = await ctx.client().whoami();
   if (ctx.json) return ctx.printJson(me);
   const p = me.principal;
-  const lines = [`${p.owner ? `${p.display_name} (via ${p.owner.display_name})` : p.display_name} · ${p.kind}${p.email ? ` · ${p.email}` : ""} · ${p.id}`];
-  lines.push(`Server: ${ctx.connection().server}${ctx.connection().source === "profile" ? ` (profile ${ctx.connection().profile})` : ""}`);
+  const lines = [`${p.owner ? `${p.display_name} (via ${p.owner.display_name})` : p.display_name} · ${p.profile ? "profile" : p.kind}${p.email ? ` · ${p.email}` : ""} · ${p.id}`];
+  lines.push(`Server: ${ctx.connection().server}${ctx.connection().source === "account" ? ` (account ${ctx.connection().account})` : ""}`);
+  if (p.scope) lines.push(`Token scope: ${describeScope(p.scope)}`);
   if (me.owned_board) lines.push(`Your board: ${me.owned_board.name} (${me.owned_board.id}) ${me.owned_board.url}`);
   lines.push(`Boards: ${me.memberships.length}`);
   ctx.out(lines.join("\n"));
@@ -561,6 +574,45 @@ async function members(ctx: Context, args: string[]): Promise<void> {
   ctx.out(formatMembers(res.members));
 }
 
+async function actors(ctx: Context, args: string[]): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb actors [board]");
+  const res = await ctx.client().listActors({ board_id: await ctx.board(args[0]) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatActors(res.actors));
+}
+
+function describeScope(scope: TokenScope): string {
+  const parts = [scope.can.length === 1 ? "read only" : scope.can.join(", ")];
+  parts.push(scope.boards ? `boards ${scope.boards.join(", ")}` : "every board");
+  if (scope.profile) parts.push(`as ${scope.profile}`);
+  if (scope.expires_at) parts.push(`expires ${scope.expires_at}`);
+  return parts.join(" · ");
+}
+
+/**
+ * Prints a short-lived, narrowed token on stdout (so `TOKEN=$(omb tokens create …)` works) and what it can do on
+ * stderr. `--as` here names the profile the token always writes as; the request itself is made as you.
+ */
+async function tokensCreate(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 0, "tokens create [--board <id> ...] [--read-only] [--as <profile>] [--expires 1h]");
+  const boardArgs = list(values, "board").map(boardIdFrom);
+  const expires = str(values, "expires");
+  const profile = str(values, "as") ?? (ctx.io.env.OMB_PROFILE?.trim() || undefined);
+  const label = str(values, "label");
+  const input = {
+    ...(boardArgs.length ? { boards: boardArgs } : {}),
+    ...(flag(values, "read-only") ? { can: ["read" as const] } : {}),
+    ...(profile ? { profile: validateProfileName(profile) } : {}),
+    ...(expires ? { expires_in_seconds: parseDurationSeconds(expires, "--expires") } : {}),
+    ...(label ? { label } : {}),
+  };
+  const asPerson = ctx.client().as(null);
+  const res = await asPerson.createScopedToken(input).finally(() => asPerson.close());
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(res.token);
+  ctx.info(`Token ${res.prefix}… (${describeScope(res.scope)}). Shown once: hand it to the agent as OMB_TOKEN; never post it.`);
+}
+
 async function usage(ctx: Context, args: string[]): Promise<void> {
   if (args.length > 1) throw new UsageError("Usage: omb usage [board]");
   const res = await ctx.client().getUsage({ board_id: await ctx.board(args[0]) });
@@ -592,9 +644,9 @@ async function schedule(ctx: Context, args: string[], values: Values): Promise<v
     body: await ctx.body(textArg),
     ...(labels ? { labels } : {}),
     ...(mentions.length ? { mentions } : {}),
-    ...(opt("in") ? { in_seconds: parseDuration(opt("in")!, "--in") } : {}),
+    ...(opt("in") ? { in_seconds: parseDurationSeconds(opt("in")!, "--in") } : {}),
     ...(opt("at") ? { at: parseTime(opt("at")!, now) } : {}),
-    ...(opt("every") ? { every_seconds: parseDuration(opt("every")!, "--every") } : {}),
+    ...(opt("every") ? { every_seconds: parseDurationSeconds(opt("every")!, "--every") } : {}),
     ...(opt("times") ? { times: parsePositiveInt(opt("times")!, "--times") } : {}),
     ...(opt("until") ? { until: parseTime(opt("until")!, now) } : {}),
   });
@@ -689,6 +741,8 @@ export const RUNNERS: Record<string, Run> = {
   unfollow: follow(false),
   search,
   members,
+  actors,
+  "tokens create": tokensCreate,
   usage,
   schedule,
   "schedule cancel": scheduleCancel,

@@ -26,6 +26,7 @@ import { requireMember } from "./access.js";
 import { decodeCursor, encodeCursor } from "./cursors.js";
 import type { Actor, EventRow, MessageRow } from "./model.js";
 import { presentMessages } from "./present.js";
+import { coveredPrincipalIds, findProfile } from "./profiles.js";
 
 export interface FilterInput {
   by?: string | undefined;
@@ -81,23 +82,37 @@ function ensureSqlFunctions(db: DB): void {
 }
 
 /**
- * A member reference: `me`, a member handle on the board (with or without `@`), or a principal ID.
- * A principal ID is accepted without checking that it exists, so the answer never reveals who exists.
+ * A member reference: `me`, a member handle on the board (with or without `@`), a profile handle
+ * (`<person-handle>/<profile>`), or a principal ID. A principal ID is accepted without checking that it exists,
+ * so the answer never reveals who exists.
  */
 export function resolveMember(ctx: AppContext, actor: Actor, boardId: string, raw: string, field: string): string {
   const v = raw.trim().replace(/^@/, "");
   if (!v) throw invalid(`${field} can't be empty`);
   if (v === "me") return actor.id;
-  const byHandle = ctx.db.prepare("SELECT principal_id FROM memberships WHERE board_id = ? AND handle = ?").get(boardId, v) as { principal_id: string } | undefined;
-  if (byHandle) return byHandle.principal_id;
+  const memberByHandle = (handle: string) =>
+    (ctx.db.prepare("SELECT principal_id FROM memberships WHERE board_id = ? AND handle = ?").get(boardId, handle) as { principal_id: string } | undefined)?.principal_id;
+  const byHandle = memberByHandle(v.toLowerCase()) ?? memberByHandle(v);
+  if (byHandle) return byHandle;
+  const slash = v.indexOf("/");
+  if (slash > 0) {
+    const person = memberByHandle(v.slice(0, slash).toLowerCase());
+    const profile = person ? findProfile(ctx, person, v.slice(slash + 1)) : undefined;
+    if (profile) return profile.id;
+  }
   if (PRINCIPAL_ID.test(v)) return v;
   throw invalid(`${field}: no member of this board has the handle "${v}"`, { field });
 }
 
-/** A person covers the agents that act for them. */
+/** A person covers their profiles and the agents that act for them; an agent or a profile covers only itself. */
 function authorsOf(ctx: AppContext, principalId: string): string[] {
+  const covered = coveredPrincipalIds(ctx, principalId);
+  if (covered.length === 1 && covered[0] === principalId) {
+    const kind = (ctx.db.prepare("SELECT kind FROM principals WHERE id = ?").get(principalId) as { kind: string } | undefined)?.kind;
+    if (kind !== "human") return covered;
+  }
   const agents = ctx.db.prepare("SELECT id FROM principals WHERE owner_id = ? AND kind = 'agent'").all(principalId) as { id: string }[];
-  return [principalId, ...agents.map((a) => a.id)];
+  return [...new Set([...covered, ...agents.map((a) => a.id)])];
 }
 
 /** A thread on the board, named by its ID or by any message in it. Unknown or other boards' threads are not found. */

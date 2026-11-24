@@ -19,6 +19,7 @@ import { getUsage } from "../src/domain/usage.ts";
 import { WatcherWorker, createWatcher, deleteWatcher, listWatchers } from "../src/domain/watchers.ts";
 import type { Actor } from "../src/domain/model.ts";
 import { OmbError } from "../src/errors.ts";
+import { ensureProfile, profileActor } from "../src/domain/profiles.ts";
 import { freePort, human, key, makeCtx } from "./helpers.ts";
 
 async function rejects(p: Promise<unknown> | (() => unknown), code: string, reason?: string) {
@@ -99,6 +100,14 @@ test("read_messages: every filter, oldest first, with paging by message and curs
   const later = reply(ctx, maya, d.thread.id, { body: "+1", idempotency_key: key() });
   assert.deepEqual(ids(readMessages(ctx, owner, board.id, { after: now.cursor })), [later.message.id], "after a read's cursor: what is new since");
   assert.deepEqual(ids(readMessages(ctx, owner, board.id, { after: d.thread.id })), [e.message.id, later.message.id], "after a thread ID: after its root");
+
+  // profiles: a person's handle covers them; a profile handle names just the profile
+  const fx = profileActor(maya, ensureProfile(ctx, getPrincipal(ctx, maya.id)!, "fx"));
+  const fromFx = reply(ctx, fx, a.thread.id, { body: "fx checking in", idempotency_key: key() });
+  const mayaHandle = (ctx.db.prepare("SELECT handle FROM memberships WHERE board_id = ? AND principal_id = ?").get(board.id, maya.id) as { handle: string }).handle;
+  assert.ok(ids(readMessages(ctx, owner, board.id, { by: "maya" })).includes(fromFx.message.id), "a person's handle covers their profiles");
+  assert.deepEqual(ids(readMessages(ctx, owner, board.id, { by: `${mayaHandle}/fx` })), [fromFx.message.id], "a profile handle");
+  assert.deepEqual(ids(readMessages(ctx, fx, board.id, { by: "me" })), [fromFx.message.id], "me as a profile is just the profile");
 
   await rejects(() => readMessages(ctx, owner, board.id, { by: "nobody" }), "invalid_argument");
   await rejects(() => readMessages(ctx, owner, board.id, { labels: { "Bad Key": "x" } }), "invalid_argument");
@@ -239,6 +248,13 @@ test("schedules: one run, repeats at least the minimum apart, cancel, limits, lo
   runDueSchedules(ctx);
   ctx.db.prepare("UPDATE principals SET disabled_at = NULL WHERE id = ?").run(owner.id);
   assert.equal(listSchedules(ctx, owner, { thread_id: t.thread.id, all: true }).schedules.find((s) => s.id === parked.id)!.stopped_reason, "principal_disabled");
+
+  // a scoped token's schedules end before the token does
+  const scoped: Actor = { ...owner, scope: { boards: null, can: ["read", "post", "react", "label"], profile: null, expires_at: new Date(Date.parse("2026-11-20T09:00:00Z") + 7_200_000 + 3_600_000).toISOString() } };
+  await rejects(() => schedulePost(ctx, scoped, { thread_id: t.thread.id, body: "forever", every_seconds: 60 }), "invalid_argument");
+  await rejects(() => schedulePost(ctx, scoped, { thread_id: t.thread.id, body: "too late", in_seconds: 86_400 }), "invalid_argument");
+  const bounded = schedulePost(ctx, scoped, { thread_id: t.thread.id, body: "bounded", every_seconds: 60, times: 3 }).schedule;
+  cancelSchedule(ctx, owner, bounded.id);
 
   // pending limit
   ctx.config.limits.pending_schedules_per_board = 1;
