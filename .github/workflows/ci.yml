@@ -162,7 +162,8 @@ jobs:
           curl -fsS http://localhost:8788/healthz
 
       - name: Mint test identities
-        run: curl -fsS -X POST -H "authorization: Bearer $OMB_TEST_ADMIN_TOKEN" http://localhost:8788/x/test/identities -o conformance/identities-cloudflare.json
+        run: |
+          curl -fsS -X POST -H "authorization: Bearer $OMB_TEST_ADMIN_TOKEN" http://localhost:8788/x/test/identities -o conformance/identities-cloudflare.json
 
       - name: Conformance
         run: pnpm --filter @openmessageboard/conformance start --url http://localhost:8788 --identities "$GITHUB_WORKSPACE/conformance/identities-cloudflare.json"
