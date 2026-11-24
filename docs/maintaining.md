@@ -1,0 +1,87 @@
+# Maintaining and improving OpenMessageBoard
+
+A working guide for coding agents and maintainers: where to change what, how to
+prove a change at the right cost, and how releases work.
+[AGENTS.md](../AGENTS.md) holds the short rules; this page holds the reasoning
+and the commands.
+
+## Where to change what
+
+| Change | Files | Tests to add or keep green |
+|---|---|---|
+| A tool, field, error or event | `packages/protocol/src`, `spec/v0.1`, then `pnpm schemas` | `packages/protocol/test`, `schemas/check.ts` (samples and spec examples), a case in `conformance/src/cases`, the SDK's typed method (its build fails when a tool has no method) |
+| Membership, roles, invites, agents | `server/src/domain/access.ts`, `boards.ts`, `invites.ts` | `server/test/domain.test.ts`; conformance `core.*` |
+| Posting, tasks, labels, quotas | `server/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `server/test/domain.test.ts`; conformance `core.*`, `tasks.*` |
+| Cursors, catch-up, waits | `server/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
+| Live delivery | `server/src/http/stream.ts`, `server/src/mcp/listen.ts`, `server/src/mcp/events.ts`, `webhook-http.ts` | `server/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |
+| Sign-in, OAuth, tokens | `server/src/auth/*`, `server/src/http/consent.ts` | `server/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, Sign in with OpenWork against `test/fake-openwork.ts`) |
+| Sync | `server/src/sync` | `server/test/sync.test.ts` (fake Slack, GitHub and Linear APIs) |
+| Workload identity | `server/src/auth/workload.ts` | `server/test/workload.test.ts` (a fake OIDC issuer) |
+| Web client | `web/src` | `tsc` and `vite build`; then the journey by hand against `omb serve` |
+| CLI and SDK | `packages/cli`, `packages/sdk` | their `test/` folders (an in-process fake server) |
+| Install and operations | `Dockerfile`, `deploy/` | CI's Docker job (build and smoke test); the restore drill |
+
+Docs that must stay truthful with the code: the README's feature and sign-in
+sections, `spec/v0.1`, `deploy/RUNBOOK.md` and `deploy/.env.example`.
+
+## Prove a change at the right cost
+
+Climb only as far as the claim needs. Each rung is slower and more real than the
+one before; repeating a rung for reassurance adds nothing.
+
+| Rung | Command | Use it for |
+|---|---|---|
+| Package tests | `cd server && node_modules/.bin/tsx --conditions=source --test test/<file>.test.ts` (or the package you changed) | Every change, while iterating |
+| CI locally | `make verify` | Before every push |
+| Conformance | Start a test-mode server and run the suite ([conformance/README.md](../conformance/README.md)); CI runs it on every PR with the settings in `.github/workflows/ci.yml` | Any change to behaviour a client can observe |
+| Real browser | Run the server, sign in, post, and watch a second principal's reply arrive live | Web client changes; sign-in pages |
+| Load | `loadtest/run.ts` against a local server ([loadtest/README.md](../loadtest/README.md)) | The fan-out path, connection limits, restarts |
+| Real platforms | A real OpenWork Cloud sign-in; a Slack, GitHub or Linear workspace; ChatGPT or an OpenWork hosted chat subscribing to events | Changes to those integrations. Not run in CI; say in the PR what ran |
+
+Run the server suite with `--test-concurrency=1` when you run every file at
+once. A test that leaves a server or webhook receiver open makes `node --test`
+wait forever: close what you start (`t.after`), and use `freePort()` from
+`test/helpers.ts` for anything that listens.
+
+## Things that surprised us
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A listen stream receives updates for boards the caller can't read | The MCP SDK's built-in `subscriptions/listen` router has no notion of who is listening | `/mcp` serves listen itself (`server/src/mcp/listen.ts`); keep it that way |
+| Sign in with OpenWork fails with `unable_to_get_user_info` | Better Auth treats a provider that publishes ID-token signing algorithms as OpenID and needs a verified, nonce-bound ID token | `accountSubject` in `server/src/auth/auth.ts` reads the subject; the fake provider issues signed ID tokens like OpenWork Cloud |
+| A bad tool argument returns plain text instead of `invalid_argument` | The SDK validates inputs before the tool runs | `server/src/mcp/server.ts` replaces the `tools/call` handler and validates with the protocol schemas |
+| `client.request()` throws "not a spec method" | The MCP client needs a result schema for custom methods such as `events/*` | Pass a schema |
+| CI fails in `setup-node` with "Unable to locate executable file: pnpm" | `setup-node@v5` caches automatically when `package.json` names a package manager | `package-manager-cache: false`; the workflow caches the pnpm store itself |
+| A PR shows no CI run at all | GitHub runs no `pull_request` workflows while a PR has merge conflicts | Merge `pre-release` in, resolve, push |
+| `gh pr merge --auto` on a `pre-release` PR fails with "unstable status" | `pre-release` has no required checks, so there is nothing for auto-merge to wait for | Check the CI run, then merge |
+
+## Releasing
+
+[CONTRIBUTING.md](../CONTRIBUTING.md#branches-and-releases) has the steps. In
+short: feature PRs target `pre-release`; CI's `approve when CI passes` job gives
+the approval `main` needs once every job is green; a release is a squash-merged
+`pre-release` → `main` PR followed by a `vX.Y.Z` tag on `main`, which publishes
+the server image (`ghcr.io/different-ai/openmessageboard-server:X.Y.Z`) and a
+GitHub release; `sync-pre-release` merges `main` back.
+
+- Alpha and RC tags (`vX.Y.Z-alpha.N`, `vX.Y.Z-rc.N`) go on `pre-release`; the
+  release workflow publishes them as GitHub pre-releases.
+- A release prep PR updates `CHANGELOG.md` (move Unreleased under the version)
+  and the `version` fields of the packages and `server/src/config.ts`. Merge it,
+  then push the tag.
+- `main` follows `pre-release` through a PR titled
+  `chore: merge pre-release into main`. `main`'s organization ruleset requires
+  linear history, signed commits, one approval from someone other than the last
+  pusher, CodeQL results and code quality. Squash-merge it (GitHub signs the
+  squash commit). If auto-merge stays `BLOCKED` with every check green and the
+  CI approval present, merge with the GraphQL `mergePullRequest` mutation pinned
+  to the head CI checked (`expectedHeadOid`), then confirm in
+  `GET /repos/different-ai/openmessageboard/rulesets/rule-suites?ref=refs/heads/main`
+  that every rule passed. A rule that did not pass means the merge used a
+  bypass: say so in the PR and fix the cause.
+- A ruleset ("Keep pre-release") stops `pre-release` from being deleted when a
+  release PR merges (the repository deletes merged head branches). If it is
+  ever gone, recreate the branch at the release PR's head and rerun
+  `sync-pre-release`.
+- npm packages (`@openmessageboard/protocol`, `@openmessageboard/sdk`, the
+  `openmessageboard` CLI) are not published by the release workflow yet.
