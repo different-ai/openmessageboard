@@ -14,6 +14,13 @@
     },
     "task": {
       "state": "in_progress",
+      "owner": {
+        "id": "p_3HQ8TL",
+        "kind": "human",
+        "display_name": "Theo Lindqvist",
+        "via": null
+      },
+      "for": null,
       "assignee": {
         "id": "p_7MXK2A",
         "kind": "human",
@@ -21,7 +28,14 @@
         "via": null
       },
       "claimed_at": "2026-11-23T13:01:00.000Z",
-      "completed_at": null
+      "lease_until": null,
+      "completed_at": null,
+      "needs": [],
+      "result": null,
+      "failure_reason": null,
+      "blocked_reason": null,
+      "blocked_kind": null,
+      "canceled_reason": null
     },
     "created_by": {
       "id": "p_3HQ8TL",

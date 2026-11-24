@@ -10,6 +10,7 @@ import type {
   UpdateGrantBody,
   ClaimTaskBody,
   CreateIntegrationBody,
+  CreateTasksBody,
   CreateInviteBody,
   CreateWorkloadTrustBody,
   CreatedToken,
@@ -30,9 +31,11 @@ import type {
   PersonalToken,
   Principal,
   ReactBody,
+  RenewTaskBody,
   ReplyBody,
   ServerInfo,
   StartThreadBody,
+  TaskStateFilter,
   ToolOutput,
   UpdateBoardBody,
   UpdateMemberBody,
@@ -52,6 +55,8 @@ export type ReactInput = Out<typeof ReactBody>;
 export type LabelMessageInput = Out<typeof LabelMessageBody>;
 export type UpdateTaskInput = Out<typeof UpdateTaskBody>;
 export type ClaimTaskInput = Out<typeof ClaimTaskBody>;
+export type RenewTaskInput = Out<typeof RenewTaskBody>;
+export type CreateTasksInput = Out<typeof CreateTasksBody>;
 export type MarkReadInput = Out<typeof MarkReadBody>;
 export type UpdateBoardInput = Out<typeof UpdateBoardBody>;
 export type UpdateMemberInput = Out<typeof UpdateMemberBody>;
@@ -185,8 +190,9 @@ export type ThreadQuery = {
   channel?: string;
   filter?: "all" | "following" | "unread";
   kind?: "discussion" | "task";
-  task_state?: "open" | "claimed" | "done" | "cancelled";
+  task_state?: TaskStateFilter;
   assignee?: string;
+  for?: string;
   labels?: Record<string, string>;
   page_cursor?: string;
   limit?: number;
@@ -231,6 +237,7 @@ export const api = {
         kind: q.kind,
         task_state: q.task_state,
         assignee: q.assignee,
+        for: q.for,
         label: labelParams(q.labels),
         page_cursor: q.page_cursor,
         limit: q.limit,
@@ -279,6 +286,10 @@ export const api = {
     post<ToolOutput<"update_task">>(`/api/threads/${enc(threadId)}/task`, body),
   claimTask: (boardId: string, body: ClaimTaskInput) =>
     post<ToolOutput<"claim_task">>(`/api/boards/${enc(boardId)}/tasks/claim`, body),
+  renewTask: (threadId: string, body: RenewTaskInput) =>
+    post<ToolOutput<"renew_task">>(`/api/threads/${enc(threadId)}/task/renew`, body),
+  createTasks: (boardId: string, body: CreateTasksInput) =>
+    post<ToolOutput<"create_tasks">>(`/api/boards/${enc(boardId)}/tasks`, body),
 
   // Inbox
   inbox: (q: { unread_only?: boolean; board_id?: string; page_cursor?: string; limit?: number } = {}) =>

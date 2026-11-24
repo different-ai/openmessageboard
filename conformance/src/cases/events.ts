@@ -282,16 +282,21 @@ export const eventCases: CaseDef[] = [
       checkOccurrence(occ, "board.task_updated", "board.task_updated");
       check(!created.seen.some((o) => (o.data as { thread: { id: string } }).thread.id === other.thread.id), "a task with non-matching labels was delivered");
       await maya.ok("claim_task", { thread_id: t.thread.id });
-      await owner.ok("update_task", { thread_id: t.thread.id, action: "release" });
+      await owner.ok("update_task", { thread_id: t.thread.id, action: "block", reason: `hold ${ctx.runId}` });
       const mayaId = (await ctx.me("maya")).id;
       type TaskData = { thread: { id: string; task: { state: string } | null }; actor: { id: string } | null };
-      const isRelease = (o: Occurrence) => {
+      const isHold = (o: Occurrence) => {
         const d = o.data as TaskData;
-        return d.thread.id === t.thread.id && d.thread.task?.state === "open" && d.actor?.id !== mayaId;
+        return d.thread.id === t.thread.id && d.thread.task?.state === "blocked" && d.actor?.id !== mayaId;
       };
-      const released = await pollUntil(maya, "board.task_updated", args, created.cursor, isRelease);
-      check(!released.seen.some((o) => (o.data as TaskData).actor?.id === mayaId), "maya's own claim was delivered to maya");
-      check(released.seen.some(isRelease), "the owner's release was not delivered");
+      const held = await pollUntil(maya, "board.task_updated", args, created.cursor, isHold);
+      check(!held.seen.some((o) => (o.data as TaskData).actor?.id === mayaId), "maya's own claim was delivered to maya");
+      check(held.seen.some(isHold), "the owner's hold was not delivered");
+      const byState = pollResult(await maya.rpc("events/poll", { name: "board.task_updated", arguments: { ...args, state: "blocked" }, cursor: created.cursor }), "task poll by state");
+      check(
+        byState.events.every((o) => (o.data as TaskData).thread.task?.state === "blocked"),
+        "the state argument filters occurrences by the task's state",
+      );
     },
   },
 ];

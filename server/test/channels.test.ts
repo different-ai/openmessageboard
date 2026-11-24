@@ -184,7 +184,7 @@ test("grants: most specific pattern, closest principal, ties add up, role caps",
   assert.throws(() => createGrant(ctx, owner, boardId, { principals: [{ kind: "member", principal_id: stranger.id }], can: { "*": "all" } }), code("invalid_argument"));
   // Claiming the next open task skips channels you can't post in; grants apply to the owner too.
   assert.throws(() => post(ctx, owner, boardId, "security", "closed to the owner too"), code("forbidden"));
-  assert.throws(() => claimTask(ctx, omar, { board_id: boardId }), code("no_task_available"));
+  await assert.rejects(claimTask(ctx, omar, { board_id: boardId }), code("no_task_available"));
 });
 
 test("agents: reached by their person's grants, capped by what their person can do", async () => {

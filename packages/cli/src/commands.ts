@@ -1,10 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
-import { TASK_STATES, type GrantPrincipal, type TaskAction, type TaskState } from "@openmessageboard/protocol";
+import type { GrantPrincipal } from "@openmessageboard/protocol";
 import {
   OmbClient,
   OmbError,
-  createIdempotencyKey,
   isInboxItem,
   normalizeServer,
   type Change,
@@ -43,13 +42,13 @@ import {
   formatLabels,
   formatMembers,
   formatMessage,
-  formatTasks,
   formatThreadHeader,
   formatThreadRow,
   formatUsage,
   formatSchema,
 } from "./format.js";
 import { promptHidden, readAll, type Io } from "./io.js";
+import { TASK_RUNNERS } from "./tasks.js";
 
 export const CLI_VERSION = "0.1.0";
 
@@ -148,7 +147,7 @@ export class Context {
   }
 }
 
-type Run = (ctx: Context, args: string[], values: Values) => Promise<number | void>;
+type Run = (ctx: Context, args: string[], values: Values, rest: string[]) => Promise<number | void>;
 
 function need(args: string[], count: number, usage: string): void {
   if (args.length !== count) throw new UsageError(`Usage: omb ${usage}`);
@@ -248,7 +247,7 @@ async function read(ctx: Context, args: string[], values: Values): Promise<void>
   if (threadArg) {
     const res = await client.getThread({ thread_id: threadIdFrom(threadArg), limit: 200 });
     if (ctx.json) return ctx.printJson(res);
-    const parts = [formatThreadHeader(res.thread), ...res.messages.map((m) => formatMessage(m, ctx.now()))];
+    const parts = [formatThreadHeader(res.thread, ctx.now()), ...res.messages.map((m) => formatMessage(m, ctx.now()))];
     if (res.next_page_cursor) parts.push("(more messages; use --json and the page cursor)");
     return ctx.out(parts.join("\n\n"));
   }
@@ -343,8 +342,8 @@ async function bodyAndBlocks(ctx: Context, bodyArg: string, values: Values) {
   return { body: `${ref.schema}@${ref.version}`, blocks: [{ ...ref, data }] };
 }
 
-async function post(ctx: Context, args: string[], values: Values, task = false): Promise<void> {
-  const usage = task ? "tasks create [board|channel] <title> <body|->" : "post [board|channel] <title> <body|->";
+async function post(ctx: Context, args: string[], values: Values): Promise<void> {
+  const usage = "post [board|channel] <title> <body|->";
   if (args.length !== 2 && args.length !== 3) throw new UsageError(`Usage: omb ${usage}`);
   const { board, channel } = boardAndChannel(args.length === 3 ? args[0] : undefined, values);
   const [title, bodyArg] = args.slice(-2) as [string, string];
@@ -359,7 +358,7 @@ async function post(ctx: Context, args: string[], values: Values, task = false):
     ...content,
     ...(mentions.length ? { mentions } : {}),
     ...(labelsOf(values) ? { labels: labelsOf(values) } : {}),
-    ...(task || flag(values, "task") ? { task: true } : {}),
+    ...(flag(values, "task") ? { task: true } : {}),
     ...(attachments.length ? { attachments } : {}),
   });
   if (ctx.json) return ctx.printJson(res);
@@ -569,57 +568,6 @@ async function inbox(ctx: Context, args: string[], values: Values): Promise<void
   const lines = res.items.length ? res.items.map((i) => formatInboxItem(i, ctx.now())) : ["Inbox is empty."];
   lines.push(`${res.unread_count} unread${marked !== undefined ? ` · marked ${marked} read` : ""}`);
   ctx.out(lines.join("\n\n"));
-}
-
-async function tasksList(ctx: Context, args: string[], values: Values): Promise<void> {
-  if (args.length > 1) throw new UsageError("Usage: omb tasks list [board] [--state s] [--label k=v] [--mine]");
-  const state = str(values, "state");
-  if (state && !(TASK_STATES as readonly string[]).includes(state)) throw new UsageError(`--state must be one of ${TASK_STATES.join(", ")}`);
-  const res = await ctx.client().listThreads({
-    board_id: await ctx.board(args[0]),
-    kind: "task",
-    task_state: state as TaskState | undefined,
-    assignee: flag(values, "mine") ? "me" : undefined,
-    labels: labelsOf(values),
-    limit: 100,
-  });
-  if (ctx.json) return ctx.printJson(res);
-  ctx.out(formatTasks(res.threads));
-}
-
-async function tasksClaim(ctx: Context, args: string[], values: Values): Promise<void> {
-  if (args.length > 1) throw new UsageError("Usage: omb tasks claim [<thread>] [--ready] [--board <id>] [--label k=v]");
-  const client = ctx.client();
-  const labels = labelsOf(values);
-  const boardFlag = str(values, "board");
-  let thread;
-  if (args[0]) {
-    thread = (await client.claimTask({ thread_id: threadIdFrom(args[0]) })).thread;
-  } else if (flag(values, "ready") || boardFlag || labels) {
-    thread = await client.claimNext(await ctx.board(boardFlag), labels);
-    if (!thread) throw new OmbError("no_task_available", labels ? `No open task matches ${formatLabels(labels)}` : "No open task");
-  } else {
-    throw new UsageError("Pass a thread ID, or --ready to claim the oldest open task");
-  }
-  if (ctx.json) return ctx.printJson({ thread });
-  const first = await client.getThread({ thread_id: thread.id, limit: 1 }).catch(() => undefined);
-  ctx.out([`Claimed ${thread.id}`, formatThreadHeader(thread), ...(first?.messages[0] ? [formatMessage(first.messages[0], ctx.now())] : [])].join("\n"));
-}
-
-function taskAction(action: TaskAction): Run {
-  return async (ctx, args, values) => {
-    need(args, 1, `tasks ${action} <thread>${action === "complete" ? " [--result <text|->]" : ""}`);
-    const resultArg = str(values, "result");
-    const result = resultArg === undefined ? undefined : await ctx.body(resultArg);
-    const res = await ctx.client().updateTask({
-      thread_id: threadIdFrom(args[0]!),
-      action,
-      ...(result ? { result, idempotency_key: createIdempotencyKey() } : {}),
-    });
-    if (ctx.json) return ctx.printJson(res);
-    const past = { complete: "Completed", release: "Released", cancel: "Cancelled", reopen: "Reopened" }[action];
-    ctx.out(`${past} ${res.thread.id}${res.message ? ` (result posted as ${res.message.id})` : ""}`);
-  };
 }
 
 async function label(ctx: Context, args: string[], values: Values): Promise<void> {
@@ -870,7 +818,7 @@ export const RUNNERS: Record<string, Run> = {
   "grants revoke": grantsRevoke,
   "grants explain": grantsExplain,
   read,
-  post: (ctx, args, values) => post(ctx, args, values),
+  post,
   reply,
   delete: del,
   edit,
@@ -882,13 +830,7 @@ export const RUNNERS: Record<string, Run> = {
   wait,
   tail,
   inbox,
-  "tasks list": tasksList,
-  "tasks create": (ctx, args, values) => post(ctx, args, values, true),
-  "tasks claim": tasksClaim,
-  "tasks complete": taskAction("complete"),
-  "tasks release": taskAction("release"),
-  "tasks cancel": taskAction("cancel"),
-  "tasks reopen": taskAction("reopen"),
+  ...TASK_RUNNERS,
   label,
   invite,
   join,

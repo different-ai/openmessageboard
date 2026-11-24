@@ -55,18 +55,46 @@ export function formatLabels(labels: Record<string, string>): string {
     .join(" ");
 }
 
-function taskSummary(t: Thread): string | undefined {
-  if (!t.task) return undefined;
-  return t.task.assignee ? `${t.task.state} by ${authorName(t.task.assignee)}` : t.task.state;
+/** "4m", "45s", "2h": how long until `iso`, for lease countdowns. */
+export function timeLeft(iso: string, now: Date = new Date()): string {
+  const s = Math.round((Date.parse(iso) - now.getTime()) / 1000);
+  if (Number.isNaN(s)) return iso;
+  if (s <= 0) return "0s";
+  if (s < 90) return `${s}s`;
+  if (s < 5400) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
 }
 
-export function formatThreadHeader(t: Thread): string {
+function taskSummary(t: Thread, now?: Date): string | undefined {
+  if (!t.task) return undefined;
+  const k = t.task;
+  let out: string = k.state;
+  if (k.assignee) out += ` by ${authorName(k.assignee)}`;
+  if (k.state === "claimed" && k.lease_until) out += ` (lease ends in ${timeLeft(k.lease_until, now)})`;
+  if (k.for && !(k.state === "claimed" && k.assignee?.id === k.for.id)) out += ` · kept for ${authorName(k.for)}`;
+  return out;
+}
+
+/** Extra task lines for the thread header: needs, holds, reasons and the result. */
+function taskDetails(t: Thread): string[] {
+  const k = t.task;
+  if (!k) return [];
+  const lines: string[] = [];
+  if (k.needs.length) lines.push(`needs: ${k.needs.map((n) => `${n.thread_id} (${n.state})`).join(", ")}`);
+  if (k.blocked_reason) lines.push(`blocked${k.blocked_kind ? ` (${k.blocked_kind})` : ""}: ${k.blocked_reason}`);
+  if (k.failure_reason) lines.push(`failed: ${k.failure_reason}`);
+  if (k.canceled_reason) lines.push(`canceled: ${k.canceled_reason}`);
+  if (k.result) lines.push(`result: ${k.result.split("\n")[0]}`);
+  return lines;
+}
+
+export function formatThreadHeader(t: Thread, now?: Date): string {
   const meta = [t.id, t.channel];
-  const task = taskSummary(t);
+  const task = taskSummary(t, now);
   if (task) meta.push(`task: ${task}`);
   if (Object.keys(t.labels).length) meta.push(formatLabels(t.labels));
   meta.push(t.url);
-  return `# ${t.title}\n${meta.join(" · ")}`;
+  return [`# ${t.title}`, meta.join(" · "), ...taskDetails(t)].join("\n");
 }
 
 export function formatThreadRow(t: Thread, now?: Date): string {
@@ -93,11 +121,25 @@ function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-export function formatTasks(threads: Thread[]): string {
+/** Who a task row names: its holder (or who finished it), else who it is kept for. */
+function taskWho(t: Thread): string {
+  const k = t.task;
+  if (!k) return "-";
+  if (k.assignee) return authorName(k.assignee);
+  if (k.for) return `for ${authorName(k.for)}`;
+  return "-";
+}
+
+export function formatTasks(threads: Thread[], now?: Date): string {
   if (threads.length === 0) return "No tasks.";
   return formatTable(
-    ["ID", "STATE", "ASSIGNEE", "LABELS", "TITLE"],
-    threads.map((t) => [t.id, t.task?.state ?? "-", t.task?.assignee ? authorName(t.task.assignee) : "-", formatLabels(t.labels) || "-", truncate(t.title, 72)]),
+    ["ID", "STATE", "WHO", "NEEDS", "LABELS", "TITLE"],
+    threads.map((t) => {
+      const k = t.task;
+      const state = k?.state === "claimed" && k.lease_until ? `claimed ${timeLeft(k.lease_until, now)}` : (k?.state ?? "-");
+      const pending = k ? k.needs.filter((n) => n.state !== "completed").length : 0;
+      return [t.id, state, taskWho(t), pending ? `${pending} open` : "-", formatLabels(t.labels) || "-", truncate(t.title, 72)];
+    }),
   );
 }
 

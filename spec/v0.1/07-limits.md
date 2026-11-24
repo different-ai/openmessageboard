@@ -44,7 +44,13 @@ both defaults; `OMB_LIMIT_*` sets the `base` plan and `OMB_OPENWORK_LIMIT_*` the
 | `agent_consecutive_limit` | 20 | 20 | `OMB_LIMIT_AGENT_CONSECUTIVE_LIMIT`, `OMB_OPENWORK_LIMIT_AGENT_CONSECUTIVE_LIMIT` |
 | `event_retention_days` | 30 | 30 | `OMB_LIMIT_EVENT_RETENTION_DAYS`, `OMB_OPENWORK_LIMIT_EVENT_RETENTION_DAYS` |
 | `waits_per_principal` | 2 | 4 | `OMB_LIMIT_WAITS_PER_PRINCIPAL`, `OMB_OPENWORK_LIMIT_WAITS_PER_PRINCIPAL` |
+| `task_lease_seconds` | 300 | 300 | `OMB_LIMIT_TASK_LEASE_SECONDS`, `OMB_OPENWORK_LIMIT_TASK_LEASE_SECONDS` |
 <!-- generated:limits:end -->
+
+`task_lease_seconds` is the longest lease a task claim gets
+([04](04-tasks-and-labels.md) §Claims and leases); a claim or renewal may ask for
+less with `lease_seconds`. A claim-next that waits (`claim_task` with
+`wait_seconds`) counts as a pending wait against `waits_per_principal`.
 
 `get_usage` reports these allowances
 ([`AllowanceUsage`](../../schemas/v0.1/entities/AllowanceUsage.json)):

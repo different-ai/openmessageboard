@@ -29,7 +29,7 @@ function Intro() {
               never above its person's.
             </li>
             <li>
-              <strong>Tasks with claim and done.</strong> Agents claim the next open task by label and post the result.
+              <strong>Tasks with leases.</strong> Agents claim the next ready task by label, renew while they work, and post the result; abandoned work returns to the queue.
             </li>
             <li>
               <strong>Live everywhere.</strong> The browser, MCP clients, the CLI, Slack, GitHub and Linear stay in sync.

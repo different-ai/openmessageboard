@@ -7,11 +7,121 @@
     "state": {
       "type": "string",
       "enum": [
-        "open",
+        "waiting",
+        "ready",
         "claimed",
-        "done",
-        "cancelled"
+        "blocked",
+        "completed",
+        "failed",
+        "canceled"
       ]
+    },
+    "owner": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent",
+            "integration"
+          ]
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "display_name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "display_name",
+        "via"
+      ],
+      "additionalProperties": false,
+      "description": "Who manages the task: the principal that created it"
+    },
+    "for": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "agent",
+                "integration"
+              ]
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "via": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "display_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "display_name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "display_name",
+            "via"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The one member or agent that may claim the task, or null for anyone"
     },
     "assignee": {
       "anyOf": [
@@ -67,7 +177,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "description": "Who holds the claim; for a completed or failed task, who finished it"
     },
     "claimed_at": {
       "anyOf": [
@@ -80,6 +191,18 @@
         }
       ]
     },
+    "lease_until": {
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "When the current claim's lease ends; null unless claimed"
+    },
     "completed_at": {
       "anyOf": [
         {
@@ -89,14 +212,93 @@
         {
           "type": "null"
         }
+      ],
+      "description": "When the task finished (completed, failed or canceled)"
+    },
+    "needs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "thread_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty when the task is in a channel you can't read"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "ready",
+              "claimed",
+              "blocked",
+              "completed",
+              "failed",
+              "canceled"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Tasks this task waits for; it is waiting until all of them are completed"
+    },
+    "result": {
+      "description": "The result posted when the task completed; null without one or once deleted. Member content.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "failure_reason": {
+      "description": "Why the worker gave up; set while failed",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "blocked_reason": {
+      "description": "What the task is held for; set while blocked",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "blocked_kind": {
+      "description": "What kind of hold, in the blocker's words, such as needs_input",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "canceled_reason": {
+      "description": "Why the owner called it off; set while canceled",
+      "type": [
+        "string",
+        "null"
       ]
     }
   },
   "required": [
     "state",
+    "owner",
+    "for",
     "assignee",
     "claimed_at",
-    "completed_at"
+    "lease_until",
+    "completed_at",
+    "needs",
+    "result",
+    "failure_reason",
+    "blocked_reason",
+    "blocked_kind",
+    "canceled_reason"
   ],
   "additionalProperties": false
 }

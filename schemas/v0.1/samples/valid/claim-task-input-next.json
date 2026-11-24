@@ -1,10 +1,11 @@
 {
   "schema": "tools/claim_task.input",
-  "description": "claim the oldest open task with labels",
+  "description": "claim the oldest ready task with labels, waiting up to 20 seconds",
   "instance": {
     "board_id": "b_4THEO9",
     "labels": {
       "queue": "release"
-    }
+    },
+    "wait_seconds": 20
   }
 }

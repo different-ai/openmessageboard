@@ -37,6 +37,13 @@
             "invite_not_eligible",
             "task_already_claimed",
             "task_not_claimable",
+            "task_waiting",
+            "task_blocked",
+            "task_finished",
+            "task_assigned",
+            "task_not_owned",
+            "claim_lost",
+            "invalid_needs",
             "no_task_available",
             "conflict",
             "internal"

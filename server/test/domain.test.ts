@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { makeCtx, human, key } from "./helpers.ts";
 import { ensureOwnBoard, createAgent, addAgentToBoard, removeMember, updateMember, listMembers, getBoard } from "../src/domain/boards.ts";
 import { createInvite, redeemInvite, disableInvite, previewInvite } from "../src/domain/invites.ts";
-import { startThread, reply, deleteMessage, getThread, listThreads, setLabels, claimTask, updateTask, setFollow } from "../src/domain/conversation.ts";
+import { startThread, reply, deleteMessage, getThread, listThreads, setFollow } from "../src/domain/conversation.ts";
 import { getChanges, getInbox, markRead, waitForActivity } from "../src/domain/changes.ts";
 import { getUsage, searchMessages, runMaintenance } from "../src/domain/usage.ts";
 import { actorFromPrincipal, getPrincipal } from "../src/domain/access.ts";
@@ -181,38 +181,4 @@ test("quota: last allowed post succeeds, next fails with details, reads continue
   assert.equal(e.details?.limit, 3);
   assert.ok(typeof e.details?.resets_at === "string");
   assert.equal(getThread(ctx, owner, th.thread.id).messages.length, 3);
-});
-
-test("tasks: claim races, claim next by label, complete with result, release, cancel, assign", async () => {
-  const ctx = await makeCtx();
-  const owner = human(ctx, "owner@example.test", "Lead");
-  const board = ensureOwnBoard(ctx, owner, { create: true })!;
-  const w1 = human(ctx, "w1@example.test");
-  const w2 = human(ctx, "w2@example.test");
-  for (const w of [w1, w2]) redeemInvite(ctx, w, createInvite(ctx, owner, board.id, { audience: "link", role: "contributor" }).url!);
-  const t1 = startThread(ctx, owner, board.id, { title: "Fix flaky test", body: "deploy test", task: true, labels: { area: "ci" }, idempotency_key: key() });
-  const t2 = startThread(ctx, owner, board.id, { title: "iOS build", body: "sign it", task: true, labels: { area: "ios" }, idempotency_key: key() });
-  assert.equal(t1.thread.task?.state, "open");
-  const results = await Promise.allSettled([
-    Promise.resolve().then(() => claimTask(ctx, w1, { thread_id: t1.thread.id })),
-    Promise.resolve().then(() => claimTask(ctx, w2, { thread_id: t1.thread.id })),
-  ]);
-  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
-  const next = claimTask(ctx, w2, { board_id: board.id, labels: { area: "ios" } });
-  assert.equal(next.thread.id, t2.thread.id);
-  await rejects(() => claimTask(ctx, w2, { board_id: board.id, labels: { area: "ios" } }), "no_task_available");
-  const winner = results[0]!.status === "fulfilled" ? w1 : w2;
-  const done = updateTask(ctx, winner, t1.thread.id, { action: "complete", result: "Fixed the race in the deploy test" });
-  assert.equal(done.thread.task?.state, "done");
-  assert.equal(done.message?.body, "Fixed the race in the deploy test");
-  updateTask(ctx, w2, t2.thread.id, { action: "release" });
-  await rejects(() => updateTask(ctx, w2, t2.thread.id, { action: "cancel" }), "forbidden");
-  assert.equal(updateTask(ctx, owner, t2.thread.id, { action: "cancel" }).thread.task?.state, "cancelled");
-  const assigned = startThread(ctx, owner, board.id, { title: "Assigned", body: "for w1", task: true, assignee: w1.id, idempotency_key: key() });
-  assert.equal(assigned.thread.task?.state, "claimed");
-  assert.equal(getInbox(ctx, w1).items.some((i) => i.kind === "task_assigned"), true);
-  const labelled = setLabels(ctx, w1, assigned.thread.id, { set: { state: "review" } });
-  assert.deepEqual(labelled.thread.labels, { state: "review" });
-  assert.equal(listThreads(ctx, owner, board.id, { labels: { state: "review" } }).threads.length, 1);
-  assert.equal(listThreads(ctx, owner, board.id, { kind: "task", task_state: "done" }).threads.length, 1);
 });

@@ -19,10 +19,11 @@ has a `title` of 1–200 characters, a `kind` (`discussion` or `task`), `labels`
   descending, paginated with opaque `page_cursor`s, and returns `as_of`: the
   board's cursor read in the same transaction as the page ([05](05-events-and-cursors.md)).
   Filters combine with AND: `channel` (a channel, or a subtree ending in `/`),
-  `filter` (`all`, `following`, or `unread`, meaning
-  `unread_count > 0`), `kind`, `task_state`, `assignee` (a principal ID or `me`)
-  and `labels` (every pair must match, on the thread's root or on one of its
-  live messages, [04](04-tasks-and-labels.md) §Label filters).
+  `filter` (`all`, `following`, or `unread`, meaning `unread_count > 0`),
+  `kind`, `task_state` (a task state, or `open`), `assignee` (a principal ID or
+  `me`), `for` (a principal ID or `me`) and `labels` (every pair must match, on
+  the thread's root or on one of its live messages; `board.task` matches the task
+  state, [04](04-tasks-and-labels.md) §Filters and §Label filters).
 - `get_thread` returns the thread and a page of messages oldest first; the next
   page continues with newer messages. It also returns `as_of`. Reading a thread
   does not change read state.

@@ -100,24 +100,61 @@ export const COMMANDS: Record<string, CommandSpec> = {
   tail: { usage: "tail [board] [--thread <id> | --inbox]", summary: "Stream changes live", options: { thread: { type: "string" }, inbox: { type: "boolean" } } },
   inbox: { usage: "inbox [--unread] [--mark-read]", summary: "Mentions, replies in threads you follow, tasks assigned to you", options: { unread: { type: "boolean" }, "mark-read": { type: "boolean" } } },
   "tasks list": {
-    usage: "tasks list [board] [--state open|claimed|done|cancelled] [--label k=v] [--mine]",
-    summary: "List tasks",
-    options: { state: { type: "string" }, label, mine: { type: "boolean" } },
+    usage: "tasks [list] [board|channel] [--board <id>] [--channel <c|c/>] [--state <state>|open|all] [--label k=v] [--for <principal>|me] [--mine]",
+    summary: "List tasks, oldest first (open ones unless --state says otherwise)",
+    options: { state: { type: "string" }, label, for: { type: "string" }, mine: { type: "boolean" }, board: { type: "string" }, channel: { type: "string" } },
   },
   "tasks create": {
-    usage: "tasks create [board|channel] <title> <body|-> [--board <id>] [--channel <c>] [--label k=v ...]",
-    summary: "Create a task",
-    options: { label, mention: { type: "string", multiple: true }, board: { type: "string" }, channel: { type: "string" } },
+    usage: "tasks create [board|channel] <title> <body|-> [--label k=v ...] [--needs <thread> ...] [--for <principal>|me] [--claim] | tasks create [board|channel] --file <plan.json|-> [--idempotency-key <k>]",
+    summary: "Create a task, or a plan of up to 15 tasks from a JSON file",
+    options: {
+      board: { type: "string" },
+      channel: { type: "string" },
+      label,
+      mention: { type: "string", multiple: true },
+      needs: { type: "string", multiple: true },
+      for: { type: "string" },
+      claim: { type: "boolean" },
+      file: { type: "string" },
+      "idempotency-key": { type: "string" },
+    },
   },
   "tasks claim": {
-    usage: "tasks claim [<thread>] [--ready] [--board <id>] [--label k=v ...]",
-    summary: "Claim a task, or the oldest open task matching labels",
-    options: { ready: { type: "boolean" }, board: { type: "string" }, label },
+    usage: "tasks claim <thread> | tasks claim --ready [board|channel|subtree/] [--label k=v ...] [--wait <duration>] [--lease <seconds>]",
+    summary: "Claim a task for a lease, or the oldest ready task matching labels (kept-for-you first)",
+    options: { ready: { type: "boolean" }, board: { type: "string" }, channel: { type: "string" }, label, wait: { type: "string" }, lease: { type: "string" } },
   },
-  "tasks complete": { usage: "tasks complete <thread> [--result <text|->]", summary: "Complete a task, optionally posting a result", options: { result: { type: "string" } } },
-  "tasks release": { usage: "tasks release <thread>", summary: "Give a claimed task back" },
-  "tasks cancel": { usage: "tasks cancel <thread>", summary: "Cancel a task" },
-  "tasks reopen": { usage: "tasks reopen <thread>", summary: "Reopen a done or cancelled task" },
+  "tasks run": {
+    usage: "tasks run <thread> | tasks run --ready [board|channel|subtree/] [--label k=v ...] [--wait <duration>] [--result <text>] -- <command> [args...]",
+    summary: "Claim a task, run a command with OMB_TASK set, renew while it runs, then complete (exit 0) or fail it",
+    options: {
+      ready: { type: "boolean" },
+      board: { type: "string" },
+      channel: { type: "string" },
+      label,
+      wait: { type: "string" },
+      lease: { type: "string" },
+      result: { type: "string" },
+    },
+  },
+  "tasks renew": { usage: "tasks renew <thread> [--lease <seconds>]", summary: "Extend your claim's lease from now", options: { lease: { type: "string" }, token: { type: "string" } } },
+  "tasks release": { usage: "tasks release <thread>", summary: "Return a task you hold to the queue", options: { token: { type: "string" } } },
+  "tasks complete": {
+    usage: "tasks complete <thread> [result|-] [--result <text|->]",
+    summary: "Finish a task you hold, optionally posting a result",
+    options: { result: { type: "string" }, token: { type: "string" } },
+  },
+  "tasks fail": { usage: "tasks fail <thread> <reason>", summary: "Give up on a task you hold", options: { token: { type: "string" } } },
+  "tasks block": {
+    usage: "tasks block <thread> <reason> [--kind <kind>]",
+    summary: "Hold a task for a person (as its worker, or as its owner when unclaimed)",
+    options: { kind: { type: "string" }, token: { type: "string" } },
+  },
+  "tasks unblock": { usage: "tasks unblock <thread>", summary: "Lift a hold, as the task's owner" },
+  "tasks reopen": { usage: "tasks reopen <thread>", summary: "Make a failed task ready again, as its owner" },
+  "tasks assign": { usage: "tasks assign <thread> <principal>|me | tasks assign <thread> --pool", summary: "Keep a task for one member or agent, or return it to anyone", options: { pool: { type: "boolean" } } },
+  "tasks needs": { usage: "tasks needs <thread> <thread>... | tasks needs <thread> --none", summary: "Replace the tasks a task waits for", options: { none: { type: "boolean" } } },
+  "tasks cancel": { usage: "tasks cancel <thread> <reason>", summary: "Call a task off, as its owner" },
   label: {
     usage: "label <message|thread> [k=v ...] [--unset k ...] [--if k=v ...] [--if-unset k ...]",
     summary: "Set or remove labels on a message (a thread's labels are its first message's)",
@@ -188,11 +225,16 @@ export interface ParsedCommandLine {
   command: string | undefined;
   positionals: string[];
   values: Values;
+  /** `tasks run` only: the command after `--`. */
+  rest: string[];
 }
 
+/** Commands that take a command line after `--`. */
+const TAKES_REST = new Set(["tasks run"]);
+
 const GROUPS = new Set(["tasks", "tokens", "boards", "channels", "grants", "schemas"]);
-/** Groups that run a default subcommand when the next word isn't one of theirs (`omb channels b_1` lists). */
-const DEFAULT_SUBCOMMAND: Record<string, string> = { boards: "list", channels: "list", grants: "list", schemas: "list" };
+/** Groups that run a default subcommand when the next word isn't one of theirs (`omb tasks b_1` lists). */
+const DEFAULT_SUBCOMMAND: Record<string, string> = { tasks: "list", boards: "list", channels: "list", grants: "list", schemas: "list" };
 
 /**
  * Parses `omb [global flags] <command> [args] [flags]`. Global flags may appear anywhere.
@@ -205,7 +247,7 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
   let command: string | undefined;
   let consumed = 0;
   if (words[0] === "help") {
-    return { command: undefined, positionals: words.slice(1), values: { help: true } };
+    return { command: undefined, positionals: words.slice(1), values: { help: true }, rest: [] };
   }
   if (words[0] && GROUPS.has(words[0])) {
     const fallback = DEFAULT_SUBCOMMAND[words[0]];
@@ -216,7 +258,7 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
       command = `${words[0]} ${fallback}`;
       consumed = 1;
     } else if (!words[1]) {
-      if (loose.values.help) return { command: undefined, positionals: [], values: { help: true } };
+      if (loose.values.help) return { command: undefined, positionals: [], values: { help: true }, rest: [] };
       throw new UsageError(`Missing subcommand: omb ${words[0]} <${subcommandsOf(words[0]).join("|")}>`);
     } else {
       command = `${words[0]} ${words[1]}`;
@@ -229,15 +271,22 @@ export function parseCommandLine(argv: string[]): ParsedCommandLine {
   if (command && !COMMANDS[command]) throw new UsageError(`Unknown command: ${command}. Run omb --help.`);
 
   const options: Options = { ...GLOBAL_OPTIONS, ...(command ? COMMANDS[command]!.options : {}) };
+  let args = argv;
+  let rest: string[] = [];
+  const dashes = argv.indexOf("--");
+  if (command && TAKES_REST.has(command) && dashes >= 0) {
+    args = argv.slice(0, dashes);
+    rest = argv.slice(dashes + 1);
+  }
   let parsed;
   try {
-    parsed = parseArgs({ args: argv, options, strict: true, allowPositionals: true });
+    parsed = parseArgs({ args, options, strict: true, allowPositionals: true });
   } catch (err) {
     throw new UsageError((err as Error).message.replace(/^.*?Unknown option/, "Unknown option"));
   }
   // Drop the command words (they are the first positionals, in order).
   const positionals = parsed.positionals.slice(consumed);
-  return { command, positionals, values: parsed.values as Values };
+  return { command, positionals, values: parsed.values as Values, rest };
 }
 
 export function subcommandsOf(group: string): string[] {
@@ -265,7 +314,7 @@ ${lines.join("\n")}
 
 ${GLOBAL_HELP}
 Run omb <command> --help for a command's arguments.
-Exit codes: 0 ok, 1 error, 2 timeout.`;
+Exit codes: 0 ok, 1 error, 2 timeout. tasks run exits with its command's code, 130 on Ctrl-C and 143 on SIGTERM.`;
 }
 
 const GLOBAL_HELP = `Global flags:

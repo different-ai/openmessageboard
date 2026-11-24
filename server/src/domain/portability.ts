@@ -1,4 +1,4 @@
-import { EXPORT_FORMAT, ExportFile, type Board } from "@openmessageboard/protocol";
+import { EXPORT_FORMAT, ExportFile, type Board, type TaskState } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
 import { OmbError, forbidden, invalid } from "../errors.js";
@@ -44,6 +44,12 @@ export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): Exp
     .all(board.id) as { message_id: string; id: string; name: string; type: string; size: number }[]) {
     files.set(a.message_id, [...(files.get(a.message_id) ?? []), { id: a.id, name: a.name, type: a.type, size: a.size }]);
   }
+  const needsMap = new Map<string, string[]>();
+  for (const r of ctx.db
+    .prepare("SELECT n.task_id, n.needs_id FROM task_needs n JOIN threads t ON t.id = n.task_id WHERE t.board_id = ?")
+    .all(board.id) as { task_id: string; needs_id: string }[]) {
+    needsMap.set(r.task_id, [...(needsMap.get(r.task_id) ?? []), r.needs_id]);
+  }
   return {
     format: EXPORT_FORMAT,
     exported_at: nowIso(ctx),
@@ -58,6 +64,7 @@ export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): Exp
       labels: JSON.parse(t.labels) as Record<string, string>,
       task_state: t.task_state,
       task_assignee_ref: t.task_assignee_id,
+      ...(needsMap.has(t.id) ? { task_needs: needsMap.get(t.id)! } : {}),
       created_by_ref: t.created_by,
       created_at: t.created_at,
     })),
@@ -132,13 +139,25 @@ export function importBoard(ctx: AppContext, actor: Actor, raw: unknown, opts: {
     }
     const author = (ref: string | null) => (ref ? (authorMap.get(ref) ?? actor.id) : null);
     const threadMap = new Map<string, string>();
-    const threadLabels = new Map<string, Record<string, string>>();
+    for (const t of file.threads) threadMap.set(t.id, newId("t"));
+    const threadLabels = new Map(file.threads.map((t) => [threadMap.get(t.id)!, t.labels] as const));
+    const taskIds = new Set(file.threads.filter((t) => t.kind === "task").map((t) => t.id));
+    const importedState = new Map<string, TaskState>();
     for (const t of file.threads) {
-      const id = newId("t");
-      threadMap.set(t.id, id);
-      threadLabels.set(id, t.labels);
+      if (t.kind !== "task") continue;
+      // Pre-v2 states map forward; a claim never survives an import (its lease and token stay on the old server).
+      const raw = t.task_state ?? "ready";
+      const s: TaskState = raw === "open" || raw === "claimed" ? "ready" : raw === "done" ? "completed" : raw === "cancelled" ? "canceled" : raw;
+      importedState.set(t.id, s);
+    }
+    for (const t of file.threads) {
+      const id = threadMap.get(t.id)!;
       const msgs = file.messages.filter((m) => m.thread_id === t.id);
       const last = msgs[msgs.length - 1]?.created_at ?? t.created_at;
+      let state = importedState.get(t.id) ?? null;
+      const needs = (t.task_needs ?? []).filter((n) => taskIds.has(n) && n !== t.id);
+      if (state === "waiting" || state === "ready") state = needs.some((n) => importedState.get(n) !== "completed") ? "waiting" : "ready";
+      const keepsAssignee = state === "completed" || state === "failed";
       // Channels travel with their threads; an unknown or invalid channel lands in general.
       const channel = t.channel && t.channel.length <= MAX_CHANNEL_CHARS && CHANNEL_PATH_PATTERN.test(t.channel) ? t.channel : DEFAULT_CHANNEL;
       ctx.db
@@ -146,8 +165,14 @@ export function importBoard(ctx: AppContext, actor: Actor, raw: unknown, opts: {
           `INSERT INTO threads (id, board_id, channel, title, kind, labels, task_state, task_assignee_id, created_by, created_at, last_activity_at, message_count)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, boardId, channel, t.title, t.kind, JSON.stringify(t.labels), t.kind === "task" ? (t.task_state ?? "open") : null, author(t.task_assignee_ref), author(t.created_by_ref), t.created_at, last, msgs.length);
+        .run(id, boardId, channel, t.title, t.kind, JSON.stringify(t.labels), t.kind === "task" ? state : null, keepsAssignee ? author(t.task_assignee_ref) : null, author(t.created_by_ref), t.created_at, last, msgs.length);
       ensureChannel(ctx, boardId, channel, actor.id);
+    }
+    for (const t of file.threads) {
+      if (!importedState.has(t.id)) continue;
+      for (const n of t.task_needs ?? []) {
+        if (taskIds.has(n) && n !== t.id) ctx.db.prepare("INSERT OR IGNORE INTO task_needs (task_id, needs_id) VALUES (?, ?)").run(threadMap.get(t.id)!, threadMap.get(n)!);
+      }
     }
     const messageMap = new Map<string, string>();
     for (const m of file.messages) messageMap.set(m.id, newId("m"));

@@ -102,8 +102,14 @@
               {
                 "type": "string",
                 "enum": [
-                  "open",
+                  "waiting",
+                  "ready",
                   "claimed",
+                  "blocked",
+                  "completed",
+                  "failed",
+                  "canceled",
+                  "open",
                   "done",
                   "cancelled"
                 ]
@@ -111,13 +117,21 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Importers read the pre-v2 states open, done and cancelled as ready, completed and canceled"
           },
           "task_assignee_ref": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "task_needs": {
+            "description": "IDs of the threads in this file that the task waits for",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "created_by_ref": {
             "type": "string"

@@ -22,6 +22,7 @@ import type { Actor, BoardRow, MembershipRow, PrincipalRow } from "./model.js";
 import { presentBoard, presentMember, principalRefs } from "./present.js";
 import { boardLimits, limitsFor } from "./plans.js";
 import { boardAttachmentKeys, removeFiles } from "./attachments.js";
+import { releaseClaimsOf } from "./tasks.js";
 
 // ---------- principals ----------
 
@@ -325,6 +326,7 @@ export function removeMembershipCascade(
   for (const id of victims) {
     const info = ctx.db.prepare("DELETE FROM memberships WHERE board_id = ? AND principal_id = ?").run(boardId, id);
     if (info.changes === 0) continue;
+    releaseClaimsOf(ctx, emit, boardId, id);
     ctx.db.prepare("DELETE FROM event_subscriptions WHERE board_id = ? AND principal_id = ?").run(boardId, id);
     recordEvent(ctx, emit, { boardId, type: "member.left", subjectId: id, actorId });
     emit({ kind: "access", boardId, principalId: id, reason });

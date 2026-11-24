@@ -14,7 +14,8 @@ import type { HubEvent } from "../live/hub.js";
 import { nowIso, requireChannelPermission, requireThread, type ThreadAccess } from "./access.js";
 import { recordEvent } from "./boards.js";
 import { canChangeMessage } from "./profiles.js";
-import { addInboxItem, checkWriteRate, validateBody, validateLabels } from "./conversation.js";
+import { addInboxItem, checkWriteRate, rejectReservedLabels, validateBody, validateLabels } from "./conversation.js";
+import { taskStateClause } from "./tasks.js";
 import { resolveTextMentions } from "./mentions.js";
 import { parseJsonObject } from "./message-extras.js";
 import type { Actor, MessageRow } from "./model.js";
@@ -24,12 +25,6 @@ import { boardLimits } from "./plans.js";
 type Emit = (e: HubEvent) => void;
 
 // ---------- labels ----------
-
-/** Keys under `board.` belong to the server. */
-export function assertLabelKeysAllowed(keys: string[]): void {
-  const reserved = keys.find((k) => k.startsWith(RESERVED_LABEL_PREFIX));
-  if (reserved) throw new OmbError("reserved_label", `Label keys under "${RESERVED_LABEL_PREFIX}" belong to the board; "${reserved}" can't be set or removed`, { key: reserved });
-}
 
 /** Keys are validated against LABEL_KEY_PATTERN before they reach SQL, so they are safe to inline in a JSON path. */
 const path = (k: string) => `'$."${k}"'`;
@@ -41,6 +36,12 @@ const path = (k: string) => `'$."${k}"'`;
 export function messageLabelFilter(labels: Record<string, string>, params: unknown[], m: string, t: string): string {
   let sql = "";
   for (const [k, v] of Object.entries(labels)) {
+    // `board.task` is the thread's task state (threads alias `t`), not a stored label.
+    const state = t === "t" ? taskStateClause(k, v, params) : null;
+    if (state !== null) {
+      sql += state;
+      continue;
+    }
     sql += ` AND (json_extract(${m}.labels, ${path(k)}) = ? OR json_extract(${t}.labels, ${path(k)}) = ?)`;
     params.push(v, v);
   }
@@ -49,6 +50,17 @@ export function messageLabelFilter(labels: Record<string, string>, params: unkno
 
 /** SQL that matches a thread (alias `t`) whose root, or one of whose live messages, matches every pair. */
 export function threadLabelFilter(labels: Record<string, string>, params: unknown[], t: string): string {
+  let task = "";
+  const rest: Record<string, string> = {};
+  for (const [k, v] of Object.entries(labels)) {
+    const state = t === "t" ? taskStateClause(k, v, params) : null;
+    if (state !== null) task += state;
+    else rest[k] = v;
+  }
+  return task + storedLabelFilter(rest, params, t);
+}
+
+function storedLabelFilter(labels: Record<string, string>, params: unknown[], t: string): string {
   const entries = Object.entries(labels);
   if (entries.length === 0) return "";
   const rootOnly = entries.map(([k]) => `json_extract(${t}.labels, ${path(k)}) = ?`).join(" AND ");
@@ -76,7 +88,7 @@ export function applyLabelChange(ctx: AppContext, emit: Emit, actor: Actor, row:
   const unset = change.unset ?? [];
   const both = unset.filter((k) => k in set);
   if (both.length) throw invalid(`Label ${both.map((k) => `"${k}"`).join(", ")} is in both set and unset`);
-  assertLabelKeysAllowed([...Object.keys(set), ...unset]);
+  rejectReservedLabels([...Object.keys(set), ...unset]);
   validateLabels(set);
   const current = parseJsonObject(row.labels);
   for (const [k, expected] of Object.entries(change.if ?? {})) {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openmessageboard:schemas:v0.1:tools/start_thread.input",
   "title": "start_thread input",
-  "description": "Start a thread in a channel of a board (general by default; the first post creates the channel). Set task: true to make it a task that agents or people can claim.",
+  "description": "Start a thread in a channel of a board (general by default; the first post creates the channel). Set task: true to make it a task that agents or people can claim; you own the tasks you create. A task can wait for other tasks (needs), be kept for one principal (for), and be claimed at once (claim).",
   "type": "object",
   "properties": {
     "board_id": {
@@ -46,9 +46,21 @@
     "task": {
       "type": "boolean"
     },
-    "assignee": {
-      "description": "Tasks only: member principal ID to assign; the task starts claimed by them and they get a task_assigned inbox item",
+    "needs": {
+      "description": "Tasks only: thread IDs of tasks on this board that must complete first",
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "for": {
+      "description": "Tasks only: the one member or agent (principal ID, or 'me') that may claim it; they get a task_assigned inbox item",
       "type": "string"
+    },
+    "claim": {
+      "description": "Tasks only: claim the new task for yourself in the same write; the result carries the claim",
+      "type": "boolean"
     },
     "blocks": {
       "description": "Structured data, checked against registered schemas (list_schemas)",

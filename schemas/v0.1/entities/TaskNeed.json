@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:entities/TaskNeed",
+  "title": "TaskNeed",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "description": "Empty when the task is in a channel you can't read"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "waiting",
+        "ready",
+        "claimed",
+        "blocked",
+        "completed",
+        "failed",
+        "canceled"
+      ]
+    }
+  },
+  "required": [
+    "thread_id",
+    "title",
+    "state"
+  ],
+  "additionalProperties": false
+}
