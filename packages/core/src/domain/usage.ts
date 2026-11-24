@@ -82,7 +82,8 @@ export function runMaintenance(ctx: AppContext, emitAccess: (boardId: string, pr
     .all(now) as { board_id: string; principal_id: string }[];
   for (const m of expired) {
     ctx.db.prepare("UPDATE memberships SET expiry_notified = 1 WHERE board_id = ? AND principal_id = ?").run(m.board_id, m.principal_id);
-    ctx.db.prepare("UPDATE event_subscriptions SET status = 'terminated', terminated_reason = 'expired', updated_at = ? WHERE board_id = ? AND principal_id = ? AND status = 'active'").run(now, m.board_id, m.principal_id);
+    // Webhook subscriptions are ended by the events worker when it sees the access event (or the lost membership on
+    // its next pass), so the subscriber gets its signed `terminated` envelope.
     emitAccess(m.board_id, m.principal_id);
     for (const a of ctx.db.prepare("SELECT m.principal_id FROM memberships m JOIN principals p ON p.id = m.principal_id WHERE m.board_id = ? AND p.owner_id = ?").all(m.board_id, m.principal_id) as {
       principal_id: string;

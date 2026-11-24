@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { AUTH_PROVIDERS, DEFAULT_LIMITS, DEFAULT_RATE_LIMITS, OPENWORK_PLAN_LIMITS, type AuthProvider, type Limits, type Plan, type RateLimits } from "@openmessageboard/protocol";
+import { AUTH_PROVIDERS, DEFAULT_LIMITS, DEFAULT_RATE_LIMITS, OPENWORK_PLAN_LIMITS, type AuthProvider, type Limits, type Plan, type RateLimits, trimTrailingSlashes } from "@openmessageboard/protocol";
 
 export interface Config {
   port: number;
@@ -59,7 +59,7 @@ export type Env = Record<string, string | undefined>;
 export function loadConfig(env: Env, overrides: Partial<Config> = {}): Config {
   const testMode = envBool(env, "OMB_TEST_MODE", false);
   const port = envInt(env, "OMB_PORT", envInt(env, "PORT", 8787));
-  const publicUrl = (env.OMB_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/+$/, "");
+  const publicUrl = trimTrailingSlashes(env.OMB_PUBLIC_URL ?? `http://localhost:${port}`);
   const dataDir = env.OMB_DATA_DIR ?? "./data";
   const limits = { ...DEFAULT_LIMITS } as Limits;
   for (const key of Object.keys(limits) as (keyof Limits)[]) {
@@ -88,7 +88,7 @@ export function loadConfig(env: Env, overrides: Partial<Config> = {}): Config {
     host: env.OMB_HOST ?? "0.0.0.0",
     publicUrl,
     dataDir,
-    dbPath: env.OMB_DB_PATH ?? `${dataDir.replace(/\/+$/, "")}/openmessageboard.db`,
+    dbPath: env.OMB_DB_PATH ?? `${trimTrailingSlashes(dataDir)}/openmessageboard.db`,
     secret: env.OMB_SECRET ?? "",
     testMode,
     limits,
@@ -96,7 +96,7 @@ export function loadConfig(env: Env, overrides: Partial<Config> = {}): Config {
     rateLimits,
     authProviders: providers as AuthProvider[],
     openwork: {
-      issuer: (env.OMB_OPENWORK_ISSUER ?? "https://app.openworklabs.com/api/auth").replace(/\/+$/, ""),
+      issuer: trimTrailingSlashes(env.OMB_OPENWORK_ISSUER ?? "https://app.openworklabs.com/api/auth"),
       clientId: env.OMB_OPENWORK_CLIENT_ID || null,
       clientSecret: env.OMB_OPENWORK_CLIENT_SECRET || null,
       signUpUrl: env.OMB_OPENWORK_SIGN_UP_URL ?? "https://app.openworklabs.com",
