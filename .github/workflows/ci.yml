@@ -22,6 +22,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # setup-node v5 caches automatically when package.json names a package manager, which needs pnpm on PATH
+          # first. The pnpm store is cached explicitly below instead.
+          package-manager-cache: false
 
       - name: Enable pnpm (corepack)
         run: |
