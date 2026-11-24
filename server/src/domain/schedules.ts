@@ -11,7 +11,9 @@ import type { AppContext } from "../context.js";
 import { read, tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
-import { activeMembership, actorFromPrincipal, getPrincipal, nowIso, requireMember, requireThread } from "./access.js";
+import { activeMembership, actorFromPrincipal, getPrincipal, nowIso, requireChannelPermission, requireMember, requireThread } from "./access.js";
+import { normalizeChannel } from "./channels.js";
+import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 import { reply, startThread, validateBody, validateLabels } from "./conversation.js";
 import type { Actor } from "./model.js";
 import { boardLimits } from "./plans.js";
@@ -21,6 +23,7 @@ interface ScheduleRow {
   id: string;
   board_id: string;
   thread_id: string | null;
+  channel: string;
   created_by: string;
   title: string | null;
   body: string;
@@ -43,6 +46,7 @@ interface ScheduleRow {
 export interface SchedulePostInput {
   board_id?: string | undefined;
   thread_id?: string | undefined;
+  channel?: string | undefined;
   title?: string | undefined;
   body: string;
   labels?: Record<string, string> | undefined;
@@ -65,6 +69,7 @@ function presentSchedules(ctx: AppContext, rows: ScheduleRow[]): Schedule[] {
     id: r.id,
     board_id: r.board_id,
     thread_id: r.thread_id,
+    channel: r.channel,
     title: r.title,
     body: r.body,
     labels: JSON.parse(r.labels) as Record<string, string>,
@@ -98,15 +103,22 @@ export function schedulePost(ctx: AppContext, actor: Actor, input: SchedulePostI
   if ((input.board_id ? 1 : 0) + (input.thread_id ? 1 : 0) !== 1) throw invalid("Pass board_id (a new thread each run) or thread_id (a reply each run)");
   let boardId: string;
   let threadId: string | null = null;
+  let channel: string;
   if (input.thread_id) {
-    const { thread } = requireThread(ctx, actor, input.thread_id, "contributor");
-    boardId = thread.board_id;
-    threadId = thread.id;
+    const t = requireThread(ctx, actor, input.thread_id, "contributor");
+    requireChannelPermission(t, "post");
+    boardId = t.thread.board_id;
+    threadId = t.thread.id;
+    channel = t.thread.channel;
     if (input.title !== undefined) throw invalid("title applies to new threads; leave it out for a reply");
     if (input.labels !== undefined) throw invalid("labels apply to new threads; leave them out for a reply");
+    if (input.channel !== undefined) throw invalid("channel applies to new threads; a reply posts in its thread's channel");
   } else {
     requireMember(ctx, actor, input.board_id!, "contributor");
     boardId = input.board_id!;
+    channel = normalizeChannel(input.channel);
+    const access = ChannelAccess.load(ctx, boardId, actor);
+    if (!access.can(channel, "read") || !access.can(channel, "post")) throw forbidden(`You can't post in ${channel}`);
     if (input.title === undefined || !input.title.trim()) throw invalid("title is required for a new thread");
     if ([...input.title.trim()].length > MAX_TITLE_CHARS) throw invalid(`Titles can be up to ${MAX_TITLE_CHARS} characters`);
   }
@@ -175,13 +187,14 @@ export function schedulePost(ctx: AppContext, actor: Actor, input: SchedulePostI
     const at = nowIso(ctx);
     ctx.db
       .prepare(
-        `INSERT INTO schedules (id, board_id, thread_id, created_by, title, body, labels, mentions, next_run_at, every_seconds, times, until, state, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+        `INSERT INTO schedules (id, board_id, thread_id, channel, created_by, title, body, labels, mentions, next_run_at, every_seconds, times, until, state, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
       )
       .run(
         id,
         boardId,
         threadId,
+        channel,
         actor.id,
         input.title?.trim() ?? null,
         input.body,
@@ -198,25 +211,32 @@ export function schedulePost(ctx: AppContext, actor: Actor, input: SchedulePostI
   });
 }
 
+/** A schedule's channel now: its thread's for replies (threads can move), else the channel it starts threads in. */
+const SCHEDULE_CHANNEL = "COALESCE((SELECT t.channel FROM threads t WHERE t.id = s.thread_id), s.channel)";
+
 export function listSchedules(
   ctx: AppContext,
   actor: Actor,
-  input: { board_id?: string | undefined; thread_id?: string | undefined; all?: boolean | undefined; limit?: number | undefined },
+  input: { board_id?: string | undefined; thread_id?: string | undefined; channel?: string | undefined; all?: boolean | undefined; limit?: number | undefined },
 ): { schedules: Schedule[] } {
   if ((input.board_id ? 1 : 0) + (input.thread_id ? 1 : 0) !== 1) throw invalid("Pass board_id or thread_id");
+  if (input.thread_id && input.channel) throw invalid("channel applies to board listings");
   return read(ctx, () => {
     const params: unknown[] = [];
-    let sql = "SELECT * FROM schedules WHERE ";
+    let sql = "SELECT s.* FROM schedules s WHERE ";
     if (input.thread_id) {
       requireThread(ctx, actor, input.thread_id);
-      sql += "thread_id = ?";
+      sql += "s.thread_id = ?";
       params.push(input.thread_id);
     } else {
       requireMember(ctx, actor, input.board_id!);
-      sql += "board_id = ?";
+      sql += "s.board_id = ?";
       params.push(input.board_id);
+      // Schedules in channels the caller can't read are left out.
+      sql += readableSql(SCHEDULE_CHANNEL, ChannelAccess.load(ctx, input.board_id!, actor).readableChannels(ctx), params);
+      sql += channelFilterSql(SCHEDULE_CHANNEL, input.channel, params);
     }
-    sql += input.all ? " ORDER BY created_at DESC, id DESC" : " AND state = 'pending' ORDER BY next_run_at, id";
+    sql += input.all ? " ORDER BY s.created_at DESC, s.id DESC" : " AND s.state = 'pending' ORDER BY s.next_run_at, s.id";
     sql += " LIMIT ?";
     params.push(Math.min(Math.max(input.limit ?? 100, 1), 500));
     return { schedules: presentSchedules(ctx, ctx.db.prepare(sql).all(...params) as ScheduleRow[]) };
@@ -228,6 +248,8 @@ export function cancelSchedule(ctx: AppContext, actor: Actor, scheduleId: string
     const row = loadRow(ctx, scheduleId);
     if (!row) throw notFound("Schedule");
     const { membership } = requireMember(ctx, actor, row.board_id, "reader", "Schedule");
+    const channel = (ctx.db.prepare(`SELECT ${SCHEDULE_CHANNEL} AS c FROM schedules s WHERE s.id = ?`).get(row.id) as { c: string }).c;
+    if (!ChannelAccess.load(ctx, row.board_id, actor).can(channel, "read")) throw notFound("Schedule");
     const ownsCreator = getPrincipal(ctx, row.created_by)?.owner_id === actor.id;
     // A profile cancels only what it scheduled, whatever its person's role (like deleting messages).
     const allowed = actor.profile ? row.created_by === actor.id : row.created_by === actor.id || membership.role === "owner" || ownsCreator;
@@ -266,7 +288,7 @@ function nextRun(row: ScheduleRow, runs: number, nowMs: number): string | null {
 }
 
 /** Errors that mean the creator can no longer post here: the schedule stops. */
-const STOPPING: Record<string, string> = { not_found: "access_ended", access_ended: "access_ended", forbidden: "not_a_contributor" };
+const STOPPING: Record<string, string> = { not_found: "access_ended", access_ended: "access_ended", forbidden: "cannot_post" };
 
 /** Fires one due schedule. Returns what happened, for tests and logs. */
 export function fireSchedule(ctx: AppContext, row: ScheduleRow): "posted" | "skipped" | "stopped" | "retry" {
@@ -292,6 +314,7 @@ export function fireSchedule(ctx: AppContext, row: ScheduleRow): "posted" | "ski
     } else {
       const labels = JSON.parse(row.labels) as Record<string, string>;
       messageId = startThread(ctx, actor, row.board_id, {
+        channel: row.channel,
         title: row.title ?? "Scheduled post",
         body: row.body,
         ...(Object.keys(labels).length ? { labels } : {}),

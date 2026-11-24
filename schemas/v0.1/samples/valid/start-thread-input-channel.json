@@ -1,0 +1,11 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "start a thread in a nested channel (the first post creates it)",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "channel": "www/production",
+    "title": "Deploy a1b2c3 failed",
+    "body": "The production deploy failed at the migration step.",
+    "idempotency_key": "4b1f0c3e-6a52-4c1e-9f1b-2d7c1a8e5f30"
+  }
+}

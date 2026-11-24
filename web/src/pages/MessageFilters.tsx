@@ -107,12 +107,12 @@ export function MessageFilterBar({ boardId, search, members, filters }: { boardI
 }
 
 /** Matching messages (read_messages), newest first, refreshed as the board changes. */
-export function FilteredMessages({ filters, labels }: { filters: MessageFilters; labels: Labels }) {
+export function FilteredMessages({ filters, labels, channel }: { filters: MessageFilters; labels: Labels; channel?: string | undefined }) {
   const { board } = useBoard();
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [more, setMore] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const key = JSON.stringify([filters, labels]);
+  const key = JSON.stringify([filters, labels, channel]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
@@ -121,6 +121,7 @@ export function FilteredMessages({ filters, labels }: { filters: MessageFilters;
         const res = await api.messages(
           board.id,
           {
+            channel: channel || undefined,
             by: filters.by || undefined,
             mentions: filters.mentionsMe ? "me" : undefined,
             text: filters.text || undefined,

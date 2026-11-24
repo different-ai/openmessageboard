@@ -118,6 +118,7 @@ export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: str
   return rows.map((t) => ({
     id: t.id,
     board_id: t.board_id,
+    channel: t.channel,
     url: threadUrl(ctx.config.publicUrl, t.board_id, t.id),
     title: t.title,
     kind: t.kind,

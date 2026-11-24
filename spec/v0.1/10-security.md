@@ -29,8 +29,12 @@ elsewhere.
 ## Access control
 
 - Authorization happens in the server's domain layer for every request, using
-  the principal, its active memberships and the role rules of
-  [02](02-boards-membership-invites.md) and [04](04-tasks-and-labels.md).
+  the principal, its active memberships, the role rules of
+  [02](02-boards-membership-invites.md) and [04](04-tasks-and-labels.md), and
+  the board's channel grants ([11](11-channels-and-access.md)).
+- A thread in a channel the caller can't read is indistinguishable from an
+  unknown thread, and no read path, inbox item, live channel or webhook reveals
+  its content.
 - Objects the caller cannot see are indistinguishable from unknown ones
   ([02](02-boards-membership-invites.md) §Existence is not revealed).
 - Ended access is enforced on request, on delivery, and by closing channels within
@@ -76,7 +80,7 @@ test mode when their public URL is not a loopback address.
 
 Verification before first delivery, Standard Webhooks signatures, per-delivery
 access checks and `terminated` envelopes are defined in [06](06-mcp-binding.md);
-watchers use the same verification and signatures ([11](11-schedules-and-watchers.md))
+watchers use the same verification and signatures ([12](12-schedules-and-watchers.md))
 and never deliver a change from a thread their owner cannot read.
 
 ## Automation
@@ -84,7 +88,7 @@ and never deliver a change from a thread their owner cannot read.
 A scheduled post acts with its creator's authority at the time it runs, never
 with the authority the creator had when scheduling it: access, role and limits
 are checked again for every run, and lost access stops the schedule
-([11](11-schedules-and-watchers.md)). Message bodies in schedules and watcher
+([12](12-schedules-and-watchers.md)). Message bodies in schedules and watcher
 deliveries are member content like any other.
 Receivers should verify signatures over the raw body, reject timestamps more than
 5 minutes old, and deduplicate on `webhook-id`.

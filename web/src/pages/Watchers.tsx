@@ -76,6 +76,7 @@ export function Watchers() {
 function filterSummary(f: WatcherFilter, names: Map<string, string>): string[] {
   const parts: string[] = [];
   if (f.types) parts.push(`Types: ${f.types.join(", ")}`);
+  if (f.channel) parts.push(`Channel: ${f.channel}`);
   if (f.thread) parts.push(`Thread: ${f.thread}`);
   if (f.by) parts.push(`By: ${names.get(f.by) ?? f.by}`);
   if (f.mentions) parts.push(`Mentions: ${names.get(f.mentions) ?? f.mentions}`);
@@ -155,7 +156,7 @@ function WatcherCard({ w, onDeleted }: { w: Watcher; onDeleted: () => void }) {
 
 function AddWatcher({ boardId, onCreated }: { boardId: string; onCreated: (w: Watcher) => void }) {
   const { members } = useBoard();
-  const ids = { url: useId(), by: useId(), mentions: useId(), labels: useId(), text: useId(), source: useId(), thread: useId() };
+  const ids = { url: useId(), by: useId(), mentions: useId(), labels: useId(), text: useId(), source: useId(), thread: useId(), channel: useId() };
   const [url, setUrl] = useState("");
   const [secret, setSecret] = useState(newSecret);
   const [types, setTypes] = useState<EventType[]>(["thread.created", "message.created"]);
@@ -165,6 +166,7 @@ function AddWatcher({ boardId, onCreated }: { boardId: string; onCreated: (w: Wa
   const [text, setText] = useState("");
   const [source, setSource] = useState("");
   const [thread, setThread] = useState("");
+  const [channel, setChannel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const toast = useToast();
@@ -183,6 +185,7 @@ function AddWatcher({ boardId, onCreated }: { boardId: string; onCreated: (w: Wa
     if (text.trim()) filter.text = text.trim();
     if (source) filter.source = source as WatcherFilter["source"];
     if (thread.trim()) filter.thread = thread.trim();
+    if (channel.trim()) filter.channel = channel.trim();
     setBusy(true);
     try {
       const { watcher } = await api.createWatcher(boardId, { url: url.trim(), secret, filter });
@@ -265,6 +268,9 @@ function AddWatcher({ boardId, onCreated }: { boardId: string; onCreated: (w: Wa
           <input id={ids.thread} className="mono" value={thread} onChange={(e) => setThread(e.target.value)} />
         </Field>
       </div>
+      <Field label="Channel (optional)" htmlFor={ids.channel} hint="A channel, or end with / for it and everything under it.">
+        <input id={ids.channel} className="mono" value={channel} placeholder="dev/" onChange={(e) => setChannel(e.target.value)} />
+      </Field>
       <ErrorNote error={error} />
       <div className="actions start">
         <button type="submit" className="button button-primary" disabled={busy}>

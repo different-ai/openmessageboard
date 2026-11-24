@@ -1,6 +1,6 @@
 /**
  * Message filters, reads and waits (core), and scheduled posts and watchers (automation profile).
- * Spec: 05 §Filters, §read_messages, §wait_for_activity; 11.
+ * Spec: 05 §Filters, §read_messages, §wait_for_activity; 12.
  */
 import type { Change, ErrorBody, Message, ToolOutput } from "@openmessageboard/protocol";
 import { check, Failure } from "../errors.ts";
@@ -73,6 +73,12 @@ export const filterCases: CaseDef[] = [
       sameIds(ids(await read(owner, { re: f.threadId, source: "board" })), thread, "source: board");
       sameIds(ids(await read(owner, { re: f.threadId, source: "slack" })), [], "source: slack (nothing synced)");
       sameIds(ids(await read(owner, { re: f.threadId, by: mayaHandle, text: f.word })), [f.r1], "filters combine");
+      {
+        const channel = `cf${ctx.runId}/web`;
+        const inChannel = await owner.ok("start_thread", { board_id: f.boardId, channel, title: `Channel filter ${ctx.runId}`, body: "In a channel.", idempotency_key: `cf-${ctx.runId}` } as never);
+        sameIds(ids(await read(owner, { channel: `cf${ctx.runId}/` })), [(inChannel as ToolOutput<"start_thread">).message.id], "channel: a subtree filter");
+        sameIds(ids(await read(owner, { channel, re: f.threadId })), [], "channel and re combine");
+      }
 
       const page = await read(owner, { re: f.threadId, after: f.rootId, limit: 1 });
       sameIds(ids(page), [f.r1], "after a message ID, limit 1");
@@ -196,7 +202,7 @@ export const automationCases: CaseDef[] = [
       const mayaId = (await ctx.me("maya")).id;
       const text = `Scheduled once ${ctx.runId}`;
       const { schedule } = await maya.ok("schedule_post", { thread_id: f.threadId, body: text, in_seconds: 2 });
-      check(schedule.state === "pending" && schedule.thread_id === f.threadId && schedule.next_run_at, "schedule_post returns a pending schedule with next_run_at (11)");
+      check(schedule.state === "pending" && schedule.thread_id === f.threadId && schedule.next_run_at, "schedule_post returns a pending schedule with next_run_at (12)");
       const listed = await maya.ok("list_schedules", { thread_id: f.threadId });
       check(listed.schedules.some((s) => s.id === schedule.id), "list_schedules lists the pending schedule");
       const posted = await postsWith(maya, f.boardId, text, 1, 30_000);
@@ -280,7 +286,7 @@ export const automationCases: CaseDef[] = [
       const { watcher } = r.data;
       check(watcher.status === "active" && watcher.filter.by === mayaId && watcher.filter.thread === f.threadId, "create_watcher returns an active watcher with its filter");
       const verification = ep.deliveries.find((d) => d.body?.type === "verification");
-      check(verification, "no verification challenge was sent before the watcher was created (11 §Watchers)");
+      check(verification, "no verification challenge was sent before the watcher was created (12 §Watchers)");
       check(verification.signatureError === null, `the verification signature is invalid: ${verification.signatureError}`);
 
       const skip = await reply(owner, f.threadId, "Not by maya: no delivery.");

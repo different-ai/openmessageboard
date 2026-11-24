@@ -13,6 +13,12 @@
       "description": "Reply in this thread each run",
       "type": "string"
     },
+    "channel": {
+      "description": "New threads only: the channel each run posts in. Default general",
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}$"
+    },
     "title": {
       "type": "string",
       "minLength": 1,

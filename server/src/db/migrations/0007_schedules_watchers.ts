@@ -2,7 +2,8 @@
  * Filtered reads, scheduled posts and watchers.
  * - messages_board: read_messages pages a board's messages in insertion (rowid) order.
  * - events_message: maps a message ID to the change that created it (`after: <message id>`).
- * - schedules: posts that fire later as their creator; `next_run_at` drives the runner.
+ * - schedules: posts that fire later as their creator; `next_run_at` drives the runner. `channel` is where a new
+ *   thread is started (for replies, the thread's channel when the schedule was made).
  * - watchers and watcher_deliveries: board-owner automation with a durable delivery queue.
  */
 export const sql = `
@@ -13,6 +14,7 @@ CREATE TABLE schedules (
   id TEXT PRIMARY KEY,
   board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   thread_id TEXT REFERENCES threads(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL DEFAULT 'general',
   created_by TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
   title TEXT,
   body TEXT NOT NULL,

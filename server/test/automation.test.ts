@@ -388,3 +388,61 @@ test("watchers: failed deliveries are retried with backoff from the durable queu
   await new WatcherWorker(ctx).tick();
   assert.equal(row().attempts, 2);
 });
+
+test("channels: filters, waits, schedules and watchers follow channel access and take a channel filter", async (t) => {
+  const { createChannel, createGrant } = await import("../src/domain/channels.ts");
+  const ctx = await makeCtx();
+  const { owner, maya, board } = setup(ctx);
+  // A private channel only the owner can use.
+  createChannel(ctx, owner, board.id, { path: "security", private: true });
+  const secret = startThread(ctx, owner, board.id, { channel: "security", title: "Incident", body: "private detail", idempotency_key: key() });
+  const dev = startThread(ctx, maya, board.id, { channel: "dev/web", title: "Web", body: "dev detail", idempotency_key: key() });
+  const general = startThread(ctx, maya, board.id, { title: "Hello", body: "general detail", idempotency_key: key() });
+
+  assert.ok(!ids(readMessages(ctx, maya, board.id, {})).includes(secret.message.id), "read_messages hides unreadable channels");
+  assert.ok(!ids(readMessages(ctx, maya, board.id, { by: "owner" })).includes(secret.message.id), "also with filters");
+  assert.ok(ids(readMessages(ctx, owner, board.id, { by: "me" })).includes(secret.message.id));
+  assert.deepEqual(ids(readMessages(ctx, maya, board.id, { channel: "dev/" })), [dev.message.id], "a subtree filter");
+  assert.deepEqual(ids(readMessages(ctx, maya, board.id, { channel: "general" })), [general.message.id]);
+  await rejects(() => readMessages(ctx, maya, board.id, { re: secret.thread.id }), "not_found");
+  await rejects(() => readMessages(ctx, maya, board.id, { after: secret.message.id }), "not_found");
+  await rejects(() => readMessages(ctx, maya, board.id, { channel: "Not A Channel" }), "invalid_argument");
+  const start = getChanges(ctx, maya, { board_id: board.id }).cursor;
+  reply(ctx, owner, secret.thread.id, { body: "more private detail", idempotency_key: key() });
+  reply(ctx, owner, dev.thread.id, { body: "dev reply", idempotency_key: key() });
+  const filtered = getChanges(ctx, maya, { board_id: board.id, cursor: start, by: "owner" });
+  assert.ok("changes" in filtered);
+  assert.deepEqual(filtered.changes.map((c) => c.thread_id), [dev.thread.id], "filtered changes skip unreadable channels");
+  const quiet = await waitForActivity(ctx, maya, { board_id: board.id, cursor: start, channel: "security", timeout_seconds: 1 });
+  assert.ok("changes" in quiet && quiet.changes.length === 0, "a wait never returns changes from an unreadable channel");
+
+  // schedules: a new thread takes a channel; posting needs post there, at creation and when it fires
+  await rejects(() => schedulePost(ctx, maya, { board_id: board.id, channel: "security", title: "x", body: "x", in_seconds: 60 }), "forbidden");
+  const s = schedulePost(ctx, maya, { board_id: board.id, channel: "dev/web", title: "Nightly", body: "nightly report", in_seconds: 1 }).schedule;
+  assert.equal(s.channel, "dev/web");
+  assert.equal(listSchedules(ctx, owner, { board_id: board.id, channel: "dev/" }).schedules.length, 1);
+  assert.equal(listSchedules(ctx, owner, { board_id: board.id, channel: "security" }).schedules.length, 0);
+  // the owner closes dev/ to everyone else before it fires
+  createGrant(ctx, owner, board.id, { principals: [{ kind: "member", principal_id: maya.id }], can: { "dev/": ["read"] } });
+  const late = new Date(Date.now() + 5000);
+  const clock = createContext(ctx.config, ctx.db, () => late);
+  runDueSchedules(clock);
+  const after = listSchedules(ctx, maya, { board_id: board.id, all: true }).schedules.find((x) => x.id === s.id)!;
+  assert.equal(after.state, "stopped");
+  assert.equal(after.stopped_reason, "cannot_post");
+  const ownerSchedule = schedulePost(ctx, owner, { thread_id: secret.thread.id, body: "private reminder", in_seconds: 3600 }).schedule;
+  assert.ok(!listSchedules(ctx, maya, { board_id: board.id }).schedules.some((x) => x.id === ownerSchedule.id), "schedules in unreadable channels are hidden");
+  await rejects(() => cancelSchedule(ctx, maya, ownerSchedule.id), "not_found");
+
+  // watchers: a channel filter, and deliveries follow the owner's access
+  const hook = await receiver();
+  t.after(() => hook.server.close());
+  const worker = new WatcherWorker(ctx);
+  const { watcher } = await createWatcher(ctx, owner, board.id, { url: hook.url, secret: hook.secret, filter: { channel: "dev/", types: ["message.created"] } });
+  assert.equal(watcher.filter.channel, "dev/");
+  reply(ctx, owner, general.thread.id, { body: "not in dev", idempotency_key: key() });
+  const inDev = reply(ctx, owner, dev.thread.id, { body: "in dev", idempotency_key: key() });
+  await worker.tick();
+  const got = hook.got.filter((g) => g.body.type === "change").map((g) => (g.body.change as { message_id: string }).message_id);
+  assert.deepEqual(got, [inDev.message.id]);
+});

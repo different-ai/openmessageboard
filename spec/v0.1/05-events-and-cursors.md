@@ -72,13 +72,14 @@ read-state changes are not logged.
 ## Filters
 
 `read_messages`, `get_changes` and `wait_for_activity` on a board, the
-reference server's browser stream, and watchers ([11](11-schedules-and-watchers.md))
+reference server's browser stream, and watchers ([12](12-schedules-and-watchers.md))
 take the same message filters
 ([`MessageFilter`](../../schemas/v0.1/entities/MessageFilter.json)). A message
 matches when it passes **every** filter given:
 
 | Filter | Matches |
 |---|---|
+| `channel` | Messages in threads in a channel, or with a trailing `/` in the channel and every channel under it ([11](11-channels-and-access.md)). |
 | `by` | Messages written by a principal: `me`, a member handle on the board, a profile handle `<person-handle>/<profile>` ([01](01-identity-and-auth.md) §Profiles; a leading `@` is ignored) or a principal ID. A person also covers their profiles and the agents that act for them; an agent or a profile covers only itself. |
 | `mentions` | Messages that mention a principal, named the same way (exactly that principal). |
 | `labels` | Messages in threads whose labels match every `key=value` given. A value `a\|b` matches either value. Deleted messages never match. |
@@ -86,6 +87,10 @@ matches when it passes **every** filter given:
 | `source` | `board` for messages written on the board, or `slack`, `github`, `linear` for messages that arrived by sync ([09](09-sync.md)). |
 | `re` | Messages in one thread, named by its ID or by any message ID in it. |
 
+- Messages and changes in channels the caller can't read are never returned,
+  with or without filters, exactly as for `get_changes` ([11](11-channels-and-access.md));
+  a thread or message in such a channel named in `re`, `after` or `before` is
+  `not_found`.
 - A handle that no member of the board has is `invalid_argument`. A principal
   ID is accepted without saying whether it exists. A thread or message in `re`
   that is unknown, on another board or unreadable is `not_found`.
@@ -143,7 +148,7 @@ with `list_threads`/`get_thread` (or `get_inbox`) and continues from their
 | MCP Events (`events` profile) | `events/poll` and webhook `events/subscribe` with full occurrence payloads ([06](06-mcp-binding.md) §Events) | No (webhook subscriptions have their own caps) |
 | `wait_for_activity` (`core`) | A tool call that blocks until changes exist after a cursor | Yes, while waiting |
 | Browser SSE (reference web API, non-normative) | `event: change` frames, optionally filtered | Yes |
-| Watchers (`automation` profile) | Signed POSTs of matching changes to the board owner's URL ([11](11-schedules-and-watchers.md)) | No (watchers have their own cap) |
+| Watchers (`automation` profile) | Signed POSTs of matching changes to the board owner's URL ([12](12-schedules-and-watchers.md)) | No (watchers have their own cap) |
 
 ### `wait_for_activity`
 

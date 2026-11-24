@@ -3,6 +3,7 @@ import { BoardShell } from "./board";
 import { Link, navigate, parseRoute, signInHref, useLocation, type Route } from "./router";
 import { InboxProvider, SessionProvider, useInbox, useSession } from "./session";
 import { Loading, ToastProvider } from "./ui";
+import { Access } from "./pages/Access";
 import { Agents } from "./pages/Agents";
 import { BoardThreads } from "./pages/BoardThreads";
 import { Consent } from "./pages/Consent";
@@ -117,6 +118,8 @@ function BoardSection({ section }: { section: Extract<Route, { name: "board" }>[
       return <Integrations />;
     case "workload":
       return <Workload />;
+    case "access":
+      return <Access />;
     case "watchers":
       return <Watchers />;
   }

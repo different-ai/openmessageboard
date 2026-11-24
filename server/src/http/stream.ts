@@ -24,7 +24,7 @@ export function boardStream(ctx: AppContext, c: AppCtx, actor: Actor, boardId: s
   const filter = hasFilterInput(input) ? resolveFilter(ctx, actor, boardId, input) : undefined;
   const after = c.req.query("after");
   let cursor =
-    c.req.query("cursor") || c.req.header("last-event-id") || (after ? cursorAfter(ctx, boardId, after) : undefined) || boardChanges(ctx, actor, boardId, undefined).cursor;
+    c.req.query("cursor") || c.req.header("last-event-id") || (after ? cursorAfter(ctx, actor, boardId, after) : undefined) || boardChanges(ctx, actor, boardId, undefined).cursor;
   let closeReason: CloseReason | null = null;
   let wake: () => void = () => {};
   const conn = ctx.connections.register({
@@ -61,7 +61,7 @@ export function boardStream(ctx: AppContext, c: AppCtx, actor: Actor, boardId: s
           dirty = false;
           try {
             for (;;) {
-              const page = boardChanges(ctx, actor, boardId, cursor, 100, undefined, filter);
+              const page = boardChanges(ctx, actor, boardId, cursor, 100, undefined, undefined, filter);
               for (const ch of page.changes) {
                 await stream.writeSSE({ event: "change", id: encodeCursor("b", boardId, ch.seq), data: JSON.stringify(ch) });
               }

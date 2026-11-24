@@ -19,13 +19,15 @@ import { read, tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, currentMonth, getBoardRow, holderId, nextMonthStart, nowIso, requireMember, requireThread } from "./access.js";
+import { activeMembership, currentMonth, getBoardRow, holderId, nextMonthStart, nowIso, requireChannelPermission, requireMember, requireThread } from "./access.js";
 import { canChangeMessage, coveredPrincipalIds } from "./profiles.js";
 import { recordEvent } from "./boards.js";
 import { encodeCursor, encodePage, decodePage } from "./cursors.js";
 import type { Actor, BoardRow, MessageRow, ThreadRow } from "./model.js";
 import { presentMessage, presentMessages, presentThread, presentThreads, refOf } from "./present.js";
 import { boardLimits } from "./plans.js";
+import { ensureChannel, normalizeChannel } from "./channels.js";
+import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 
 type Emit = (e: HubEvent) => void;
 
@@ -172,7 +174,12 @@ export function addInboxItem(
   item: { principalId: string; kind: "mention" | "reply" | "task_assigned"; boardId: string; threadId: string; messageId: string | null },
 ): void {
   const p = ctx.db.prepare("SELECT id, kind, owner_id, profile_name FROM principals WHERE id = ?").get(item.principalId) as MentionRow | undefined;
-  if (!p || !activeMembership(ctx, item.boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name })) return;
+  if (!p) return;
+  const subject = { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name };
+  if (!activeMembership(ctx, item.boardId, subject)) return;
+  // No inbox item for someone who can't read the thread's channel.
+  const channel = (ctx.db.prepare("SELECT channel FROM threads WHERE id = ?").get(item.threadId) as { channel: string } | undefined)?.channel;
+  if (!channel || !ChannelAccess.load(ctx, item.boardId, subject).can(channel, "read")) return;
   const id = newId("ix");
   const info = ctx.db
     .prepare("INSERT INTO inbox_items (id, principal_id, kind, board_id, thread_id, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -250,6 +257,7 @@ function loadThread(ctx: AppContext, id: string): ThreadRow {
 }
 
 export interface StartThreadInput {
+  channel?: string | undefined;
   title: string;
   body: string;
   mentions?: string[] | undefined;
@@ -271,6 +279,9 @@ export function startThread(
     const { board } = requireMember(ctx, actor, boardId, "contributor");
     const { idempotency_key: key, ...payload } = input;
     return idempotent(ctx, actor, key, { op: "start_thread", boardId, ...payload }, () => {
+      const channel = normalizeChannel(input.channel);
+      const channels = ChannelAccess.load(ctx, board.id, actor);
+      if (!channels.can(channel, "read") || !channels.can(channel, "post")) throw forbidden(`You can't post in ${channel}`);
       const title = validateTitle(input.title);
       const bytes = validateBody(ctx, input.body, board.id);
       const labels = validateLabels(input.labels ?? {});
@@ -280,6 +291,10 @@ export function startThread(
       if (input.assignee !== undefined) {
         if (kind !== "task") throw invalid("assignee only applies to tasks");
         const [a] = resolveMentions(ctx, board.id, [input.assignee]);
+        const p = ctx.db.prepare("SELECT kind, owner_id, profile_name FROM principals WHERE id = ?").get(a!) as Omit<MentionRow, "id">;
+        if (!ChannelAccess.load(ctx, board.id, { id: a!, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name }).can(channel, "read")) {
+          throw invalid(`The assignee can't read ${channel}`, { principal_id: a });
+        }
         assignee = a!;
       }
       chargePost(ctx, actor, board, bytes + Buffer.byteLength(title, "utf8"));
@@ -288,10 +303,11 @@ export function startThread(
       const state: TaskState | null = kind === "task" ? (assignee ? "claimed" : "open") : null;
       ctx.db
         .prepare(
-          `INSERT INTO threads (id, board_id, title, kind, labels, task_state, task_assignee_id, task_claimed_at, created_by, created_at, last_activity_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO threads (id, board_id, channel, title, kind, labels, task_state, task_assignee_id, task_claimed_at, created_by, created_at, last_activity_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(threadId, board.id, title, kind, JSON.stringify(labels), state, assignee, assignee ? now : null, actor.id, now, now);
+        .run(threadId, board.id, channel, title, kind, JSON.stringify(labels), state, assignee, assignee ? now : null, actor.id, now, now);
+      ensureChannel(ctx, board.id, channel, actor.id);
       const thread = loadThread(ctx, threadId);
       const row = insertMessage(ctx, emit, { board, thread, author: actor, body: input.body, bytes, replyTo: null, mentions, isRoot: true, ...(opts.source ? { source: opts.source } : {}) });
       recordEvent(ctx, emit, { boardId: board.id, type: "thread.created", threadId, messageId: row.id, actorId: actor.id });
@@ -311,9 +327,11 @@ export interface ReplyInput {
 }
 
 function replyInTx(ctx: AppContext, emit: Emit, actor: Actor, threadId: string, input: ReplyInput, opts: WriteOptions): { message: Message } {
-  const { board, thread } = requireThread(ctx, actor, threadId, "contributor");
+  const t = requireThread(ctx, actor, threadId, "contributor");
+  const { board, thread } = t;
   const { idempotency_key: key, ...payload } = input;
   return idempotent(ctx, actor, key, { op: "reply", threadId, ...payload }, () => {
+    requireChannelPermission(t, "post");
     const bytes = validateBody(ctx, input.body, board.id);
     const mentions = resolveMentions(ctx, board.id, input.mentions);
     if (input.reply_to) {
@@ -348,6 +366,8 @@ export function deleteMessage(ctx: AppContext, actor: Actor, messageId: string):
     const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId) as MessageRow | undefined;
     if (!row) throw notFound("Message");
     const { membership } = requireMember(ctx, actor, row.board_id, "reader", "Message");
+    const channel = (ctx.db.prepare("SELECT channel FROM threads WHERE id = ?").get(row.thread_id) as { channel: string }).channel;
+    if (!ChannelAccess.load(ctx, row.board_id, actor).can(channel, "read")) throw notFound("Message");
     const ownerId = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id ?? null;
     if (!canChangeMessage(actor, { id: row.author_id, owner_id: ownerId }, membership.role)) {
       throw forbidden(actor.profile ? "A profile can delete only what it wrote" : "You can delete your own messages; owners can delete any");
@@ -405,6 +425,7 @@ export function getThread(
 }
 
 export interface ListThreadsInput {
+  channel?: string | undefined;
   filter?: "all" | "following" | "unread" | undefined;
   kind?: ThreadKind | undefined;
   task_state?: TaskState | undefined;
@@ -429,6 +450,8 @@ export function listThreads(ctx: AppContext, actor: Actor, boardId: string, inpu
     const limit = Math.min(input.limit ?? 25, 100);
     const params: unknown[] = [boardId];
     let sql = "SELECT t.* FROM threads t WHERE t.board_id = ?";
+    sql += readableSql("t.channel", ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx), params);
+    sql += channelFilterSql("t.channel", input.channel, params);
     if (input.filter === "following") {
       sql += " AND EXISTS (SELECT 1 FROM follows f WHERE f.thread_id = t.id AND f.principal_id = ?)";
       params.push(actor.id);
@@ -483,7 +506,9 @@ export function setFollow(ctx: AppContext, actor: Actor, threadId: string, follo
 export function setLabels(ctx: AppContext, actor: Actor, threadId: string, input: { set?: Record<string, string> | undefined; remove?: string[] | undefined }): { thread: Thread } {
   checkWriteRate(ctx, actor, (ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(threadId) as { board_id: string } | undefined)?.board_id ?? "", {});
   return tx(ctx, (emit) => {
-    const { thread } = requireThread(ctx, actor, threadId, "contributor");
+    const t = requireThread(ctx, actor, threadId, "contributor");
+    const { thread } = t;
+    requireChannelPermission(t, "label");
     const current = JSON.parse(thread.labels) as Record<string, string>;
     const both = (input.remove ?? []).filter((k) => input.set && k in input.set);
     if (both.length) throw invalid(`Label ${both.map((k) => `"${k}"`).join(", ")} is in both set and remove`);
@@ -507,7 +532,9 @@ export function claimTask(
   return tx(ctx, (emit) => {
     let thread: ThreadRow;
     if (input.thread_id) {
-      thread = requireThread(ctx, actor, input.thread_id, "contributor").thread;
+      const t = requireThread(ctx, actor, input.thread_id, "contributor");
+      requireChannelPermission(t, "post");
+      thread = t.thread;
       if (thread.kind !== "task") throw new OmbError("task_not_claimable", "This thread is not a task", { state: null });
       if (thread.task_state === "claimed") {
         if (thread.task_assignee_id === actor.id) return { thread: presentThread(ctx, thread, actor.id) };
@@ -517,7 +544,12 @@ export function claimTask(
     } else {
       requireMember(ctx, actor, input.board_id!, "contributor");
       const params: unknown[] = [input.board_id];
-      const sql = "SELECT t.* FROM threads t WHERE t.board_id = ? AND t.kind = 'task' AND t.task_state = 'open'" + labelClauses(input.labels, params) + " ORDER BY t.created_at, t.id LIMIT 1";
+      const access = ChannelAccess.load(ctx, input.board_id!, actor);
+      const sql =
+        "SELECT t.* FROM threads t WHERE t.board_id = ? AND t.kind = 'task' AND t.task_state = 'open'" +
+        readableSql("t.channel", access.allowedChannels(ctx, "read", "post"), params) +
+        labelClauses(input.labels, params) +
+        " ORDER BY t.created_at, t.id LIMIT 1";
       const next = ctx.db.prepare(sql).get(...params) as ThreadRow | undefined;
       if (!next) throw new OmbError("no_task_available", "No open task matches");
       thread = next;
@@ -545,9 +577,11 @@ export function updateTask(
   const boardId = (ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(threadId) as { board_id: string } | undefined)?.board_id;
   if (boardId) checkWriteRate(ctx, actor, boardId, {});
   return tx(ctx, (emit) => {
-    const { thread, membership } = requireThread(ctx, actor, threadId, "contributor");
+    const t = requireThread(ctx, actor, threadId, "contributor");
+    const { thread, membership } = t;
     const { idempotency_key: key, ...payload } = input;
     return idempotent(ctx, actor, key, { op: "update_task", threadId, ...payload }, () => {
+      requireChannelPermission(t, "post");
       if (thread.kind !== "task" || !thread.task_state) throw new OmbError("task_not_claimable", "This thread is not a task", { state: null });
       const isOwner = membership.role === "owner";
       const isAssignee = thread.task_assignee_id === actor.id;

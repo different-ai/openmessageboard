@@ -15,6 +15,7 @@ import type { EventSubscriptions } from "../mcp/events.js";
 import { createMcpServer } from "../mcp/server.js";
 import { isListenRequest, serveListen } from "../mcp/listen.js";
 import { registerApiRoutes } from "./api.js";
+import { registerChannelRoutes } from "./channels.js";
 import { registerOAuthConsentRoutes } from "./consent.js";
 import { clientMetadataDocument } from "../auth/openwork.js";
 import type { AppEnv, RouteModule } from "./util.js";
@@ -164,6 +165,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
 
   registerOAuthConsentRoutes(app, ctx, opts.auth);
   registerApiRoutes(app, ctx, serverInfo);
+  registerChannelRoutes(app, ctx);
   for (const m of opts.modules ?? []) m.register(app, ctx);
 
   // MCP (Streamable HTTP). subscriptions/listen is served here with per-principal authorization.

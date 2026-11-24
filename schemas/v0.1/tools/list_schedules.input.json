@@ -11,6 +11,12 @@
     "thread_id": {
       "type": "string"
     },
+    "channel": {
+      "description": "Board listings only: schedules in this channel or subtree",
+      "type": "string",
+      "maxLength": 121,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?$"
+    },
     "all": {
       "type": "boolean"
     },

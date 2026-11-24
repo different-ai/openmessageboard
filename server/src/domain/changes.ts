@@ -9,6 +9,7 @@ import { decodeCursor, decodePage, encodeCursor, encodePage } from "./cursors.js
 import type { Actor, EventRow, InboxRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
 import { presentInbox, presentMember, presentMessages, presentThreads, principalRefs } from "./present.js";
 import { FILTER_KEYS, boardOfRef, filteredPage, hasFilterInput, isEmptyFilter, resolveFilter, seqAfter, type FilterInput, type ResolvedFilter } from "./filters.js";
+import { AccessCache, ChannelAccess, channelFilterSql, channelMatches, readableSql, type AccessPrincipal } from "./grants.js";
 
 function purgedUpto(ctx: AppContext): number {
   return Number((ctx.db.prepare("SELECT value FROM meta WHERE key = 'events_purged_upto'").get() as { value: string }).value);
@@ -64,6 +65,11 @@ export function presentChanges(ctx: AppContext, rows: EventRow[], viewerId: stri
   });
 }
 
+/**
+ * Board changes after a cursor. Changes to threads in channels the caller can't read are left out (the cursor
+ * still moves past them); with `channel`, only thread and message changes in that channel or subtree are returned.
+ * `filter` adds the message filters (filters.ts); filtered pages also skip past changes that do not match.
+ */
 export function boardChanges(
   ctx: AppContext,
   actor: Actor,
@@ -71,6 +77,7 @@ export function boardChanges(
   cursor: string | undefined,
   limit = 100,
   threadId?: string,
+  channel?: string,
   filter?: ResolvedFilter,
 ): ChangesPage {
   return read(ctx, () => {
@@ -83,22 +90,29 @@ export function boardChanges(
         resync: true,
       });
     }
-    if (!isEmptyFilter(filter) || threadId) {
+    if (!isEmptyFilter(filter) || threadId || channel) {
       const f: ResolvedFilter = { ...filter };
       if (threadId) {
         if (f.threadId && f.threadId !== threadId) throw invalid("re names a different thread than thread_id");
         f.threadId = threadId;
       }
+      if (channel) {
+        if (f.channel && f.channel !== channel) throw invalid("Two different channel filters");
+        f.channel = channel;
+      }
       const page = filteredPage(ctx, actor, boardId, s, f, n);
       return { changes: presentChanges(ctx, page.rows, actor.id), cursor: encodeCursor("b", boardId, page.next), has_more: page.more };
     }
     const params: unknown[] = [boardId, s];
-    let sql = "SELECT * FROM events WHERE board_id = ? AND seq > ?";
+    let sql = "SELECT e.* FROM events e LEFT JOIN threads t ON t.id = e.thread_id WHERE e.board_id = ? AND e.seq > ?";
     if (threadId) {
-      sql += " AND thread_id = ?";
+      sql += " AND e.thread_id = ?";
       params.push(threadId);
     }
-    sql += " ORDER BY seq LIMIT ?";
+    const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
+    if (readable !== null) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${readableSql("t.channel", readable, params)}))`;
+    if (channel) sql += ` AND t.id IS NOT NULL${channelFilterSql("t.channel", channel, params)}`;
+    sql += " ORDER BY e.seq LIMIT ?";
     params.push(n + 1);
     const rows = ctx.db.prepare(sql).all(...params) as EventRow[];
     const more = rows.length > n;
@@ -109,18 +123,37 @@ export function boardChanges(
   });
 }
 
+type InboxRowWithChannel = InboxRow & { channel: string };
+
+/** Inbox items stay hidden while their thread's channel (or board) is unreadable. */
+export function visibleInbox(ctx: AppContext, actor: AccessPrincipal): (r: InboxRowWithChannel) => boolean {
+  const access = new AccessCache(ctx, actor);
+  return (r) => access.canRead(r.board_id, r.channel);
+}
+
+function unreadCount(ctx: AppContext, actor: Actor): number {
+  const visible = new AccessCache(ctx, actor);
+  const groups = ctx.db
+    .prepare(
+      `SELECT i.board_id, t.channel, COUNT(*) AS n FROM inbox_items i JOIN threads t ON t.id = i.thread_id
+       WHERE i.principal_id = ? AND i.read_at IS NULL GROUP BY i.board_id, t.channel`,
+    )
+    .all(actor.id) as { board_id: string; channel: string; n: number }[];
+  return groups.reduce((sum, g) => sum + (visible.canRead(g.board_id, g.channel) ? g.n : 0), 0);
+}
+
 export function inboxChanges(ctx: AppContext, actor: Actor, cursor: string | undefined, limit = 100): InboxChangesPage {
   return read(ctx, () => {
     const n = Math.min(Math.max(limit, 1), 100);
     if (cursor === undefined || cursor === "") return { items: [], cursor: encodeCursor("i", actor.id, maxInboxSeq(ctx, actor.id)), has_more: false };
     const { s } = decodeCursor(cursor, "i", actor.id);
-    const rows = ctx.db.prepare("SELECT * FROM inbox_items WHERE principal_id = ? AND seq > ? ORDER BY seq LIMIT ?").all(actor.id, s, n + 1) as InboxRow[];
+    const rows = ctx.db
+      .prepare("SELECT i.*, t.channel FROM inbox_items i JOIN threads t ON t.id = i.thread_id WHERE i.principal_id = ? AND i.seq > ? ORDER BY i.seq LIMIT ?")
+      .all(actor.id, s, n + 1) as InboxRowWithChannel[];
     const more = rows.length > n;
     const page = rows.slice(0, n);
     const last = page[page.length - 1];
-    // A board-scoped token sees only items from its boards; the cursor still moves past the others.
-    const visible = page.filter((r) => boardInScope(actor, r.board_id));
-    return { items: presentInbox(ctx, visible), cursor: encodeCursor("i", actor.id, last?.seq ?? s), has_more: more };
+    return { items: presentInbox(ctx, page.filter(visibleInbox(ctx, actor))), cursor: encodeCursor("i", actor.id, last?.seq ?? s), has_more: more };
   });
 }
 
@@ -130,7 +163,7 @@ type ChangeQuery = FilterInput & { cursor?: string | undefined; after?: string |
 function boardQuery(ctx: AppContext, actor: Actor, boardId: string, input: ChangeQuery): { cursor: string | undefined; filter: ResolvedFilter | undefined } {
   if (input.cursor && input.after) throw invalid("Pass cursor or after, not both");
   const filter = hasFilterInput(input) ? resolveFilter(ctx, actor, boardId, input) : undefined;
-  const cursor = input.after ? encodeCursor("b", boardId, seqAfter(ctx, boardId, input.after)) : input.cursor;
+  const cursor = input.after ? encodeCursor("b", boardId, seqAfter(ctx, actor, boardId, input.after)) : input.cursor;
   return { cursor, filter };
 }
 
@@ -154,7 +187,7 @@ export function getChanges(
   return read(ctx, () => {
     requireMember(ctx, actor, boardId);
     const q = boardQuery(ctx, actor, boardId, input);
-    return boardChanges(ctx, actor, boardId, q.cursor, input.limit, undefined, q.filter);
+    return boardChanges(ctx, actor, boardId, q.cursor, input.limit, undefined, undefined, q.filter);
   });
 }
 
@@ -201,7 +234,7 @@ export async function waitForActivity(
   }
   const threadId = input.thread_id ?? filter?.threadId;
   const fetch = (): ChangesPage | InboxChangesPage =>
-    input.inbox ? inboxChanges(ctx, actor, cursor) : boardChanges(ctx, actor, boardId!, cursor, 100, input.thread_id, filter);
+    input.inbox ? inboxChanges(ctx, actor, cursor) : boardChanges(ctx, actor, boardId!, cursor, 100, input.thread_id, undefined, filter);
   const found = (page: ChangesPage | InboxChangesPage) => ("changes" in page ? page.changes.length : page.items.length) > 0;
   let page = fetch();
   if (found(page)) return page;
@@ -250,13 +283,6 @@ export async function waitForActivity(
 
 // ---------- inbox ----------
 
-/** Unread inbox items; a board-scoped token counts only its boards. */
-function unreadCount(ctx: AppContext, actor: Actor): number {
-  const boards = actor.scope?.boards;
-  const extra = boards ? ` AND board_id IN (${boards.map(() => "?").join(",")})` : "";
-  return (ctx.db.prepare(`SELECT COUNT(*) AS n FROM inbox_items WHERE principal_id = ? AND read_at IS NULL${extra}`).get(actor.id, ...(boards ?? [])) as { n: number }).n;
-}
-
 export function getInbox(
   ctx: AppContext,
   actor: Actor,
@@ -265,20 +291,20 @@ export function getInbox(
   return read(ctx, () => {
     const limit = Math.min(input.limit ?? 25, 100);
     const params: unknown[] = [actor.id];
-    let sql = "SELECT * FROM inbox_items WHERE principal_id = ?";
-    if (input.unread_only) sql += " AND read_at IS NULL";
+    let sql = "SELECT i.*, t.channel FROM inbox_items i JOIN threads t ON t.id = i.thread_id WHERE i.principal_id = ?";
+    if (input.unread_only) sql += " AND i.read_at IS NULL";
     if (input.board_id) {
-      sql += " AND board_id = ?";
+      sql += " AND i.board_id = ?";
       params.push(input.board_id);
     }
     const after = decodePage(input.page_cursor, `inbox:${actor.id}`);
     if (after) {
-      sql += " AND seq < ?";
+      sql += " AND i.seq < ?";
       params.push(Number(after[0]));
     }
-    sql += " ORDER BY seq DESC LIMIT ?";
+    sql += " ORDER BY i.seq DESC LIMIT ?";
     params.push(limit + 1);
-    const rows = (ctx.db.prepare(sql).all(...params) as InboxRow[]).filter((r) => !!activeMembership(ctx, r.board_id, actor));
+    const rows = (ctx.db.prepare(sql).all(...params) as InboxRowWithChannel[]).filter(visibleInbox(ctx, actor));
     const more = rows.length > limit;
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];

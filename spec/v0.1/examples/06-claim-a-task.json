@@ -62,6 +62,7 @@
             "thread": {
               "id": "t_8TASK1",
               "board_id": "b_4THEO9",
+              "channel": "general",
               "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
               "title": "Rotate the App Store signing key",
               "kind": "task",
@@ -184,6 +185,7 @@
             "thread": {
               "id": "t_8TASK1",
               "board_id": "b_4THEO9",
+              "channel": "general",
               "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
               "title": "Rotate the App Store signing key",
               "kind": "task",
@@ -296,6 +298,7 @@
             "thread": {
               "id": "t_8TASK1",
               "board_id": "b_4THEO9",
+              "channel": "general",
               "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
               "title": "Rotate the App Store signing key",
               "kind": "task",

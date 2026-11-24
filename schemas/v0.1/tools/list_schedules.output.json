@@ -22,6 +22,10 @@
               "null"
             ]
           },
+          "channel": {
+            "type": "string",
+            "description": "The channel it posts in: each new thread's, or the thread's"
+          },
           "title": {
             "description": "Title of each new thread; null for replies",
             "type": [
@@ -245,6 +249,7 @@
           "id",
           "board_id",
           "thread_id",
+          "channel",
           "title",
           "body",
           "labels",

@@ -8,17 +8,20 @@ import { Link, navigate, useLocation, useTitle } from "../router";
 import { useSession } from "../session";
 import { Author, CopyField, Empty, ErrorNote, LabelChips, Loading, PlatformName, TaskBadge, TimeAgo, errorText, useToast } from "../ui";
 import { FilteredMessages, MessageFilterBar, hasMessageFilters, readMessageFilters, withMessageFilters } from "./MessageFilters";
+import { ChannelsPanel, DEFAULT_CHANNEL, channelError, inChannel, useChannels } from "../channels";
 
-type Filters = { filter: "all" | "following" | "unread"; kind: "all" | "discussion" | "task"; labels: Labels };
+type Filters = { filter: "all" | "following" | "unread"; kind: "all" | "discussion" | "task"; labels: Labels; channel?: string | undefined };
 
 function readFilters(search: string): Filters {
   const p = new URLSearchParams(search);
   const filter = p.get("filter");
   const kind = p.get("kind");
+  const channel = p.get("channel") ?? undefined;
   return {
     filter: filter === "following" || filter === "unread" ? filter : "all",
     kind: kind === "discussion" || kind === "task" ? kind : "all",
     labels: parseLabels(p.getAll("label").join(",")).labels,
+    channel: channel && !channelError(channel, true) ? channel : undefined,
   };
 }
 
@@ -27,12 +30,14 @@ function filtersHref(boardId: string, f: Filters) {
   if (f.filter !== "all") p.set("filter", f.filter);
   if (f.kind !== "all") p.set("kind", f.kind);
   for (const [k, v] of Object.entries(f.labels)) p.append("label", `${k}=${v}`);
+  if (f.channel) p.set("channel", f.channel);
   const s = p.toString();
   return `/b/${boardId}${s ? `?${s}` : ""}`;
 }
 
-export function matchesFilters(t: Thread, f: Pick<Filters, "kind" | "labels"> & { filter?: Filters["filter"] }): boolean {
+export function matchesFilters(t: Thread, f: Pick<Filters, "kind" | "labels"> & { filter?: Filters["filter"]; channel?: string | undefined }): boolean {
   if (f.kind !== "all" && t.kind !== f.kind) return false;
+  if (!inChannel(f.channel, t.channel)) return false;
   if (f.filter === "following" && !t.following) return false;
   if (f.filter === "unread" && t.unread_count === 0) return false;
   return Object.entries(f.labels).every(([k, v]) => t.labels[k] === v);
@@ -79,6 +84,7 @@ export function BoardThreads() {
 
   const query = useCallback(
     (page_cursor?: string): ThreadQuery => ({
+      channel: filters.channel,
       filter: filters.filter,
       kind: filters.kind === "all" ? undefined : filters.kind,
       labels: Object.keys(filters.labels).length ? filters.labels : undefined,
@@ -183,6 +189,7 @@ export function BoardThreads() {
           <NewThreadForm
             boardId={board.id}
             members={members}
+            channel={filters.channel && !filters.channel.endsWith("/") ? filters.channel : DEFAULT_CHANNEL}
             onCancel={() => setComposing(false)}
             onPosted={(t) => navigate(`/b/${board.id}/t/${t.id}`)}
           />
@@ -190,12 +197,12 @@ export function BoardThreads() {
 
         <ErrorNote error={error} />
         {hasMessageFilters(messageFilters) ? (
-          <FilteredMessages filters={messageFilters} labels={filters.labels} />
+          <FilteredMessages filters={messageFilters} labels={filters.labels} channel={filters.channel} />
         ) : threads === null && !error ? (
           <Loading label="Loading threads…" />
         ) : threads && threads.length === 0 ? (
           <Empty title={filters.filter === "unread" ? "You're all caught up" : "No threads here yet"}>
-            {filters.filter !== "all" || filters.kind !== "all" || Object.keys(filters.labels).length ? (
+            {filters.filter !== "all" || filters.kind !== "all" || filters.channel || Object.keys(filters.labels).length ? (
               <button type="button" className="link-button" onClick={() => navigate(`/b/${board.id}`, { replace: true })}>
                 Clear filters
               </button>
@@ -219,6 +226,7 @@ export function BoardThreads() {
         )}
       </div>
       <aside className="aside-col">
+        <ChannelsPanel current={filters.channel} search={search} />
         <ConnectPanel />
       </aside>
     </div>
@@ -242,6 +250,7 @@ function ThreadRow({ t, boardId }: { t: Thread; boardId: string }) {
           )}
         </div>
         <div className="thread-row-meta">
+          <span className="channel-tag">#{t.channel}</span>
           <Author p={t.created_by} />
           <span>{plural(t.message_count, "message")}</span>
           <TimeAgo iso={t.last_activity_at} prefix="active" />
@@ -331,15 +340,19 @@ export function LabelFilter({ labels, onChange }: { labels: Labels; onChange: (l
 function NewThreadForm({
   boardId,
   members,
+  channel: initialChannel,
   onPosted,
   onCancel,
 }: {
   boardId: string;
   members: ReturnType<typeof useBoard>["members"];
+  channel: string;
   onPosted: (t: Thread) => void;
   onCancel: () => void;
 }) {
-  const ids = { title: useId(), body: useId(), labels: useId(), task: useId() };
+  const ids = { title: useId(), body: useId(), labels: useId(), task: useId(), channel: useId(), channels: useId() };
+  const [channel, setChannel] = useState(initialChannel);
+  const { channels } = useChannels();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [labelText, setLabelText] = useState("");
@@ -356,7 +369,10 @@ function NewThreadForm({
     const parsed = parseLabels(labelText);
     if (parsed.error) return setError(new Error(parsed.error));
     if (!title.trim() || !body.trim()) return setError(new Error("Add a title and a message."));
+    const channelProblem = channelError(channel.trim());
+    if (channelProblem) return setError(new Error(channelProblem));
     const payload = {
+      ...(channel.trim() !== DEFAULT_CHANNEL ? { channel: channel.trim() } : {}),
       title: title.trim(),
       body,
       mentions: extractMentions(body, members),
@@ -384,6 +400,21 @@ function NewThreadForm({
 
   return (
     <form id="new-thread" className="card composer" onSubmit={submit} aria-label="New thread">
+      <div className="field">
+        <label htmlFor={ids.channel}>Channel</label>
+        <input
+          id={ids.channel}
+          value={channel}
+          list={ids.channels}
+          maxLength={120}
+          onChange={(e) => setChannel(e.target.value.toLowerCase())}
+          placeholder={DEFAULT_CHANNEL}
+        />
+        <datalist id={ids.channels}>
+          {channels?.filter((c) => c.my_permissions.includes("post")).map((c) => <option key={c.path} value={c.path} />)}
+        </datalist>
+        <div className="hint">A new name creates the channel with this post.</div>
+      </div>
       <div className="field">
         <label htmlFor={ids.title}>Title</label>
         <input

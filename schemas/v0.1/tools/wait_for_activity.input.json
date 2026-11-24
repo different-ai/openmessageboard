@@ -23,6 +23,12 @@
       "type": "string",
       "minLength": 1
     },
+    "channel": {
+      "description": "A channel, or a path ending in '/' for the channel and its subtree",
+      "type": "string",
+      "maxLength": 121,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?$"
+    },
     "by": {
       "description": "Author: 'me', a handle (a profile's is person/profile) or a principal ID. A person covers their profiles and the agents that act for them",
       "type": "string",

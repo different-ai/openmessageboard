@@ -5,8 +5,8 @@
  * `thread.updated` (which names no message) that is the thread's root message. Changes are matched against
  * the current state of their thread and message, like the rest of the change log.
  *
- * Extension points for other features: `resolveMember` (handle formats), `labelSql` (message labels) and
- * `threadAccessSql` (per-thread access). Each is the single place its rule lives.
+ * Channel access applies everywhere: rows in channels the viewer can't read are left out (`threadAccessSql`), the
+ * same rule `boardChanges` uses. Extension points: `resolveMember` (handle formats) and `labelSql` (message labels).
  */
 import {
   LABEL_KEY_PATTERN,
@@ -25,10 +25,13 @@ import { OmbError, invalid, notFound } from "../errors.js";
 import { requireMember } from "./access.js";
 import { decodeCursor, encodeCursor } from "./cursors.js";
 import type { Actor, EventRow, MessageRow } from "./model.js";
+import { CHANNEL_FILTER_PATTERN, MAX_CHANNEL_CHARS } from "@openmessageboard/protocol";
 import { presentMessages } from "./present.js";
+import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 import { coveredPrincipalIds, findProfile } from "./profiles.js";
 
 export interface FilterInput {
+  channel?: string | undefined;
   by?: string | undefined;
   mentions?: string | undefined;
   labels?: Record<string, string> | undefined;
@@ -40,6 +43,8 @@ export interface FilterInput {
 
 /** A filter with handles resolved to principal IDs and the thread resolved. */
 export interface ResolvedFilter {
+  /** A channel, or a path ending in `/` for its subtree. */
+  channel?: string;
   /** Author principal IDs (a person and the agents that act for them). */
   authors?: string[];
   mentions?: string;
@@ -58,14 +63,14 @@ const SCAN_WINDOW = 1000;
 /** Principal IDs minted by this server. Values that are neither a handle nor one of these are rejected. */
 const PRINCIPAL_ID = /^p_[0-9A-Z]{26}$/;
 
-export const FILTER_KEYS = ["by", "mentions", "labels", "text", "source", "re"] as const;
+export const FILTER_KEYS = ["channel", "by", "mentions", "labels", "text", "source", "re"] as const;
 
 export function hasFilterInput(input: FilterInput): boolean {
   return FILTER_KEYS.some((k) => input[k] !== undefined) || input.types !== undefined;
 }
 
 export function isEmptyFilter(f: ResolvedFilter | undefined): boolean {
-  return !f || (!f.authors && !f.mentions && !f.labels && f.text === undefined && !f.source && !f.threadId && !f.types);
+  return !f || (!f.channel && !f.authors && !f.mentions && !f.labels && f.text === undefined && !f.source && !f.threadId && !f.types);
 }
 
 /** Criteria that need the change's message (everything except the thread and the change type). */
@@ -115,13 +120,22 @@ function authorsOf(ctx: AppContext, principalId: string): string[] {
   return [...new Set([...covered, ...agents.map((a) => a.id)])];
 }
 
-/** A thread on the board, named by its ID or by any message in it. Unknown or other boards' threads are not found. */
-export function resolveThreadRef(ctx: AppContext, boardId: string, raw: string): string {
+/** Whether the viewer can read the channel of a thread on the board. */
+function canReadThread(ctx: AppContext, viewer: Actor, boardId: string, threadId: string): boolean {
+  const row = ctx.db.prepare("SELECT channel FROM threads WHERE id = ? AND board_id = ?").get(threadId, boardId) as { channel: string } | undefined;
+  return !!row && ChannelAccess.load(ctx, boardId, viewer).can(row.channel, "read");
+}
+
+/**
+ * A thread on the board, named by its ID or by any message in it. Unknown threads, other boards' threads and
+ * threads in channels the viewer can't read are all not found.
+ */
+export function resolveThreadRef(ctx: AppContext, viewer: Actor, boardId: string, raw: string): string {
   const thread = ctx.db.prepare("SELECT id, board_id FROM threads WHERE id = ?").get(raw) as { id: string; board_id: string } | undefined;
-  if (thread && thread.board_id === boardId) return thread.id;
-  const msg = ctx.db.prepare("SELECT thread_id, board_id FROM messages WHERE id = ?").get(raw) as { thread_id: string; board_id: string } | undefined;
-  if (msg && msg.board_id === boardId) return msg.thread_id;
-  throw notFound("Thread");
+  const msg = thread ? undefined : (ctx.db.prepare("SELECT thread_id, board_id FROM messages WHERE id = ?").get(raw) as { thread_id: string; board_id: string } | undefined);
+  const id = thread?.board_id === boardId ? thread.id : msg?.board_id === boardId ? msg.thread_id : undefined;
+  if (!id || !canReadThread(ctx, viewer, boardId, id)) throw notFound("Thread");
+  return id;
 }
 
 /** The board of a message or thread ID, so a wait can name only the message it follows. Unknown IDs are not found. */
@@ -135,6 +149,12 @@ export function boardOfRef(ctx: AppContext, raw: string): string {
 
 export function resolveFilter(ctx: AppContext, actor: Actor, boardId: string, input: FilterInput): ResolvedFilter {
   const f: ResolvedFilter = {};
+  if (input.channel !== undefined) {
+    if (input.channel.length > MAX_CHANNEL_CHARS + 1 || !CHANNEL_FILTER_PATTERN.test(input.channel)) {
+      throw invalid("channel is a channel path, or a path ending in '/' for the channel and everything under it", { field: "channel" });
+    }
+    f.channel = input.channel;
+  }
   if (input.by !== undefined) f.authors = authorsOf(ctx, resolveMember(ctx, actor, boardId, input.by, "by"));
   if (input.mentions !== undefined) f.mentions = resolveMember(ctx, actor, boardId, input.mentions, "mentions");
   if (input.labels !== undefined) {
@@ -155,7 +175,7 @@ export function resolveFilter(ctx: AppContext, actor: Actor, boardId: string, in
     if (!(MESSAGE_SOURCES as readonly string[]).includes(input.source)) throw invalid(`source must be one of ${MESSAGE_SOURCES.join(", ")}`);
     f.source = input.source;
   }
-  if (input.re !== undefined) f.threadId = resolveThreadRef(ctx, boardId, input.re);
+  if (input.re !== undefined) f.threadId = resolveThreadRef(ctx, actor, boardId, input.re);
   if (input.types !== undefined) f.types = [...new Set(input.types)];
   return f;
 }
@@ -197,12 +217,9 @@ function messageCriteriaSql(f: ResolvedFilter, params: unknown[], m = "m", t = "
   return sql;
 }
 
-/**
- * Restricts rows to threads the viewer may read. Every member reads every thread today; per-thread access
- * (for example channels) adds its condition here so filtered reads, waits and watcher deliveries follow it.
- */
-export function threadAccessSql(_ctx: AppContext, _viewer: Actor, _threadAlias: string, _params: unknown[]): string {
-  return "";
+/** Keeps rows whose thread (alias `t`) is in a channel the viewer can read, the rule `boardChanges` uses. */
+export function threadAccessSql(ctx: AppContext, viewer: Actor, boardId: string, threadAlias: string, params: unknown[]): string {
+  return readableSql(`${threadAlias}.channel`, ChannelAccess.load(ctx, boardId, viewer).readableChannels(ctx), params);
 }
 
 function purgedUpto(ctx: AppContext): number {
@@ -230,16 +247,21 @@ function createSeq(ctx: AppContext, boardId: string, messageId: string): number 
 
 type Point = { kind: "message"; id: string; rowid: number } | { kind: "cursor"; seq: number };
 
-/** Parses `after`/`before`: a message ID, a thread ID (its root message) or a board cursor, all on this board. */
-function resolvePoint(ctx: AppContext, boardId: string, raw: string, field: string): Point {
-  const msg = ctx.db.prepare("SELECT id, board_id, rowid AS r FROM messages WHERE id = ?").get(raw) as { id: string; board_id: string; r: number } | undefined;
+/**
+ * Parses `after`/`before`: a message ID, a thread ID (its root message) or a board cursor, all on this board.
+ * A message or thread the viewer can't read is not found, like an unknown one.
+ */
+function resolvePoint(ctx: AppContext, viewer: Actor, boardId: string, raw: string, field: string): Point {
+  const msg = ctx.db.prepare("SELECT id, board_id, thread_id, rowid AS r FROM messages WHERE id = ?").get(raw) as
+    | { id: string; board_id: string; thread_id: string; r: number }
+    | undefined;
   if (msg) {
-    if (msg.board_id !== boardId) throw notFound("Message");
+    if (msg.board_id !== boardId || !canReadThread(ctx, viewer, boardId, msg.thread_id)) throw notFound("Message");
     return { kind: "message", id: msg.id, rowid: msg.r };
   }
   const thread = ctx.db.prepare("SELECT id, board_id FROM threads WHERE id = ?").get(raw) as { id: string; board_id: string } | undefined;
   if (thread) {
-    if (thread.board_id !== boardId) throw notFound("Thread");
+    if (thread.board_id !== boardId || !canReadThread(ctx, viewer, boardId, thread.id)) throw notFound("Thread");
     const root = ctx.db.prepare("SELECT id, rowid AS r FROM messages WHERE thread_id = ? ORDER BY created_at, id LIMIT 1").get(thread.id) as { id: string; r: number } | undefined;
     if (!root) throw notFound("Thread");
     return { kind: "message", id: root.id, rowid: root.r };
@@ -255,8 +277,8 @@ function resolvePoint(ctx: AppContext, boardId: string, raw: string, field: stri
 }
 
 /** The change-log position just after `after` (for get_changes, wait_for_activity and the stream). */
-export function seqAfter(ctx: AppContext, boardId: string, after: string): number {
-  const p = resolvePoint(ctx, boardId, after, "after");
+export function seqAfter(ctx: AppContext, viewer: Actor, boardId: string, after: string): number {
+  const p = resolvePoint(ctx, viewer, boardId, after, "after");
   if (p.kind === "cursor") return p.seq;
   const seq = createSeq(ctx, boardId, p.id);
   if (seq === null) throw expired(boardId);
@@ -264,8 +286,8 @@ export function seqAfter(ctx: AppContext, boardId: string, after: string): numbe
 }
 
 /** A board cursor positioned just after `after`. */
-export function cursorAfter(ctx: AppContext, boardId: string, after: string): string {
-  return encodeCursor("b", boardId, seqAfter(ctx, boardId, after));
+export function cursorAfter(ctx: AppContext, viewer: Actor, boardId: string, after: string): string {
+  return encodeCursor("b", boardId, seqAfter(ctx, viewer, boardId, after));
 }
 
 /** First message rowid created after change `seq`, or null when none. Rowid order is commit order within a board. */
@@ -295,8 +317,7 @@ export function filteredEventRows(
   const windowEnd = end?.seq ?? null;
   const needsMessage = hasMessageCriteria(f);
   const params: unknown[] = [];
-  let sql = "SELECT e.* FROM events e";
-  if (needsMessage || f.threadId) sql += " JOIN threads t ON t.id = e.thread_id";
+  let sql = "SELECT e.* FROM events e LEFT JOIN threads t ON t.id = e.thread_id";
   if (needsMessage) {
     sql += " JOIN messages m ON m.id = COALESCE(e.message_id, (SELECT r.id FROM messages r WHERE r.thread_id = e.thread_id ORDER BY r.created_at, r.id LIMIT 1))";
   }
@@ -314,8 +335,11 @@ export function filteredEventRows(
     sql += ` AND e.type IN (${f.types.map(() => "?").join(",")})`;
     params.push(...f.types);
   }
+  if (f.channel) sql += ` AND t.id IS NOT NULL${channelFilterSql("t.channel", f.channel, params)}`;
   if (needsMessage) sql += messageCriteriaSql(f, params);
-  if (needsMessage || f.threadId) sql += threadAccessSql(ctx, viewer, "t", params);
+  // Changes in channels the viewer can't read are left out; changes without a thread are board-wide.
+  const access = threadAccessSql(ctx, viewer, boardId, "t", params);
+  if (access) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${access}))`;
   sql += " ORDER BY e.seq LIMIT ?";
   params.push(limit);
   return { rows: ctx.db.prepare(sql).all(...params) as EventRow[], windowEnd };
@@ -355,17 +379,18 @@ export function readMessages(ctx: AppContext, actor: Actor, boardId: string, inp
       sql += " AND m.thread_id = ?";
       params.push(f.threadId);
     }
+    sql += channelFilterSql("t.channel", f.channel, params);
     sql += messageCriteriaSql(f, params);
-    sql += threadAccessSql(ctx, actor, "t", params);
+    sql += threadAccessSql(ctx, actor, boardId, "t", params);
     let ascending = false;
     if (input.after !== undefined) {
-      const p = resolvePoint(ctx, boardId, input.after, "after");
+      const p = resolvePoint(ctx, actor, boardId, input.after, "after");
       const bound = p.kind === "message" ? p.rowid : (firstRowidAfterSeq(ctx, boardId, p.seq) ?? Number.MAX_SAFE_INTEGER) - 1;
       sql += " AND m.rowid > ?";
       params.push(bound);
       ascending = true;
     } else if (input.before !== undefined) {
-      const p = resolvePoint(ctx, boardId, input.before, "before");
+      const p = resolvePoint(ctx, actor, boardId, input.before, "before");
       const bound = p.kind === "message" ? p.rowid : (firstRowidAfterSeq(ctx, boardId, p.seq) ?? Number.MAX_SAFE_INTEGER);
       sql += " AND m.rowid < ?";
       params.push(bound);

@@ -29,7 +29,8 @@ disagree, the schema wins and the prose is a bug.
 | [08 Export and import](08-export.md) | `openmessageboard.export/0.1` |
 | [09 Sync](09-sync.md) | Slack, GitHub and Linear integrations |
 | [10 Security](10-security.md) | Threat model and required protections |
-| [11 Scheduled posts and watchers](11-schedules-and-watchers.md) | Posting later, and board automation that delivers matching changes to a URL |
+| [11 Channels and access](11-channels-and-access.md) | Channels, named boards, grants and private channels |
+| [12 Scheduled posts and watchers](12-schedules-and-watchers.md) | Posting later, and board automation that delivers matching changes to a URL |
 | [examples/](examples/) | Worked JSON exchanges; each file is also a test fixture checked by `schemas/check.ts` |
 
 ## Conformance language
@@ -53,9 +54,12 @@ Sections marked *non-normative*, examples, and notes are informative.
 - **Principal**: an identity that acts on the server: a `human`, an `agent`
   owned by a human, or an `integration` that authors messages arriving from an
   external platform ([01](01-identity-and-auth.md)).
-- **Board**: a container of threads with its own members, settings and event log.
-  Each human owns at most `boards_owned` boards; v0.1 has exactly one personal
-  board per human.
+- **Board**: a container of threads with its own members, settings, channels,
+  grants and event log. Each human owns at most `boards_owned` boards: one
+  personal board and named boards ([11](11-channels-and-access.md)).
+- **Channel**: a path such as `general` or `www/production` that groups a board's
+  threads; access can be opened or narrowed per channel with **grants**
+  ([11](11-channels-and-access.md)).
 - **Member**: a principal with an active membership on a board, holding a
   **role**: `reader`, `contributor` or `owner`. "reader+" means any role,
   "contributor+" means contributor or owner.
@@ -124,7 +128,7 @@ server implements every MUST in the sections listed for it. The profile names ar
 | `sync` | `core`, plus [09](09-sync.md) for at least one of Slack, GitHub or Linear. | Not testable without external platforms; reported as skipped |
 | `workload` | `core`, plus [01](01-identity-and-auth.md) §Workload identity. | Not testable without a trusted OIDC issuer; reported as skipped |
 | `import` | `core`, plus import ([08](08-export.md) §Import). | Only the discovery claim; import and export have no MCP path in v0.1 |
-| `automation` | `core`, plus [11](11-schedules-and-watchers.md) and the tools whose profile is `automation`. | A schedule runs once and repeats, cancel stops it, a watcher receives a signed, filtered delivery after a verified handshake, private addresses are refused |
+| `automation` | `core`, plus [12](12-schedules-and-watchers.md) and the tools whose profile is `automation`. | A schedule runs once and repeats, cancel stops it, a watcher receives a signed, filtered delivery after a verified handshake, private addresses are refused |
 
 A client "implements" OpenMessageBoard when it uses only the MCP binding and the
 discovery document, follows the client algorithm in [05](05-events-and-cursors.md),

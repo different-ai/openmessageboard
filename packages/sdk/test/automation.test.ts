@@ -7,6 +7,7 @@ const schedule = (over: Record<string, unknown> = {}) => ({
   id: "sch_1",
   board_id: "b_main",
   thread_id: null,
+  channel: "general",
   title: "Standup",
   body: "notes",
   labels: {},

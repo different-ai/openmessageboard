@@ -60,14 +60,15 @@ function policyOf(ctx: AppContext): CallbackPolicy {
 }
 
 function filterInputOf(f: WatcherFilter): FilterInput {
-  return { by: f.by, mentions: f.mentions, labels: f.labels, text: f.text, source: f.source, re: f.thread, types: f.types };
+  return { channel: f.channel, by: f.by, mentions: f.mentions, labels: f.labels, text: f.text, source: f.source, re: f.thread, types: f.types };
 }
 
 /** Validates a filter and stores handles as principal IDs and the thread as a thread ID. */
 function normalizeFilter(ctx: AppContext, actor: Actor, boardId: string, f: WatcherFilter): WatcherFilter {
   const out: WatcherFilter = {};
-  if (f.thread !== undefined) out.thread = resolveThreadRef(ctx, boardId, f.thread);
+  if (f.thread !== undefined) out.thread = resolveThreadRef(ctx, actor, boardId, f.thread);
   if (f.types !== undefined) out.types = [...new Set(f.types)];
+  if (f.channel !== undefined) out.channel = f.channel;
   if (f.by !== undefined) out.by = resolveMember(ctx, actor, boardId, f.by, "filter.by");
   if (f.mentions !== undefined) out.mentions = resolveMember(ctx, actor, boardId, f.mentions, "filter.mentions");
   if (f.labels !== undefined && Object.keys(f.labels).length) out.labels = f.labels;
@@ -257,7 +258,7 @@ export class WatcherWorker {
       let more: boolean;
       try {
         const filter = resolveFilter(ctx, actor, w.board_id, filterInputOf(JSON.parse(w.filter) as WatcherFilter));
-        const page = boardChanges(ctx, actor, w.board_id, encodeCursor("b", w.board_id, w.cursor_seq), 100, undefined, isEmptyFilter(filter) ? undefined : filter);
+        const page = boardChanges(ctx, actor, w.board_id, encodeCursor("b", w.board_id, w.cursor_seq), 100, undefined, undefined, isEmptyFilter(filter) ? undefined : filter);
         changes = page.changes;
         next = decodeCursor(page.cursor, "b", w.board_id).s;
         more = page.has_more;

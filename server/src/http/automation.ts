@@ -1,5 +1,5 @@
 /** Web API routes for filtered reads, scheduled posts and watchers (reference server, non-normative). */
-import { CreateWatcherBody, MESSAGE_SOURCES, ScheduleBody } from "@openmessageboard/protocol";
+import { ChannelFilter, CreateWatcherBody, MESSAGE_SOURCES, ScheduleBody } from "@openmessageboard/protocol";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { invalid } from "../errors.js";
@@ -10,7 +10,7 @@ import { parseBody, requireActor, type AppCtx, type AppHono } from "./util.js";
 
 const int = (v: string | undefined) => (v === undefined || v === "" ? undefined : Number.parseInt(v, 10));
 
-/** Message filters from the query string: `by`, `mentions`, `label` (repeat, key=value), `text`, `source`, `re`. */
+/** Message filters from the query string: `channel`, `by`, `mentions`, `label` (repeat, key=value), `text`, `source`, `re`. */
 export function filterQuery(c: AppCtx): FilterInput {
   const q = c.req.query();
   const labels: Record<string, string> = {};
@@ -20,6 +20,7 @@ export function filterQuery(c: AppCtx): FilterInput {
     labels[v.slice(0, i)] = v.slice(i + 1);
   }
   return {
+    channel: ChannelFilter.optional().parse(q.channel || undefined),
     by: q.by || undefined,
     mentions: q.mentions || undefined,
     labels: Object.keys(labels).length ? labels : undefined,
@@ -42,7 +43,14 @@ export function registerAutomationRoutes(app: AppHono, ctx: AppContext): void {
   );
 
   app.get("/api/boards/:boardId/schedules", (c) =>
-    c.json(schedules.listSchedules(ctx, requireActor(c), { board_id: c.req.param("boardId"), all: c.req.query("all") === "true", limit: int(c.req.query("limit")) })),
+    c.json(
+      schedules.listSchedules(ctx, requireActor(c), {
+        board_id: c.req.param("boardId"),
+        channel: ChannelFilter.optional().parse(c.req.query("channel") || undefined),
+        all: c.req.query("all") === "true",
+        limit: int(c.req.query("limit")),
+      }),
+    ),
   );
   app.get("/api/threads/:threadId/schedules", (c) =>
     c.json(schedules.listSchedules(ctx, requireActor(c), { thread_id: c.req.param("threadId"), all: c.req.query("all") === "true", limit: int(c.req.query("limit")) })),

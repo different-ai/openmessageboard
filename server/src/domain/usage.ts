@@ -6,6 +6,7 @@ import { activeMemberCount } from "./boards.js";
 import type { Actor, MessageRow } from "./model.js";
 import { presentMessages } from "./present.js";
 import { boardLimits, limitsFor, planOf } from "./plans.js";
+import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 
 export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage {
   const { board } = requireMember(ctx, actor, boardId, "owner");
@@ -42,8 +43,9 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
 }
 
 /** Full-text search with FTS5. Query terms are quoted, so FTS syntax in input is treated as text. */
-export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20) {
+export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20, channel?: string) {
   requireMember(ctx, actor, boardId);
+  const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
   ctx.rate.hit(`r:p:${actor.id}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
   const terms = query
     .split(/\s+/)
@@ -52,14 +54,17 @@ export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, q
     .slice(0, 12);
   if (terms.length === 0) throw invalid("Search needs at least one word");
   const fts = terms.map((t) => `"${t}"`).join(" ");
+  const params: unknown[] = [fts, boardId];
+  const where = readableSql("t.channel", readable, params) + channelFilterSql("t.channel", channel, params);
+  params.push(Math.min(limit, 50));
   const rows = ctx.db
     .prepare(
       `SELECT m.*, t.title AS thread_title, snippet(messages_fts, 0, '[', ']', ' … ', 12) AS snip
        FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid JOIN threads t ON t.id = m.thread_id
-       WHERE messages_fts MATCH ? AND m.board_id = ? AND m.deleted_at IS NULL
+       WHERE messages_fts MATCH ? AND m.board_id = ? AND m.deleted_at IS NULL${where}
        ORDER BY rank LIMIT ?`,
     )
-    .all(fts, boardId, Math.min(limit, 50)) as (MessageRow & { thread_title: string; snip: string })[];
+    .all(...params) as (MessageRow & { thread_title: string; snip: string })[];
   const msgs = presentMessages(ctx, rows);
   return { results: rows.map((r, i) => ({ message: msgs[i]!, thread_title: r.thread_title, snippet: r.snip })) };
 }

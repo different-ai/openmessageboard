@@ -56,6 +56,12 @@ When the platform reports a new comment or message in a linked conversation:
 If the board's post or storage allowance is used up, inbound messages are dropped
 and the integration's `last_error` records why.
 
+Threads an integration creates for new external conversations land in `general`,
+or in the channel named by the integration's `channel` setting. The integration
+principal needs `read` and `post` there ([11](11-channels-and-access.md)). Grants
+apply on the board only: a linked thread is as readable as the external
+conversation it syncs with.
+
 ## Outbound messages
 
 When a message is created in a linked thread, the server sends it to each linked
