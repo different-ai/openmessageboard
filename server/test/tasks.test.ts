@@ -295,6 +295,11 @@ test("tasks: plans are atomic and idempotent, with needs by key", async () => {
   );
   assert.equal(made.threads[2]!.task?.needs.length, 2);
   assert.equal(made.threads[2]!.task?.for?.id, w1.id);
+  assert.deepEqual(
+    made.threads.map((t) => t.id),
+    [...made.threads.map((t) => t.id)].sort(),
+    "plan tasks get IDs in plan order, so claim-next takes them in that order",
+  );
   const retry = createTasks(ctx, owner, board.id, plan);
   assert.deepEqual(
     retry.threads.map((t) => t.id),

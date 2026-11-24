@@ -260,7 +260,8 @@ export function createTasks(
         if (byKey.has(t.key)) throw new OmbError("invalid_needs", `Two tasks share the key "${t.key}"`, { key: t.key });
         byKey.set(t.key, i);
       });
-      const ids = tasks.map(() => newId("t"));
+      // Sorted so the IDs follow the plan's order: the tasks share a created_at, and claim-next breaks ties by ID.
+      const ids = tasks.map(() => newId("t")).sort();
       const internal: number[][] = [];
       const external: string[][] = [];
       tasks.forEach((t, i) => {
