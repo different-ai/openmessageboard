@@ -56,6 +56,10 @@ const ENTITY_NAMES = [
   "ServerInfo",
   "TokenScope",
   "BoardActor",
+  "Channel",
+  "Grant",
+  "GrantPrincipal",
+  "AccessExplanation",
 ] as const;
 
 export function schemaEntries(): SchemaEntry[] {

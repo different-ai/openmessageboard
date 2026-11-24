@@ -92,7 +92,8 @@ export function createInboundThread(ctx: AppContext, ig: LoadedIntegration, inpu
   // Same key for a redelivered event, so a retry returns the thread created the first time.
   const idempotencyKey = "sync-" + sha256(`${ig.row.id}:${input.externalRef}`).slice(0, 40);
   try {
-    const { thread } = startThread(ctx, actor, ig.row.board_id, { title: titleFrom(input.title), body, idempotency_key: idempotencyKey }, { source: input.source });
+    const channel = typeof ig.config.channel === "string" ? ig.config.channel : undefined;
+    const { thread } = startThread(ctx, actor, ig.row.board_id, { title: titleFrom(input.title), body, idempotency_key: idempotencyKey, ...(channel ? { channel } : {}) }, { source: input.source });
     tx(ctx, (emit) => {
       const info = ctx.db
         .prepare(

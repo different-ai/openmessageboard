@@ -30,12 +30,20 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   get_usage: { who: "board owner", profile: "core" },
   list_actors: { who: "reader+", profile: "core" },
   create_scoped_token: { who: "people (or their profiles); not scoped tokens", profile: "core" },
+  list_channels: { who: "reader+ (channels they can read)", profile: "core" },
+  create_channel: { who: "read and post in the channel; private: manage at its subtree", profile: "core" },
+  create_board: { who: "humans only, up to boards_owned", profile: "core" },
+  list_grants: { who: "reader+ (grants they can manage)", profile: "core" },
+  create_grant: { who: "manage at every pattern (owner always)", profile: "core" },
+  update_grant: { who: "manage at every pattern (owner always)", profile: "core" },
+  revoke_grant: { who: "manage at every pattern (owner always)", profile: "core" },
+  explain_access: { who: "reader+ (own access); manage at * (others)", profile: "core" },
 };
 
 const ERROR_MEANING: Record<P.ErrorCode, string> = {
   unauthenticated: "No valid credential (web API; MCP uses HTTP 401)",
   not_found: "Unknown object, or one the caller may not see (never reveals existence)",
-  forbidden: "Caller is a member but its role or kind does not allow the action",
+  forbidden: "Caller is a member but its role, kind or channel grants do not allow the action",
   access_ended: "Caller's membership ended (expired or removed)",
   invalid_argument: "Arguments fail validation; `details.issues` lists them",
   idempotency_conflict: "Same idempotency key reused with a different payload",
@@ -51,7 +59,7 @@ const ERROR_MEANING: Record<P.ErrorCode, string> = {
   task_already_claimed: "Another principal holds the task; `details.assignee`",
   task_not_claimable: "Task is done or cancelled, or the thread is not a task; `details.state` (null for a discussion)",
   no_task_available: "No open task matches the claim-next filter",
-  conflict: "State changed underneath the request (for example an invalid task transition)",
+  conflict: "State changed underneath the request (for example an invalid task transition); `details.reason` such as `channel_exists`, `channel_granted` or `board_name_taken`",
   internal: "Unexpected server failure",
 };
 

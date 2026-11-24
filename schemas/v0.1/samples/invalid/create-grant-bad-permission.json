@@ -1,0 +1,17 @@
+{
+  "schema": "tools/create_grant.input",
+  "description": "permissions are read, post, react, label and manage",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "principals": [
+      {
+        "kind": "everyone"
+      }
+    ],
+    "can": {
+      "security/": [
+        "admin"
+      ]
+    }
+  }
+}

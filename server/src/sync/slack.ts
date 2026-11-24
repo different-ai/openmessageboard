@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ChannelPath } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { OmbError, invalid } from "../errors.js";
 import { badSignature, fetchJson, hmacHex, obj, retryAfterMs, safeEqual, str, SyncHttpError } from "./http.js";
@@ -15,6 +16,8 @@ const SlackConfig = z.strictObject({
     .toUpperCase()
     .regex(/^[CG][A-Z0-9]{4,}$/, "must be a Slack channel ID such as C0123456789"),
   auto_create_threads: z.boolean().default(true),
+  /** Board channel for threads this integration creates. Default general. */
+  channel: ChannelPath.optional(),
 });
 const SlackSecrets = z.strictObject({
   bot_token: z.string().trim().regex(/^xox[a-z]-/, "must be the app's bot token (starts with xoxb-)"),

@@ -8,6 +8,8 @@ import { ownedBoards } from "./boards.js";
 import type { Actor, MessageRow, PrincipalRow, ThreadRow } from "./model.js";
 import { presentBoard } from "./present.js";
 import { limitsFor } from "./plans.js";
+import { ensureChannel } from "./channels.js";
+import { CHANNEL_PATH_PATTERN, DEFAULT_CHANNEL, MAX_CHANNEL_CHARS } from "@openmessageboard/protocol";
 
 /** Board export: threads, messages, authorship and reply links. No emails, tokens, invites, follows or read state. */
 export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): ExportFile {
@@ -41,6 +43,7 @@ export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): Exp
     threads: threads.map((t) => ({
       id: t.id,
       title: t.title,
+      channel: t.channel,
       kind: t.kind,
       labels: JSON.parse(t.labels) as Record<string, string>,
       task_state: t.task_state,
@@ -118,12 +121,15 @@ export function importBoard(ctx: AppContext, actor: Actor, raw: unknown, opts: {
       threadMap.set(t.id, id);
       const msgs = file.messages.filter((m) => m.thread_id === t.id);
       const last = msgs[msgs.length - 1]?.created_at ?? t.created_at;
+      // Channels travel with their threads; an unknown or invalid channel lands in general.
+      const channel = t.channel && t.channel.length <= MAX_CHANNEL_CHARS && CHANNEL_PATH_PATTERN.test(t.channel) ? t.channel : DEFAULT_CHANNEL;
       ctx.db
         .prepare(
-          `INSERT INTO threads (id, board_id, title, kind, labels, task_state, task_assignee_id, created_by, created_at, last_activity_at, message_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO threads (id, board_id, channel, title, kind, labels, task_state, task_assignee_id, created_by, created_at, last_activity_at, message_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, boardId, t.title, t.kind, JSON.stringify(t.labels), t.kind === "task" ? (t.task_state ?? "open") : null, author(t.task_assignee_ref), author(t.created_by_ref), t.created_at, last, msgs.length);
+        .run(id, boardId, channel, t.title, t.kind, JSON.stringify(t.labels), t.kind === "task" ? (t.task_state ?? "open") : null, author(t.task_assignee_ref), author(t.created_by_ref), t.created_at, last, msgs.length);
+      ensureChannel(ctx, boardId, channel, actor.id);
     }
     const messageMap = new Map<string, string>();
     for (const m of file.messages) messageMap.set(m.id, newId("m"));

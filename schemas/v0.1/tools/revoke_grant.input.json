@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/revoke_grant.input",
+  "title": "revoke_grant input",
+  "description": "Remove a grant. What it gave stops from the next request. Needs manage at its patterns.",
+  "type": "object",
+  "properties": {
+    "grant_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Grant ID"
+    }
+  },
+  "required": [
+    "grant_id"
+  ]
+}

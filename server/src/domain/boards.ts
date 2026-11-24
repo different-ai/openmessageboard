@@ -118,6 +118,7 @@ export function recordEvent(
     .prepare("INSERT INTO events (board_id, type, thread_id, message_id, subject_id, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run(e.boardId, e.type, e.threadId ?? null, e.messageId ?? null, e.subjectId ?? null, e.actorId ?? null, nowIso(ctx));
   const seq = Number(info.lastInsertRowid);
+  const channel = e.threadId ? ((ctx.db.prepare("SELECT channel FROM threads WHERE id = ?").get(e.threadId) as { channel: string } | undefined)?.channel ?? null) : null;
   emit({
     kind: "board",
     boardId: e.boardId,
@@ -127,6 +128,7 @@ export function recordEvent(
     messageId: e.messageId ?? null,
     actorId: e.actorId ?? null,
     subjectId: e.subjectId ?? null,
+    channel,
   });
   return seq;
 }
@@ -184,6 +186,35 @@ export function ensureOwnBoard(ctx: AppContext, actor: Actor, opts: { create: bo
   });
 }
 
+/**
+ * Creates another named board owned by a person, up to their plan's `boards_owned`. Names are unique among the
+ * person's boards, ignoring case. The personal board (created on first whoami) stays as it is.
+ */
+export function createNamedBoard(ctx: AppContext, actor: Actor, rawName: string): Board {
+  requireHuman(actor, "Only people can own boards");
+  const name = rawName.trim();
+  if (!name || name.length > 80) throw invalid("Board name must be 1-80 characters");
+  return tx(ctx, (emit) => {
+    const owned = ownedBoards(ctx, actor.id);
+    const limit = limitsFor(ctx, actor.id).boards_owned;
+    if (owned.length >= limit) {
+      throw new OmbError("quota_exceeded", `You own ${owned.length} of the ${limit} board(s) your plan allows`, { allowance: "boards_owned", used: owned.length, limit, resets_at: null });
+    }
+    assertBoardNameFree(owned, name);
+    const principal = getPrincipal(ctx, actor.id)!;
+    const id = newId("b");
+    ctx.db.prepare("INSERT INTO boards (id, name, owner_id, is_personal, created_at) VALUES (?, ?, ?, 0, ?)").run(id, name, actor.id, nowIso(ctx));
+    const m = insertMembership(ctx, id, principal, "owner");
+    recordEvent(ctx, emit, { boardId: id, type: "member.joined", subjectId: actor.id, actorId: actor.id });
+    return presentBoard(ctx, getBoardRow(ctx, id)!, m);
+  });
+}
+
+function assertBoardNameFree(owned: BoardRow[], name: string, exceptId?: string): void {
+  const taken = owned.find((b) => b.id !== exceptId && b.name.trim().toLowerCase() === name.toLowerCase());
+  if (taken) throw new OmbError("conflict", `You already have a board named "${taken.name}"`, { reason: "board_name_taken" });
+}
+
 export function getBoard(ctx: AppContext, actor: Actor, boardId: string): Board {
   const { board, membership } = requireMember(ctx, actor, boardId);
   return presentBoard(ctx, board, membership);
@@ -226,6 +257,7 @@ export function updateBoard(
     if (input.name !== undefined) {
       const name = input.name.trim();
       if (!name || name.length > 80) throw invalid("Board name must be 1-80 characters");
+      assertBoardNameFree(ownedBoards(ctx, board.owner_id), name, board.id);
       ctx.db.prepare("UPDATE boards SET name = ? WHERE id = ?").run(name, board.id);
     }
     const s = input.settings ?? {};

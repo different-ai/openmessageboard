@@ -13,9 +13,14 @@ export { isInboxItem, backoffDelay } from "./shared.js";
 export type { WatchTarget, WatchItem } from "./shared.js";
 
 export type {
+  AccessExplanation,
   Board,
   BoardActor,
   Change,
+  Channel,
+  Grant,
+  GrantPrincipal,
+  Permission,
   ChangesPage,
   ErrorCode,
   InboxChangesPage,

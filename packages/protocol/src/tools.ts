@@ -30,6 +30,7 @@ import {
   BoardActor,
   TokenScope,
 } from "./entities.js";
+import { CHANNEL_TOOLS, CHANNEL_WRITE_TOOLS, ChannelFilter, ChannelPath } from "./channels.js";
 
 const id = (what: string) => z.string().min(1).describe(`${what} ID`);
 const idempotencyKey = z
@@ -49,20 +50,22 @@ const usageWarning = z.array(AllowanceUsage).optional().describe("Present when a
 export const TOOLS = {
   whoami: {
     description:
-      "Who you are on this server, your own board (created on first use for people), every board you can access, and the server's limits.",
+      "Who you are on this server, your own board (created on first use for people), every board you own and can access, and the server's limits.",
     input: z.object({}),
     output: z.object({
       principal: Principal,
       owned_board: Board.nullable(),
+      owned_boards: z.array(Board).describe("Every board you own, your personal board first"),
       memberships: z.array(Membership),
       server: ServerInfo,
     }),
   },
   list_threads: {
     description:
-      "List threads on a board by most recent activity. Filter by following/unread, kind, task state, assignee or labels. Returns an as_of cursor for get_changes.",
+      "List threads on a board by most recent activity. Filter by channel (www/ for a subtree), following/unread, kind, task state, assignee or labels. Returns an as_of cursor for get_changes.",
     input: z.object({
       board_id: id("Board"),
+      channel: ChannelFilter.optional(),
       filter: z.enum(["all", "following", "unread"]).optional(),
       kind: z.enum(THREAD_KINDS).optional(),
       task_state: z.enum(TASK_STATES).optional(),
@@ -79,9 +82,10 @@ export const TOOLS = {
     output: z.object({ thread: Thread, messages: z.array(Message), next_page_cursor: z.string().nullable(), as_of: z.string() }),
   },
   start_thread: {
-    description: "Start a thread on a board. Set task: true to make it a task that agents or people can claim.",
+    description: "Start a thread in a channel of a board (general by default; the first post creates the channel). Set task: true to make it a task that agents or people can claim.",
     input: z.object({
       board_id: id("Board"),
+      channel: ChannelPath.optional().describe("Channel path such as dev or www/production. Default general."),
       title: z.string().min(1).max(MAX_TITLE_CHARS),
       body: z.string().min(1).describe("Markdown, up to 16 KiB"),
       mentions,
@@ -126,7 +130,13 @@ export const TOOLS = {
   get_changes: {
     description:
       "Changes after a cursor, in order. Pass board_id for a board's changes or inbox: true for your inbox. Omit cursor to get the current position. If the result says cursor_expired, reload with list_threads.",
-    input: z.object({ board_id: z.string().optional(), inbox: z.boolean().optional(), cursor: z.string().optional(), limit: limit(100, 100) }),
+    input: z.object({
+      board_id: z.string().optional(),
+      inbox: z.boolean().optional(),
+      channel: ChannelFilter.optional().describe("Board changes only: thread and message changes in this channel or subtree"),
+      cursor: z.string().optional(),
+      limit: limit(100, 100),
+    }),
     output: z.union([ChangesPage, InboxChangesPage]),
   },
   wait_for_activity: {
@@ -135,14 +145,15 @@ export const TOOLS = {
       board_id: z.string().optional(),
       thread_id: z.string().optional(),
       inbox: z.boolean().optional(),
+      channel: ChannelFilter.optional().describe("Board waits only: wake for changes in this channel or subtree"),
       cursor: z.string().describe("Cursor from a previous result"),
       timeout_seconds: z.number().int().min(1).max(WAIT_MAX_SECONDS).optional(),
     }),
     output: z.union([ChangesPage, InboxChangesPage]),
   },
   search_messages: {
-    description: "Full-text search of messages on one board.",
-    input: z.object({ board_id: id("Board"), query: z.string().min(1).max(200), limit: limit(50, 20) }),
+    description: "Full-text search of messages on one board, optionally in one channel or subtree.",
+    input: z.object({ board_id: id("Board"), query: z.string().min(1).max(200), channel: ChannelFilter.optional(), limit: limit(50, 20) }),
     output: z.object({ results: z.array(z.object({ message: Message, thread_title: z.string(), snippet: z.string() })) }),
   },
   list_members: {
@@ -223,6 +234,7 @@ export const TOOLS = {
       scope: TokenScope,
     }),
   },
+  ...CHANNEL_TOOLS,
 } as const;
 
 export type ToolName = keyof typeof TOOLS;
@@ -243,4 +255,5 @@ export const WRITE_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>([
   "create_invite",
   "redeem_invite",
   "create_scoped_token",
+  ...CHANNEL_WRITE_TOOLS,
 ]);

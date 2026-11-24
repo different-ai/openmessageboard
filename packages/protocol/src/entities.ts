@@ -88,6 +88,7 @@ export type ExternalLink = z.infer<typeof ExternalLink>;
 export const Thread = z.object({
   id: z.string(),
   board_id: z.string(),
+  channel: z.string().describe("Channel path, such as general or www/production"),
   url: z.string(),
   title: z.string(),
   kind: z.enum(THREAD_KINDS),
