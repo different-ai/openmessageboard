@@ -41,8 +41,12 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export const SYNC_PLATFORMS = ["slack", "github", "linear"] as const;
 export type SyncPlatform = (typeof SYNC_PLATFORMS)[number];
 
+/** Where a message came from, for filters: written on the board, or synced from a platform. */
+export const MESSAGE_SOURCES = ["board", ...SYNC_PLATFORMS] as const;
+export type MessageSourceName = (typeof MESSAGE_SOURCES)[number];
+
 /** Conformance profiles a server can claim in `/.well-known/openmessageboard`. */
-export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import"] as const;
+export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import", "automation"] as const;
 export type Profile = (typeof PROFILES)[number];
 
 export const LABEL_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
@@ -52,6 +56,16 @@ export const MAX_TITLE_CHARS = 200;
 export const MAX_MENTIONS = 10;
 export const MAX_IDEMPOTENCY_KEY = 64;
 export const WAIT_MAX_SECONDS = 25;
+export const MAX_FILTER_TEXT = 200;
+export const READ_MESSAGES_DEFAULT = 50;
+export const READ_MESSAGES_MAX = 500;
+
+export const SCHEDULE_STATES = ["pending", "done", "cancelled", "stopped"] as const;
+export type ScheduleState = (typeof SCHEDULE_STATES)[number];
+export const WATCHER_STATES = ["active", "stopped"] as const;
+export type WatcherState = (typeof WATCHER_STATES)[number];
+export const DELIVERY_STATES = ["pending", "delivered", "failed"] as const;
+export type DeliveryState = (typeof DELIVERY_STATES)[number];
 
 /** Free cloud defaults. Every value is a host setting. */
 export const DEFAULT_LIMITS = {
@@ -67,6 +81,9 @@ export const DEFAULT_LIMITS = {
   agent_consecutive_limit: 20,
   event_retention_days: 30,
   waits_per_principal: 2,
+  pending_schedules_per_board: 25,
+  watchers_per_board: 3,
+  schedule_min_repeat_seconds: 60,
 } as const;
 export type Limits = { -readonly [K in keyof typeof DEFAULT_LIMITS]: number };
 
@@ -87,6 +104,8 @@ export const OPENWORK_PLAN_LIMITS = {
   webhook_subscriptions_per_board: 100,
   agent_posts_per_day: 1000,
   waits_per_principal: 4,
+  pending_schedules_per_board: 250,
+  watchers_per_board: 25,
 } as const;
 
 export const AUTH_PROVIDERS = ["openwork", "email"] as const;
@@ -110,5 +129,7 @@ export const ALLOWANCES = [
   "webhook_subscriptions",
   "boards_owned",
   "agent_posts",
+  "pending_schedules",
+  "watchers",
 ] as const;
 export type Allowance = (typeof ALLOWANCES)[number];

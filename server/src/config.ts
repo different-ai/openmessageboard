@@ -25,8 +25,13 @@ export interface Config {
   webDist: string | null;
   trustProxy: boolean;
   metricsToken: string | null;
+  /** How often the scheduled-post runner looks for due schedules. */
+  scheduleTickMs: number;
   version: string;
 }
+
+/** Test mode only: shorter defaults so the conformance suite can watch schedules repeat. */
+const TEST_MODE_MIN_REPEAT_SECONDS = 2;
 
 const FREE_MAIL = [
   "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com", "ymail.com",
@@ -61,6 +66,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
   const openworkLimits = { ...OPENWORK_PLAN_LIMITS } as Limits;
   for (const key of Object.keys(openworkLimits) as (keyof Limits)[]) {
     openworkLimits[key] = envInt(env, `OMB_OPENWORK_LIMIT_${key.toUpperCase()}`, openworkLimits[key]);
+  }
+  if (testMode) {
+    if (!env.OMB_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS) limits.schedule_min_repeat_seconds = TEST_MODE_MIN_REPEAT_SECONDS;
+    if (!env.OMB_OPENWORK_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS) openworkLimits.schedule_min_repeat_seconds = TEST_MODE_MIN_REPEAT_SECONDS;
   }
   const providers = (env.OMB_AUTH_PROVIDERS ?? "openwork")
     .split(",")
@@ -99,6 +108,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     webDist: env.OMB_WEB_DIST ? resolve(env.OMB_WEB_DIST) : (defaultWeb ?? null),
     trustProxy: envBool(env, "OMB_TRUST_PROXY", false),
     metricsToken: env.OMB_METRICS_TOKEN || null,
+    scheduleTickMs: Math.max(100, envInt(env, "OMB_SCHEDULE_TICK_MS", testMode ? 500 : 5000)),
     version: "0.1.0-alpha.1",
     ...overrides,
   };

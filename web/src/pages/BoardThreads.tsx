@@ -7,6 +7,7 @@ import { MAX_TITLE, parseLabels, plural } from "../format";
 import { Link, navigate, useLocation, useTitle } from "../router";
 import { useSession } from "../session";
 import { Author, CopyField, Empty, ErrorNote, LabelChips, Loading, PlatformName, TaskBadge, TimeAgo, errorText, useToast } from "../ui";
+import { FilteredMessages, MessageFilterBar, hasMessageFilters, readMessageFilters, withMessageFilters } from "./MessageFilters";
 
 type Filters = { filter: "all" | "following" | "unread"; kind: "all" | "discussion" | "task"; labels: Labels };
 
@@ -68,6 +69,7 @@ export function BoardThreads() {
   const { search } = useLocation();
   const filters = readFilters(search);
   const filterKey = filtersHref(board.id, filters);
+  const messageFilters = readMessageFilters(search);
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -135,7 +137,7 @@ export function BoardThreads() {
     }
   }
 
-  const setFilters = (f: Partial<Filters>) => navigate(filtersHref(board.id, { ...filters, ...f }), { replace: true });
+  const setFilters = (f: Partial<Filters>) => navigate(withMessageFilters(filtersHref(board.id, { ...filters, ...f }), search), { replace: true });
 
   return (
     <div className="with-aside">
@@ -175,6 +177,7 @@ export function BoardThreads() {
           )}
         </div>
         <LabelFilter labels={filters.labels} onChange={(labels) => setFilters({ labels })} />
+        <MessageFilterBar boardId={board.id} search={search} members={members} filters={messageFilters} />
 
         {composing && (
           <NewThreadForm
@@ -186,7 +189,9 @@ export function BoardThreads() {
         )}
 
         <ErrorNote error={error} />
-        {threads === null && !error ? (
+        {hasMessageFilters(messageFilters) ? (
+          <FilteredMessages filters={messageFilters} labels={filters.labels} />
+        ) : threads === null && !error ? (
           <Loading label="Loading threads…" />
         ) : threads && threads.length === 0 ? (
           <Empty title={filters.filter === "unread" ? "You're all caught up" : "No threads here yet"}>
@@ -205,7 +210,7 @@ export function BoardThreads() {
             {threads?.map((t) => <ThreadRow key={t.id} t={t} boardId={board.id} />)}
           </ul>
         )}
-        {next && (
+        {next && !hasMessageFilters(messageFilters) && (
           <div className="center">
             <button type="button" className="button" onClick={loadMore} disabled={loadingMore}>
               {loadingMore ? "Loading…" : "Load more threads"}

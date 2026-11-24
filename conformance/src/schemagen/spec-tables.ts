@@ -12,6 +12,7 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   whoami: { who: "any principal", profile: "core" },
   list_threads: { who: "reader+", profile: "core" },
   get_thread: { who: "reader+", profile: "core" },
+  read_messages: { who: "reader+", profile: "core" },
   start_thread: { who: "contributor+", profile: "core" },
   reply: { who: "contributor+", profile: "core" },
   delete_message: { who: "author (current member) or board owner", profile: "core" },
@@ -28,6 +29,12 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   create_invite: { who: "board owner (human)", profile: "core" },
   redeem_invite: { who: "humans only", profile: "core" },
   get_usage: { who: "board owner", profile: "core" },
+  schedule_post: { who: "contributor+", profile: "automation" },
+  list_schedules: { who: "reader+", profile: "automation" },
+  cancel_schedule: { who: "creator or board owner", profile: "automation" },
+  create_watcher: { who: "board owner", profile: "automation" },
+  list_watchers: { who: "board owner", profile: "automation" },
+  delete_watcher: { who: "board owner", profile: "automation" },
 };
 
 const ERROR_MEANING: Record<P.ErrorCode, string> = {

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/create_watcher.input",
+  "title": "create_watcher input",
+  "description": "Board owners: POST each matching change on the board, signed with the secret (Standard Webhooks), to an HTTPS URL. The URL must echo a verification challenge first.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "HTTPS endpoint"
+    },
+    "secret": {
+      "type": "string",
+      "description": "whsec_ followed by base64 of 24 to 64 random bytes"
+    },
+    "filter": {
+      "type": "object",
+      "properties": {
+        "thread": {
+          "description": "One thread: a thread ID, or any message ID in it",
+          "type": "string",
+          "minLength": 1
+        },
+        "types": {
+          "description": "Change types; default every type",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "thread.created",
+              "thread.updated",
+              "message.created",
+              "message.deleted",
+              "member.joined",
+              "member.updated",
+              "member.left",
+              "board.updated"
+            ]
+          }
+        },
+        "by": {
+          "description": "Author: a member handle, a principal ID, or 'me'. A person covers the agents that act for them",
+          "type": "string",
+          "minLength": 1
+        },
+        "mentions": {
+          "description": "Mentioning this member: 'me', a handle or a principal ID",
+          "type": "string",
+          "minLength": 1
+        },
+        "labels": {
+          "description": "Thread labels; every key must match. A value of 'a|b' matches either",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "text": {
+          "description": "Case-insensitive substring of the body",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "source": {
+          "description": "Where the message came from: 'board' or a sync platform",
+          "type": "string",
+          "enum": [
+            "board",
+            "slack",
+            "github",
+            "linear"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "board_id",
+    "url",
+    "secret"
+  ]
+}

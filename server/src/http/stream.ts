@@ -4,6 +4,8 @@ import { OmbError } from "../errors.js";
 import { requireMember } from "../domain/access.js";
 import { boardChanges, inboxChanges } from "../domain/changes.js";
 import { encodeCursor } from "../domain/cursors.js";
+import { cursorAfter, hasFilterInput, resolveFilter } from "../domain/filters.js";
+import { filterQuery } from "./automation.js";
 import type { Actor } from "../domain/model.js";
 import type { CloseReason } from "../live/connections.js";
 import type { AppCtx } from "./util.js";
@@ -13,11 +15,16 @@ const KEEPALIVE_MS = 15_000;
 /**
  * Board change stream for the browser (Server-Sent Events). Subscribes to the hub before catching up,
  * so a change that commits during catch-up is never missed; every frame is re-read from the event log.
+ * Message filters in the query string (see `filterQuery`) limit the frames to matching changes.
  */
 export function boardStream(ctx: AppContext, c: AppCtx, actor: Actor, boardId: string): Response | Promise<Response> {
   requireMember(ctx, actor, boardId);
   ctx.rate.hit(`s:p:${actor.id}`, ctx.config.rateLimits.streams_per_minute_principal, 60_000);
-  let cursor = c.req.query("cursor") || c.req.header("last-event-id") || boardChanges(ctx, actor, boardId, undefined).cursor;
+  const input = filterQuery(c);
+  const filter = hasFilterInput(input) ? resolveFilter(ctx, actor, boardId, input) : undefined;
+  const after = c.req.query("after");
+  let cursor =
+    c.req.query("cursor") || c.req.header("last-event-id") || (after ? cursorAfter(ctx, boardId, after) : undefined) || boardChanges(ctx, actor, boardId, undefined).cursor;
   let closeReason: CloseReason | null = null;
   let wake: () => void = () => {};
   const conn = ctx.connections.register({
@@ -54,7 +61,7 @@ export function boardStream(ctx: AppContext, c: AppCtx, actor: Actor, boardId: s
           dirty = false;
           try {
             for (;;) {
-              const page = boardChanges(ctx, actor, boardId, cursor, 100);
+              const page = boardChanges(ctx, actor, boardId, cursor, 100, undefined, filter);
               for (const ch of page.changes) {
                 await stream.writeSSE({ event: "change", id: encodeCursor("b", boardId, ch.seq), data: JSON.stringify(ch) });
               }

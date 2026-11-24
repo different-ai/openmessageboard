@@ -11,6 +11,8 @@ import { createResolver, type WorkloadVerifier } from "./auth/resolve.js";
 import { createApp } from "./http/app.js";
 import { EventSubscriptions } from "./mcp/events.js";
 import { runMaintenance } from "./domain/usage.js";
+import { startSchedules } from "./domain/schedules.js";
+import { WatcherWorker } from "./domain/watchers.js";
 import type { RouteModule } from "./http/util.js";
 
 export interface Features {
@@ -64,6 +66,8 @@ export async function startServer(configIn?: Config, opts: { listen?: boolean; f
   const { app } = createApp(ctx, { auth, resolver, events, modules, openworkAvailable: openworkClient !== null });
 
   const stopEvents = events.start();
+  const stopSchedules = startSchedules(ctx);
+  const stopWatchers = new WatcherWorker(ctx).start();
   const stopSync = features.sync?.start(ctx) ?? (() => {});
   const maintenance = setInterval(() => {
     try {
@@ -104,6 +108,8 @@ export async function startServer(configIn?: Config, opts: { listen?: boolean; f
       clearInterval(maintenance);
       unsubAccess();
       stopEvents();
+      stopSchedules();
+      stopWatchers();
       stopSync();
       ctx.connections.closeAll();
       if (server) {

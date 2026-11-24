@@ -1,4 +1,5 @@
-import { TASK_STATES, type TaskAction, type TaskState } from "@openmessageboard/protocol";
+import { randomBytes } from "node:crypto";
+import { EVENT_TYPES, MESSAGE_SOURCES, TASK_STATES, type EventType, type MessageSourceName, type TaskAction, type TaskState } from "@openmessageboard/protocol";
 import {
   OmbClient,
   OmbError,
@@ -6,6 +7,7 @@ import {
   isInboxItem,
   normalizeServer,
   type Change,
+  type ChangeFilters,
   type InboxItem,
   type WatchItem,
   type WatchTarget,
@@ -16,6 +18,7 @@ import {
   flag,
   isThreadUrl,
   list,
+  parseDuration,
   parseLabels,
   parsePositiveInt,
   parseTime,
@@ -33,7 +36,11 @@ import {
   formatLabels,
   formatMembers,
   formatMessage,
+  formatScheduled,
+  formatSchedules,
   formatTasks,
+  formatWatcherFilter,
+  formatWatchers,
   formatThreadHeader,
   formatThreadRow,
   formatUsage,
@@ -139,6 +146,23 @@ function labelsOf(values: Values): Record<string, string> | undefined {
   return pairs.length ? parseLabels(pairs) : undefined;
 }
 
+/** The read_messages filters given on the command line. */
+function filtersOf(values: Values, opts: { labels?: boolean } = {}): ChangeFilters {
+  const source = str(values, "source");
+  if (source !== undefined && !(MESSAGE_SOURCES as readonly string[]).includes(source)) throw new UsageError(`--source must be one of ${MESSAGE_SOURCES.join(", ")}`);
+  const labels = opts.labels === false ? undefined : labelsOf(values);
+  const f: ChangeFilters = {};
+  for (const k of ["by", "mentions", "text", "re"] as const) {
+    const v = str(values, k);
+    if (v !== undefined) f[k] = k === "re" ? threadIdFrom(v) : v;
+  }
+  if (labels) f.labels = labels;
+  if (source) f.source = source as MessageSourceName;
+  return f;
+}
+
+const hasFilters = (f: ChangeFilters) => Object.keys(f).length > 0;
+
 /** Runs until Ctrl-C (or the returned promise settles); resolves the abort signal on interrupt. */
 function interruptSignal(ctx: Context): { signal: AbortSignal; dispose: () => void } {
   const abort = new AbortController();
@@ -195,8 +219,29 @@ async function boards(ctx: Context): Promise<void> {
   ctx.out(formatBoards(me.memberships));
 }
 
+async function readMessages(ctx: Context, boardArg: string | undefined, values: Values): Promise<void> {
+  const limitArg = str(values, "limit");
+  const after = str(values, "after");
+  const before = str(values, "before");
+  const res = await ctx.client().messages(await ctx.board(boardArg), {
+    ...filtersOf(values),
+    ...(after ? { after } : {}),
+    ...(before ? { before } : {}),
+    ...(limitArg ? { limit: parsePositiveInt(limitArg, "--limit") } : {}),
+  });
+  if (ctx.json) return ctx.printJson(res);
+  const parts = res.messages.map((m) => `${m.thread_id} ${formatMessage(m, ctx.now())}`);
+  ctx.out(parts.length ? parts.join("\n\n") : "No matching messages.");
+  ctx.info(res.has_more && after ? `More: omb read --after ${res.messages[res.messages.length - 1]!.id} …` : `New since: omb read --after ${res.cursor} …`);
+}
+
 async function read(ctx: Context, args: string[], values: Values): Promise<void> {
-  if (args.length > 1) throw new UsageError("Usage: omb read [board] [--thread <id>] [--unread] [--label k=v]");
+  if (args.length > 1) throw new UsageError("Usage: omb read [board] [--thread <id>] [--unread] [--label k=v] [--by h] [--mentions [h]] [--text t] [--source s] [--re id] [--after id]");
+  const messageMode = flag(values, "messages") || ["by", "mentions", "text", "source", "re", "after", "before"].some((k) => values[k] !== undefined);
+  if (messageMode) {
+    if (str(values, "thread") || flag(values, "unread")) throw new UsageError("--thread and --unread list threads; use --re to read one thread's matching messages");
+    return readMessages(ctx, args[0], values);
+  }
   const threadArg = str(values, "thread") ?? (args[0] && isThreadUrl(args[0]) ? args[0] : undefined);
   const client = ctx.client();
   if (threadArg) {
@@ -264,31 +309,75 @@ function parseTimeoutSeconds(values: Values, fallback: number | undefined): numb
   return n === 0 ? undefined : n;
 }
 
+/**
+ * `wait <id>` (or `--re`/`--after` with no board): waits in that message's thread for what follows it. The server
+ * finds the board from the message, so an answer that is already there comes back at once.
+ */
+async function waitAfterMessage(ctx: Context, filters: ChangeFilters, after: string, seconds: number | undefined, signal: AbortSignal) {
+  const client = ctx.client();
+  const deadline = seconds === undefined ? Number.POSITIVE_INFINITY : Date.now() + seconds * 1000;
+  let cursor: string | undefined;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return null;
+    const timeout_seconds = Math.max(1, Math.min(25, Math.ceil(remaining / 1000)));
+    try {
+      const page = await client.waitForActivity({ ...filters, ...(cursor ? { cursor } : { after }), timeout_seconds }, { signal });
+      cursor = page.cursor;
+      if (page.changes.length) return { changes: page.changes as WatchItem[], cursor: page.cursor };
+    } catch (err) {
+      if (signal.aborted || !(err instanceof OmbError) || !err.retryable) throw err;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+}
+
 async function wait(ctx: Context, args: string[], values: Values): Promise<number> {
-  need(args, 0, "wait [--thread <id> | --mentions | --board <id>] [--timeout <s>]");
+  if (args.length > 1) throw new UsageError(`Usage: omb wait [<message-id>] [--thread <id> | --board <id> | --mentions [h]] [filters] [--timeout <s>]`);
   const thread = str(values, "thread");
   const board = str(values, "board");
-  const chosen = [thread !== undefined, board !== undefined, flag(values, "mentions")].filter(Boolean).length;
-  if (chosen > 1) throw new UsageError("Pick one of --thread, --board, --mentions");
+  const id = args[0];
+  const after = str(values, "after") ?? (id ? threadIdFrom(id) : undefined);
+  if ([thread !== undefined, board !== undefined, id !== undefined].filter(Boolean).length > 1) throw new UsageError("Pick one of <message-id>, --thread, --board");
+  const filters = filtersOf(values);
+  if (id && !filters.re) filters.re = threadIdFrom(id);
   const client = ctx.client();
-  const target: WatchTarget = thread ? { thread: threadIdFrom(thread) } : board ? { board: boardIdFrom(board) } : { inbox: true };
-  // Mentions wait until something arrives; a thread or board waits 5 minutes unless told otherwise.
-  const seconds = parseTimeoutSeconds(values, "inbox" in target ? undefined : 300);
+  // Bare --mentions with nothing else waits on your inbox for mentions and assigned tasks, as before.
+  const inbox = !thread && !board && !after && !filters.re && Object.keys(filters).length <= 1 && (filters.mentions === undefined || filters.mentions === "me");
+  // The inbox waits until something arrives; a thread or board waits 5 minutes unless told otherwise.
+  const seconds = parseTimeoutSeconds(values, inbox ? undefined : 300);
   const me = await client.me();
   const { signal, dispose } = interruptSignal(ctx);
   try {
-    const result = await client.waitForChanges(target, {
-      timeoutMs: seconds === undefined ? undefined : seconds * 1000,
-      signal,
-      filter: (item: WatchItem) =>
-        isInboxItem(item) ? item.kind === "mention" || item.kind === "task_assigned" : (item as Change).actor?.id !== me.id,
-    });
+    let result: { changes: WatchItem[]; cursor: string } | null;
+    if (inbox) {
+      result = await client.waitForChanges(
+        { inbox: true },
+        { timeoutMs: seconds === undefined ? undefined : seconds * 1000, signal, filter: (item: WatchItem) => isInboxItem(item) && (item.kind === "mention" || item.kind === "task_assigned") },
+      );
+    } else if (thread || board) {
+      const target: WatchTarget = thread ? { thread: threadIdFrom(thread) } : { board: boardIdFrom(board!) };
+      result = await client.waitForChanges(target, {
+        timeoutMs: seconds === undefined ? undefined : seconds * 1000,
+        signal,
+        ...(after ? { after } : {}),
+        filters,
+        // Your own changes don't end a wait unless you asked for them with --by.
+        filter: (item: WatchItem) => filters.by !== undefined || (item as Change).actor?.id !== me.id,
+      });
+    } else {
+      if (!after && !filters.re) throw new UsageError("Name a board, a thread or a message to wait in (or --mentions for your inbox)");
+      result = await waitAfterMessage(ctx, filters, after ?? filters.re!, seconds, signal);
+    }
     if (!result) {
       ctx.info(`No activity within ${seconds}s`);
       return 2;
     }
     if (ctx.json) ctx.printJson(result);
-    else for (const item of result.changes) printWatchItem(ctx, item);
+    else {
+      for (const item of result.changes) printWatchItem(ctx, item);
+      if (!inbox) ctx.info(`Wait on: omb wait ${thread ? `--thread ${thread} ` : board ? `--board ${board} ` : ""}--after ${result.cursor}`);
+    }
     return 0;
   } catch (err) {
     if (signal.aborted) return 130;
@@ -299,8 +388,11 @@ async function wait(ctx: Context, args: string[], values: Values): Promise<numbe
 }
 
 async function tail(ctx: Context, args: string[], values: Values): Promise<number> {
-  if (args.length > 1) throw new UsageError("Usage: omb tail [board] [--thread <id> | --inbox]");
+  if (args.length > 1) throw new UsageError("Usage: omb tail [board] [--thread <id> | --inbox] [filters] [--after id]");
   const thread = str(values, "thread");
+  const filters = filtersOf(values);
+  const after = str(values, "after");
+  if (flag(values, "inbox") && (hasFilters(filters) || after)) throw new UsageError("Filters and --after apply to a board or thread, not --inbox");
   const target: WatchTarget = flag(values, "inbox")
     ? { inbox: true }
     : thread
@@ -310,6 +402,8 @@ async function tail(ctx: Context, args: string[], values: Values): Promise<numbe
   const { signal, dispose } = interruptSignal(ctx);
   const handle = client.watch(target, {
     signal,
+    ...(hasFilters(filters) ? { filters } : {}),
+    ...(after ? { after } : {}),
     onChange: (item) => printWatchItem(ctx, item),
     onStatus: (s) => {
       if (ctx.json) return;
@@ -474,6 +568,102 @@ async function usage(ctx: Context, args: string[]): Promise<void> {
   ctx.out(formatUsage(res));
 }
 
+async function schedule(ctx: Context, args: string[], values: Values): Promise<void> {
+  const title = str(values, "title");
+  const usage = "schedule <board|thread> <text|-> [--title <t>] [--in 1d] [--at <time>] [--every 1h] [--times n] [--until <time>]";
+  let target: { board_id: string; title: string } | { thread_id: string };
+  let textArg: string;
+  if (title !== undefined) {
+    const { board, rest } = splitOptionalBoard(args, 1, usage);
+    target = { board_id: await ctx.board(board), title };
+    textArg = rest[0]!;
+  } else {
+    need(args, 2, `${usage} (without --title, the first argument is the thread to reply in)`);
+    target = { thread_id: threadIdFrom(args[0]!) };
+    textArg = args[1]!;
+  }
+  const now = ctx.now();
+  const opt = (name: string) => str(values, name);
+  const labels = labelsOf(values);
+  const mentions = list(values, "mention");
+  if (labels && "thread_id" in target) throw new UsageError("--label applies to new threads (with --title)");
+  const res = await ctx.client().schedulePost({
+    ...target,
+    body: await ctx.body(textArg),
+    ...(labels ? { labels } : {}),
+    ...(mentions.length ? { mentions } : {}),
+    ...(opt("in") ? { in_seconds: parseDuration(opt("in")!, "--in") } : {}),
+    ...(opt("at") ? { at: parseTime(opt("at")!, now) } : {}),
+    ...(opt("every") ? { every_seconds: parseDuration(opt("every")!, "--every") } : {}),
+    ...(opt("times") ? { times: parsePositiveInt(opt("times")!, "--times") } : {}),
+    ...(opt("until") ? { until: parseTime(opt("until")!, now) } : {}),
+  });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatScheduled(res.schedule));
+}
+
+async function scheduleCancel(ctx: Context, args: string[]): Promise<void> {
+  need(args, 1, "schedule cancel <schedule>");
+  const res = await ctx.client().cancelSchedule({ schedule_id: args[0]! });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(res.cancelled ? `Cancelled ${res.schedule.id}` : `${res.schedule.id} was already ${res.schedule.state}`);
+}
+
+async function schedules(ctx: Context, args: string[], values: Values): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb schedules [board|thread] [--all]");
+  const client = ctx.client();
+  const all = flag(values, "all") || undefined;
+  let res;
+  if (args[0] && isThreadUrl(args[0])) res = await client.listSchedules({ thread_id: threadIdFrom(args[0]), all });
+  else if (!args[0]) res = await client.listSchedules({ board_id: await ctx.defaultBoard(), all });
+  else {
+    // A bare ID may name a board or a thread.
+    try {
+      res = await client.listSchedules({ board_id: boardIdFrom(args[0]), all });
+    } catch (err) {
+      if (!(err instanceof OmbError) || err.code !== "not_found") throw err;
+      res = await client.listSchedules({ thread_id: args[0], all });
+    }
+  }
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatSchedules(res.schedules));
+}
+
+async function watchers(ctx: Context, args: string[]): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb watchers [board]");
+  const res = await ctx.client().listWatchers({ board_id: await ctx.board(args[0]) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(formatWatchers(res.watchers));
+}
+
+async function watchersCreate(ctx: Context, args: string[], values: Values): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb watchers create [board] --url <https-url> [filters]");
+  const url = str(values, "url");
+  if (!url) throw new UsageError("--url is required");
+  const types = list(values, "type");
+  for (const t of types) if (!(EVENT_TYPES as readonly string[]).includes(t)) throw new UsageError(`--type must be one of ${EVENT_TYPES.join(", ")}`);
+  const generated = str(values, "secret") === undefined;
+  const secret = str(values, "secret") ?? `whsec_${randomBytes(32).toString("base64")}`;
+  const { re: _re, ...filters } = filtersOf(values);
+  const thread = str(values, "thread") ?? str(values, "re");
+  const res = await ctx.client().createWatcher({
+    board_id: await ctx.board(args[0]),
+    url,
+    secret,
+    filter: { ...filters, ...(thread ? { thread: threadIdFrom(thread) } : {}), ...(types.length ? { types: types as EventType[] } : {}) },
+  });
+  if (ctx.json) return ctx.printJson(generated ? { ...res, secret } : res);
+  ctx.out(`Created ${res.watcher.id} → ${res.watcher.url} (${formatWatcherFilter(res.watcher.filter)})`);
+  if (generated) ctx.out(`Signing secret (shown once; verify the webhook-signature header with it):\n${secret}`);
+}
+
+async function watchersDelete(ctx: Context, args: string[]): Promise<void> {
+  need(args, 1, "watchers delete <watcher>");
+  const res = await ctx.client().deleteWatcher({ watcher_id: args[0]! });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Deleted ${res.watcher_id}`);
+}
+
 export const RUNNERS: Record<string, Run> = {
   login,
   whoami,
@@ -500,4 +690,10 @@ export const RUNNERS: Record<string, Run> = {
   search,
   members,
   usage,
+  schedule,
+  "schedule cancel": scheduleCancel,
+  schedules,
+  watchers,
+  "watchers create": watchersCreate,
+  "watchers delete": watchersDelete,
 };

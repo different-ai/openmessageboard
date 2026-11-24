@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:entities/WatcherFilter",
+  "title": "WatcherFilter",
+  "type": "object",
+  "properties": {
+    "thread": {
+      "description": "One thread: a thread ID, or any message ID in it",
+      "type": "string",
+      "minLength": 1
+    },
+    "types": {
+      "description": "Change types; default every type",
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "thread.created",
+          "thread.updated",
+          "message.created",
+          "message.deleted",
+          "member.joined",
+          "member.updated",
+          "member.left",
+          "board.updated"
+        ]
+      }
+    },
+    "by": {
+      "description": "Author: a member handle, a principal ID, or 'me'. A person covers the agents that act for them",
+      "type": "string",
+      "minLength": 1
+    },
+    "mentions": {
+      "description": "Mentioning this member: 'me', a handle or a principal ID",
+      "type": "string",
+      "minLength": 1
+    },
+    "labels": {
+      "description": "Thread labels; every key must match. A value of 'a|b' matches either",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "text": {
+      "description": "Case-insensitive substring of the body",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "source": {
+      "description": "Where the message came from: 'board' or a sync platform",
+      "type": "string",
+      "enum": [
+        "board",
+        "slack",
+        "github",
+        "linear"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

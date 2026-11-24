@@ -7,6 +7,7 @@ import { getMembership, nowIso, requireMember, requireThread } from "./access.js
 import { decodeCursor, decodePage, encodeCursor, encodePage } from "./cursors.js";
 import type { Actor, EventRow, InboxRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
 import { presentInbox, presentMember, presentMessages, presentThreads, principalRefs } from "./present.js";
+import { FILTER_KEYS, boardOfRef, filteredPage, hasFilterInput, isEmptyFilter, resolveFilter, seqAfter, type FilterInput, type ResolvedFilter } from "./filters.js";
 
 function purgedUpto(ctx: AppContext): number {
   return Number((ctx.db.prepare("SELECT value FROM meta WHERE key = 'events_purged_upto'").get() as { value: string }).value);
@@ -62,7 +63,15 @@ export function presentChanges(ctx: AppContext, rows: EventRow[], viewerId: stri
   });
 }
 
-export function boardChanges(ctx: AppContext, actor: Actor, boardId: string, cursor: string | undefined, limit = 100, threadId?: string): ChangesPage {
+export function boardChanges(
+  ctx: AppContext,
+  actor: Actor,
+  boardId: string,
+  cursor: string | undefined,
+  limit = 100,
+  threadId?: string,
+  filter?: ResolvedFilter,
+): ChangesPage {
   return read(ctx, () => {
     requireMember(ctx, actor, boardId);
     const n = Math.min(Math.max(limit, 1), 100);
@@ -72,6 +81,15 @@ export function boardChanges(ctx: AppContext, actor: Actor, boardId: string, cur
       throw new OmbError("cursor_expired", "This cursor is older than the server keeps changes. Reload with list_threads and use its as_of cursor.", {
         resync: true,
       });
+    }
+    if (!isEmptyFilter(filter) || threadId) {
+      const f: ResolvedFilter = { ...filter };
+      if (threadId) {
+        if (f.threadId && f.threadId !== threadId) throw invalid("re names a different thread than thread_id");
+        f.threadId = threadId;
+      }
+      const page = filteredPage(ctx, actor, boardId, s, f, n);
+      return { changes: presentChanges(ctx, page.rows, actor.id), cursor: encodeCursor("b", boardId, page.next), has_more: page.more };
     }
     const params: unknown[] = [boardId, s];
     let sql = "SELECT * FROM events WHERE board_id = ? AND seq > ?";
@@ -103,56 +121,124 @@ export function inboxChanges(ctx: AppContext, actor: Actor, cursor: string | und
   });
 }
 
+type ChangeQuery = FilterInput & { cursor?: string | undefined; after?: string | undefined };
+
+/** Resolves `after` (or `cursor`) and the message filters of a board read. Caller has checked membership. */
+function boardQuery(ctx: AppContext, actor: Actor, boardId: string, input: ChangeQuery): { cursor: string | undefined; filter: ResolvedFilter | undefined } {
+  if (input.cursor && input.after) throw invalid("Pass cursor or after, not both");
+  const filter = hasFilterInput(input) ? resolveFilter(ctx, actor, boardId, input) : undefined;
+  const cursor = input.after ? encodeCursor("b", boardId, seqAfter(ctx, boardId, input.after)) : input.cursor;
+  return { cursor, filter };
+}
+
+function rejectInboxFilters(input: ChangeQuery): void {
+  if (input.after !== undefined) throw invalid("after applies to board changes, not the inbox");
+  if (FILTER_KEYS.some((k) => input[k] !== undefined)) throw invalid("Message filters apply to board changes, not the inbox");
+}
+
 export function getChanges(
   ctx: AppContext,
   actor: Actor,
-  input: { board_id?: string | undefined; inbox?: boolean | undefined; cursor?: string | undefined; limit?: number | undefined },
+  input: ChangeQuery & { board_id?: string | undefined; inbox?: boolean | undefined; limit?: number | undefined },
 ): ChangesPage | InboxChangesPage {
   if (input.inbox && input.board_id) throw invalid("Pass board_id or inbox: true, not both");
-  if (input.inbox) return inboxChanges(ctx, actor, input.cursor, input.limit);
+  if (input.inbox) {
+    rejectInboxFilters(input);
+    return inboxChanges(ctx, actor, input.cursor, input.limit);
+  }
   if (!input.board_id) throw invalid("Pass board_id or inbox: true");
-  return boardChanges(ctx, actor, input.board_id, input.cursor, input.limit);
+  const boardId = input.board_id;
+  return read(ctx, () => {
+    requireMember(ctx, actor, boardId);
+    const q = boardQuery(ctx, actor, boardId, input);
+    return boardChanges(ctx, actor, boardId, q.cursor, input.limit, undefined, q.filter);
+  });
 }
 
-/** Long-poll: returns as soon as there are changes after the cursor, or empty after the timeout. */
+/**
+ * Long-poll: returns as soon as there are matching changes after the cursor (or after a message), or an empty
+ * page after the timeout. Changes that do not match the filters move the cursor on without ending the wait.
+ */
 export async function waitForActivity(
   ctx: AppContext,
   actor: Actor,
-  input: { board_id?: string | undefined; thread_id?: string | undefined; inbox?: boolean | undefined; cursor: string; timeout_seconds?: number | undefined },
+  input: ChangeQuery & { board_id?: string | undefined; thread_id?: string | undefined; inbox?: boolean | undefined; timeout_seconds?: number | undefined },
   signal?: AbortSignal,
 ): Promise<ChangesPage | InboxChangesPage> {
   const timeoutMs = Math.min(Math.max(input.timeout_seconds ?? 20, 1), WAIT_MAX_SECONDS) * 1000;
+  const deadline = Date.now() + timeoutMs;
   let boardId = input.board_id;
   if (input.thread_id) {
     const { thread } = requireThread(ctx, actor, input.thread_id);
     if (boardId && boardId !== thread.board_id) throw invalid("thread_id is not on that board");
     boardId = thread.board_id;
   }
-  const fetch = (): ChangesPage | InboxChangesPage =>
-    input.inbox ? inboxChanges(ctx, actor, input.cursor) : boardChanges(ctx, actor, boardId ?? "", input.cursor, 100, input.thread_id);
+  if (input.inbox && (boardId || input.thread_id)) throw invalid("Pass board_id, thread_id or inbox: true");
+  if (input.inbox) rejectInboxFilters(input);
+  // Waiting after a message (or in its thread) needs no board: it is the message's board.
+  let what = "Board";
+  if (!input.inbox && !boardId && (input.re || input.after)) {
+    what = "Message";
+    try {
+      boardId = boardOfRef(ctx, (input.re ?? input.after)!);
+    } catch (e) {
+      if (input.re) throw e;
+      throw invalid("Pass board_id or thread_id with an after cursor");
+    }
+  }
   if (!input.inbox && !boardId) throw invalid("Pass board_id, thread_id or inbox: true");
-  const first = fetch();
-  if (("changes" in first ? first.changes.length : first.items.length) > 0) return first;
-  const conn = ctx.connections.register({ principalId: actor.id, kind: "wait", boards: new Set(boardId ? [boardId] : []), close: () => wake() });
-  let wake: () => void = () => {};
+  if (!input.cursor && !input.after) throw invalid("Pass cursor or after");
+  let cursor = input.cursor ?? "";
+  let filter: ResolvedFilter | undefined;
+  if (!input.inbox) {
+    requireMember(ctx, actor, boardId!, "reader", what);
+    const q = boardQuery(ctx, actor, boardId!, input);
+    cursor = q.cursor!;
+    filter = q.filter;
+  }
+  const threadId = input.thread_id ?? filter?.threadId;
+  const fetch = (): ChangesPage | InboxChangesPage =>
+    input.inbox ? inboxChanges(ctx, actor, cursor) : boardChanges(ctx, actor, boardId!, cursor, 100, input.thread_id, filter);
+  const found = (page: ChangesPage | InboxChangesPage) => ("changes" in page ? page.changes.length : page.items.length) > 0;
+  let page = fetch();
+  if (found(page)) return page;
+  cursor = page.cursor;
+  let closed = false;
+  let wake: (end?: boolean) => void = () => {};
+  const conn = ctx.connections.register({
+    principalId: actor.id,
+    kind: "wait",
+    boards: new Set(boardId ? [boardId] : []),
+    close: () => {
+      closed = true;
+      wake(true);
+    },
+  });
   try {
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(done, timeoutMs);
-      const unsub = ctx.hub.subscribe((e: HubEvent) => {
-        if (input.inbox && e.kind === "inbox" && e.principalId === actor.id) done();
-        else if (!input.inbox && e.kind === "board" && e.boardId === boardId && (!input.thread_id || e.threadId === input.thread_id)) done();
-        else if ((e.kind === "access" && e.principalId === actor.id && e.boardId === boardId) || (e.kind === "board_deleted" && e.boardId === boardId)) done();
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || signal?.aborted || closed) break;
+      const ended = await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => done(true), remaining);
+        const unsub = ctx.hub.subscribe((e: HubEvent) => {
+          if (input.inbox && e.kind === "inbox" && e.principalId === actor.id) done(false);
+          else if (!input.inbox && e.kind === "board" && e.boardId === boardId && (!threadId || e.threadId === threadId)) done(false);
+          else if ((e.kind === "access" && e.principalId === actor.id && e.boardId === boardId) || (e.kind === "board_deleted" && e.boardId === boardId)) done(true);
+        });
+        const onAbort = () => done(true);
+        signal?.addEventListener("abort", onAbort, { once: true });
+        wake = done;
+        function done(end = false) {
+          clearTimeout(timer);
+          unsub();
+          signal?.removeEventListener("abort", onAbort);
+          resolve(end);
+        }
       });
-      const onAbort = () => done();
-      signal?.addEventListener("abort", onAbort, { once: true });
-      wake = done;
-      function done() {
-        clearTimeout(timer);
-        unsub();
-        signal?.removeEventListener("abort", onAbort);
-        resolve();
-      }
-    });
+      page = fetch();
+      if (found(page) || ended) return page;
+      cursor = page.cursor;
+    }
   } finally {
     ctx.connections.unregister(conn);
   }

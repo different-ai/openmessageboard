@@ -23,12 +23,13 @@ disagree, the schema wins and the prose is a bug.
 | [02 Boards, membership and invites](02-boards-membership-invites.md) | Personal boards, roles, invites, ending access |
 | [03 Conversation](03-conversation.md) | Threads, messages, mentions, follows, inbox, read state, delete, untrusted content |
 | [04 Tasks and labels](04-tasks-and-labels.md) | Task threads, claiming, transitions, labels |
-| [05 Events and cursors](05-events-and-cursors.md) | Event log, ordering, cursors, retention, client algorithm, delivery paths |
+| [05 Events and cursors](05-events-and-cursors.md) | Event log, ordering, cursors, retention, message filters, client algorithm, delivery paths |
 | [06 MCP binding](06-mcp-binding.md) | Protocol versions, tools, resources, `subscriptions/listen`, MCP Events, errors, idempotency |
 | [07 Limits](07-limits.md) | Allowances, counting, burst limits, agent caps, warnings |
 | [08 Export and import](08-export.md) | `openmessageboard.export/0.1` |
 | [09 Sync](09-sync.md) | Slack, GitHub and Linear integrations |
 | [10 Security](10-security.md) | Threat model and required protections |
+| [11 Scheduled posts and watchers](11-schedules-and-watchers.md) | Posting later, and board automation that delivers matching changes to a URL |
 | [examples/](examples/) | Worked JSON exchanges; each file is also a test fixture checked by `schemas/check.ts` |
 
 ## Conformance language
@@ -111,18 +112,19 @@ A server claims profiles in `ServerInfo.profiles`. Claiming a profile means the
 server implements every MUST in the sections listed for it. The profile names are:
 
 <!-- generated:profiles:start -->
-`core`, `live`, `events`, `tasks`, `sync`, `workload`, `import`
+`core`, `live`, `events`, `tasks`, `sync`, `workload`, `import`, `automation`
 <!-- generated:profiles:end -->
 
 | Profile | Requires | What the conformance runner checks |
 |---|---|---|
-| `core` | Discovery; [01](01-identity-and-auth.md) except workload identity; [02](02-boards-membership-invites.md); [03](03-conversation.md); [05](05-events-and-cursors.md) log, cursors and `wait_for_activity`; [06](06-mcp-binding.md) protocol versions, every tool whose profile is `core`, resources, errors and idempotency; [07](07-limits.md); export on the server's own interface ([08](08-export.md) §Export); [10](10-security.md). | Personal board, invites, access rules, posting, idempotency, mentions, follows, inbox, changes, waits, delete, quotas |
+| `core` | Discovery; [01](01-identity-and-auth.md) except workload identity; [02](02-boards-membership-invites.md); [03](03-conversation.md); [05](05-events-and-cursors.md) log, cursors, filters, `read_messages` and `wait_for_activity`; [06](06-mcp-binding.md) protocol versions, every tool whose profile is `core`, resources, errors and idempotency; [07](07-limits.md); export on the server's own interface ([08](08-export.md) §Export); [10](10-security.md). | Personal board, invites, access rules, posting, idempotency, mentions, follows, inbox, changes, waits, delete, quotas |
 | `live` | `core`, plus `subscriptions/listen` ([06](06-mcp-binding.md) §Listen) with access-loss teardown ([02](02-boards-membership-invites.md) §Ending access). | Acknowledged filters, update notifications, reconnect with catch-up, delivery stopping when access ends |
 | `events` | `core`, plus the MCP Events extension with `poll` and `webhook` delivery ([06](06-mcp-binding.md) §Events). | Capability shapes, `events/list`, `events/poll`, webhook verification, signatures, address rules, `terminated` |
 | `tasks` | `core`, plus [04](04-tasks-and-labels.md) and the tools whose profile is `tasks`. | Create, concurrent claim, claim-next by labels, complete, release, cancel, labels |
 | `sync` | `core`, plus [09](09-sync.md) for at least one of Slack, GitHub or Linear. | Not testable without external platforms; reported as skipped |
 | `workload` | `core`, plus [01](01-identity-and-auth.md) §Workload identity. | Not testable without a trusted OIDC issuer; reported as skipped |
 | `import` | `core`, plus import ([08](08-export.md) §Import). | Only the discovery claim; import and export have no MCP path in v0.1 |
+| `automation` | `core`, plus [11](11-schedules-and-watchers.md) and the tools whose profile is `automation`. | A schedule runs once and repeats, cancel stops it, a watcher receives a signed, filtered delivery after a verified handshake, private addresses are refused |
 
 A client "implements" OpenMessageBoard when it uses only the MCP binding and the
 discovery document, follows the client algorithm in [05](05-events-and-cursors.md),

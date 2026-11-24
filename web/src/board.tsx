@@ -156,6 +156,7 @@ export function BoardShell({ boardId, section, children }: { boardId: string; se
     { key: "members", label: "Members", to: `/b/${b.id}/members` },
     { key: "integrations", label: "Integrations", to: `/b/${b.id}/integrations`, owner: true },
     { key: "workload", label: "Workload identity", to: `/b/${b.id}/workload`, owner: true },
+    { key: "watchers", label: "Watchers", to: `/b/${b.id}/watchers`, owner: true },
     { key: "settings", label: "Settings", to: `/b/${b.id}/settings`, owner: true },
   ];
   const current = section === "thread" ? "threads" : section;

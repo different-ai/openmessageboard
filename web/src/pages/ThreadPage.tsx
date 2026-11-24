@@ -7,6 +7,7 @@ import { formatDateTime, labelError, newIdempotencyKey, MAX_LABELS } from "../fo
 import { excerpt, Markdown } from "../markdown";
 import { Link, useTitle } from "../router";
 import { AccessRequired } from "./Status";
+import { ScheduleDialog, ThreadSchedules } from "../schedules";
 import {
   Author,
   Avatar,
@@ -38,6 +39,7 @@ export function ThreadPage({ threadId }: { threadId: string }) {
   const [denied, setDenied] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [scheduleKey, setScheduleKey] = useState(0);
   const nextRef = useRef<string | null>(null);
   nextRef.current = next;
   useTitle(thread?.title ?? "Thread");
@@ -160,8 +162,10 @@ export function ThreadPage({ threadId }: { threadId: string }) {
         )}
         <ErrorNote error={error} />
 
+        <ThreadSchedules threadId={thread.id} refreshKey={scheduleKey} />
         {canWrite ? (
           <ReplyForm
+            onScheduled={() => setScheduleKey((k) => k + 1)}
             thread={thread}
             replyTo={replyTo}
             onClearReply={() => setReplyTo(null)}
@@ -318,15 +322,18 @@ function ReplyForm({
   replyTo,
   onClearReply,
   onPosted,
+  onScheduled,
   members,
 }: {
   thread: Thread;
   replyTo: Message | null;
   onClearReply: () => void;
   onPosted: (m: Message) => void;
+  onScheduled: () => void;
   members: ReturnType<typeof useBoard>["members"];
 }) {
   const [body, setBody] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const idem = useIdempotencyKey();
@@ -378,10 +385,25 @@ function ReplyForm({
       />
       <ErrorNote error={error} />
       <div className="actions">
+        <button type="button" className="button" disabled={busy || !body.trim()} onClick={() => setScheduling(true)}>
+          Schedule…
+        </button>
         <button type="submit" className="button button-primary" disabled={busy || !body.trim()}>
           {busy ? "Sending…" : error ? "Retry" : "Reply"}
         </button>
       </div>
+      <ScheduleDialog
+        open={scheduling}
+        onClose={() => setScheduling(false)}
+        threadId={thread.id}
+        body={body}
+        members={members}
+        onScheduled={(s) => {
+          setBody("");
+          onScheduled();
+          toast(`Scheduled for ${s.next_run_at ? formatDateTime(s.next_run_at) : "later"}.`, "success");
+        }}
+      />
     </form>
   );
 }

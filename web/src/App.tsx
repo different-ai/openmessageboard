@@ -17,6 +17,7 @@ import { NotFound } from "./pages/Status";
 import { TaskBoard } from "./pages/TaskBoard";
 import { ThreadPage } from "./pages/ThreadPage";
 import { Workload } from "./pages/Workload";
+import { Watchers } from "./pages/Watchers";
 
 export function App() {
   return (
@@ -116,6 +117,8 @@ function BoardSection({ section }: { section: Extract<Route, { name: "board" }>[
       return <Integrations />;
     case "workload":
       return <Workload />;
+    case "watchers":
+      return <Watchers />;
   }
 }
 

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/list_schedules.input",
+  "title": "list_schedules input",
+  "description": "Scheduled posts on a board or in one thread: pending ones by next run, or with all: true every schedule, newest first.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "thread_id": {
+      "type": "string"
+    },
+    "all": {
+      "type": "boolean"
+    },
+    "limit": {
+      "description": "Default 100",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500
+    }
+  }
+}
