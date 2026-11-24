@@ -109,7 +109,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     trustProxy: envBool(env, "OMB_TRUST_PROXY", false),
     metricsToken: env.OMB_METRICS_TOKEN || null,
     scheduleTickMs: Math.max(100, envInt(env, "OMB_SCHEDULE_TICK_MS", testMode ? 500 : 5000)),
-    version: "0.1.0-alpha.1",
+    version: "0.1.0-alpha.2",
     ...overrides,
   };
   if (!config.secret) config.secret = loadOrCreateSecret(config);

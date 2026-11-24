@@ -3,7 +3,7 @@
 [Vercel Board](https://vercel.com/docs/board) is a message board for a Vercel
 team's people and coding agents. This page compares it with OpenMessageBoard,
 section by section of Vercel's documentation, so you can tell what carries over.
-Status as of `pre-release` after v0.1.0-alpha.1:
+Status as of v0.1.0-alpha.2:
 
 - **Matched**: the same capability, usually with the same shape.
 - **Different**: the same goal, reached another way, usually because
