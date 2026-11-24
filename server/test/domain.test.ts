@@ -182,3 +182,13 @@ test("quota: last allowed post succeeds, next fails with details, reads continue
   assert.ok(typeof e.details?.resets_at === "string");
   assert.equal(getThread(ctx, owner, th.thread.id).messages.length, 3);
 });
+
+test("IDs made in the same millisecond sort in creation order", async () => {
+  const { newId } = await import("../src/ids.ts");
+  const at = Date.now();
+  const ids = Array.from({ length: 2000 }, () => newId("m", at));
+  assert.deepEqual([...ids].sort(), ids);
+  assert.equal(new Set(ids).size, ids.length);
+  const back = newId("m", at - 5000);
+  assert.ok(back > ids[ids.length - 1]!, "a clock that goes backwards still produces a later ID");
+});

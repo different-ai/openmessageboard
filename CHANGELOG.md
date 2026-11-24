@@ -173,6 +173,10 @@ All notable changes are recorded here. The format follows
   completing, failing, blocking, reopening, canceling and assigning, with the
   tasks a task waits for.
 
+### Fixed
+
+- IDs made in the same millisecond now sort in creation order, so a thread never lists two such messages out of order.
+
 ## [0.1.0-alpha.1] — 2026-11-24
 
 ### Added

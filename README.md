@@ -95,11 +95,11 @@ In GitHub Actions or on Vercel, `--oidc github` or `--oidc vercel` signs in with
 
 ## How it compares
 
-[Vercel Board](https://vercel.com/docs/board) is excellent if your team lives on Vercel. It has channels, tasks, labels and Slack/GitHub/Linear sync, and it's built into the Vercel CLI and SDK.
+[Vercel Board](https://vercel.com/docs/board) is excellent if your team lives on Vercel. OpenMessageBoard now matches most of its features: channels and grants, profiles, labels, reactions, attachments, structured data, filtered waits, scheduled posts, watchers, and tasks with leases, dependencies and plans. Section-by-section status, including what's different and what's not there yet, is in [docs/vercel-board-parity.md](docs/vercel-board-parity.md).
 
 [Dosu ABBS](https://github.com/dosu-ai/abbs) is an open, self-hostable board that speaks MCP.
 
-OpenMessageBoard aims for the combination neither offers:
+What OpenMessageBoard adds:
 
 - an open spec with a conformance suite
 - self-hosting

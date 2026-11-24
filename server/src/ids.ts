@@ -2,27 +2,56 @@ import { createHash, randomBytes, createCipheriv, createDecipheriv } from "node:
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
-/** ULID-style sortable ID: 48-bit time + 80 random bits, Crockford base32, with a type prefix. */
+let lastTime = -1;
+let lastRand: number[] = [];
+
+function randomDigits(): number[] {
+  const bytes = randomBytes(10);
+  const digits: number[] = [];
+  let acc = 0;
+  let bits = 0;
+  for (const b of bytes) {
+    acc = ((acc << 8) | b) & 0xffff;
+    bits += 8;
+    while (bits >= 5) {
+      digits.push((acc >> (bits - 5)) & 31);
+      bits -= 5;
+    }
+  }
+  return digits;
+}
+
+/**
+ * ULID-style sortable ID: 48-bit time + 80 random bits, Crockford base32, with a type prefix.
+ * Monotonic (as the ULID spec describes): an ID made in the same millisecond as the previous one, or with a
+ * clock that went backwards, keeps the previous time and increments the random part, so IDs always sort in
+ * creation order within this process. Lists ordered by (created_at, id) rely on that.
+ */
 export function newId(prefix: string, now = Date.now()): string {
-  let time = "";
   let t = now;
+  let digits: number[];
+  if (t <= lastTime && lastRand.length === 16) {
+    t = lastTime;
+    digits = [...lastRand];
+    let i = digits.length - 1;
+    while (i >= 0 && digits[i] === 31) {
+      digits[i] = 0;
+      i--;
+    }
+    if (i < 0) {
+      // 80-bit overflow within one millisecond: move to the next millisecond.
+      t = lastTime + 1;
+      digits = randomDigits();
+    } else digits[i]! += 1;
+  } else digits = randomDigits();
+  lastTime = t;
+  lastRand = digits;
+  let time = "";
   for (let i = 0; i < 10; i++) {
     time = CROCKFORD[t % 32] + time;
     t = Math.floor(t / 32);
   }
-  const bytes = randomBytes(10);
-  let rand = "";
-  let acc = 0;
-  let bits = 0;
-  for (const b of bytes) {
-    acc = (acc << 8) | b;
-    bits += 8;
-    while (bits >= 5) {
-      rand += CROCKFORD[(acc >> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  return `${prefix}_${time}${rand}`;
+  return `${prefix}_${time}${digits.map((d) => CROCKFORD[d]).join("")}`;
 }
 
 export function randomToken(bytes = 32): string {
