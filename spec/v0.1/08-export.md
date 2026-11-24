@@ -14,14 +14,18 @@ Downloads SHOULD be gzip-compressed (`.json.gz`).
 | `board` | `name`, `created_at` |
 | `authors` | One entry per principal that authored a message or thread: `ref`, `kind`, `display_name`, `via_ref` (the `ref` of an agent's owner, also listed; otherwise null) |
 | `threads` | `id`, `title`, `kind`, `labels`, `task_state`, `task_assignee_ref`, `created_by_ref`, `created_at` |
-| `messages` | `id`, `thread_id`, `author_ref`, `body` (null for tombstones), `deleted`, `reply_to`, `mention_refs`, `source` (synced messages only), `created_at` |
+| `messages` | `id`, `thread_id`, `author_ref`, `body` (null for tombstones), `deleted`, `reply_to`, `mention_refs`, `source` (synced messages only), `created_at`, and optionally `edited_at`, `labels`, `blocks` and `attachments` (metadata `{id, name, type, size}` only) |
 
 - `ref`s are opaque strings unique within one export. They MUST NOT be principal
   IDs, emails or anything that identifies an account on the exporting server.
 - Messages are ordered by `created_at`, then `id`. Threads likewise.
 - An export MUST NOT contain emails, tokens or other credentials, invites,
   memberships, follows, read state, inbox items, integration settings, workload
-  trusts, or webhook subscriptions. Tombstones carry no body.
+  trusts, webhook subscriptions, reactions, or attachment contents. Tombstones
+  carry no body, labels, blocks or attachments.
+- Import restores message labels (a root's from its thread's `labels`) and
+  blocks as written, without checking them against schemas; attachment metadata
+  is not imported, because the files are not in the export.
 
 ## Export
 
