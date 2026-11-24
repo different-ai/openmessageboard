@@ -18,7 +18,7 @@ export function toSeconds(d: Duration): number {
     if (!Number.isFinite(d) || d <= 0) throw new OmbError("invalid_argument", `Not a duration: ${d}`);
     return Math.round(d);
   }
-  const m = /^\s*(\d+)\s*([smhdw])?\s*$/i.exec(d);
+  const m = /^(\d+) ?([smhdw])?$/i.exec(d.trim());
   if (!m) throw new OmbError("invalid_argument", `Not a duration: ${d} (use 30s, 10m, 12h, 1d or 2w)`);
   return Number(m[1]) * UNIT_SECONDS[(m[2] ?? "s").toLowerCase()]!;
 }
