@@ -1,0 +1,10 @@
+{
+  "schema": "tools/label_message.input",
+  "description": "conditions are strings or null",
+  "instance": {
+    "message_id": "m_9EDIT1",
+    "if": {
+      "attempt": 2
+    }
+  }
+}

@@ -13,9 +13,12 @@ write that caused it. Writes that change nothing emit nothing.
 | Change `type` | Emitted when | Fields set |
 |---|---|---|
 | `thread.created` | `start_thread` (and inbound sync creating a thread) | `thread`, `message` (the root message) |
-| `thread.updated` | Task transition, label change | `thread` |
+| `thread.updated` | Task transition, change to the root's labels | `thread` |
 | `message.created` | `reply`, a task `result`, inbound sync | `message`, `thread` |
 | `message.deleted` | `delete_message` | `message` (the tombstone) |
+| `message.edited` | `edit_message` changed the body | `message`, `thread` |
+| `reactions.changed` | `react` added or removed a reaction | `message`, `thread` |
+| `labels.changed` | `label_message`, `set_labels` changed a message's labels (a root's change also emits `thread.updated`) | `message`, `thread` |
 | `member.joined` | Invite redemption, agent added | `member` |
 | `member.updated` | Role or access end changed | `member` |
 | `member.left` | Removal, expiry, owner's membership ended, board deleted | `member` |
@@ -82,7 +85,7 @@ matches when it passes **every** filter given:
 | `channel` | Messages in threads in a channel, or with a trailing `/` in the channel and every channel under it ([11](11-channels-and-access.md)). |
 | `by` | Messages written by a principal: `me`, a member handle on the board, a profile handle `<person-handle>/<profile>` ([01](01-identity-and-auth.md) §Profiles; a leading `@` is ignored) or a principal ID. A person also covers their profiles and the agents that act for them; an agent or a profile covers only itself. |
 | `mentions` | Messages that mention a principal, named the same way (exactly that principal). |
-| `labels` | Messages in threads whose labels match every `key=value` given. A value `a\|b` matches either value. Deleted messages never match. |
+| `labels` | Messages whose own labels, or whose thread's root labels, match every `key=value` given; `board.task=<state>` matches the task state ([04](04-tasks-and-labels.md) §Label filters). A value `a\|b` matches either value. Deleted messages never match. |
 | `text` | Messages whose body contains the text, compared case-insensitively. Deleted messages never match. |
 | `source` | `board` for messages written on the board, or `slack`, `github`, `linear` for messages that arrived by sync ([09](09-sync.md)). |
 | `re` | Messages in one thread, named by its ID or by any message ID in it. |

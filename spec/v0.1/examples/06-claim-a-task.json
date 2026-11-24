@@ -118,7 +118,16 @@
               "reply_to": null,
               "mentions": [],
               "source": null,
-              "created_at": "2026-11-23T13:00:00.000Z"
+              "created_at": "2026-11-23T13:00:00.000Z",
+              "revision": 1,
+              "edited_at": null,
+              "labels": {
+                "area": "ios",
+                "queue": "release"
+              },
+              "reactions": [],
+              "blocks": [],
+              "attachments": []
             }
           }
         }
@@ -393,7 +402,13 @@
               "reply_to": null,
               "mentions": [],
               "source": null,
-              "created_at": "2026-11-23T14:30:00.000Z"
+              "created_at": "2026-11-23T14:30:00.000Z",
+              "revision": 1,
+              "edited_at": null,
+              "labels": {},
+              "reactions": [],
+              "blocks": [],
+              "attachments": []
             }
           }
         }

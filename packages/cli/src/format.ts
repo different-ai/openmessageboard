@@ -1,4 +1,4 @@
-import type { AccessExplanation, BoardActor, Change, Channel, Grant, InboxItem, Member, Membership, Message, PrincipalRef, Schedule, Thread, Usage, Watcher, WatcherFilter } from "@openmessageboard/sdk";
+import type { AccessExplanation, BoardActor, Change, Channel, DataSchema, Grant, InboxItem, Member, Membership, Message, PrincipalRef, Schedule, Thread, Usage, Watcher, WatcherFilter } from "@openmessageboard/sdk";
 
 /** "release-agent (via Maya)" for agents, the display name otherwise. */
 export function authorName(p: PrincipalRef): string {
@@ -33,9 +33,20 @@ function indent(text: string, prefix = "  "): string {
 export function formatMessage(m: Message, now?: Date): string {
   const parts = [authorName(m.author), relativeTime(m.created_at, now)];
   if (m.source) parts.push(`from ${m.source.platform} (${m.source.author_name})`);
+  if (m.edited_at) parts.push(`edited (revision ${m.revision})`);
   parts.push(m.id);
   const body = m.deleted || m.body === null ? "[deleted]" : m.body;
-  return `${parts.join(" · ")}\n${indent(body)}`;
+  const extra: string[] = [];
+  if (Object.keys(m.labels ?? {}).length) extra.push(`labels: ${formatLabels(m.labels)}`);
+  for (const b of m.blocks ?? []) extra.push(`${b.schema}@${b.version}: ${JSON.stringify(b.data)}`);
+  for (const a of m.attachments ?? []) extra.push(`file: ${a.name} (${a.type}, ${a.size} bytes) ${a.id}`);
+  if (m.reactions?.length) extra.push(`reactions: ${m.reactions.map((r) => `${r.emoji} ${r.count}${r.me ? " (you)" : ""}`).join(", ")}`);
+  return `${parts.join(" · ")}\n${indent(body)}${extra.length ? `\n${indent(extra.join("\n"))}` : ""}`;
+}
+
+export function formatSchema(s: DataSchema): string {
+  const head = `${s.id}${s.builtin ? " (built in)" : ""}${s.description ? ` · ${s.description}` : ""}`;
+  return `${head}\n${JSON.stringify(s.schema, null, 2)}`;
 }
 
 export function formatLabels(labels: Record<string, string>): string {
@@ -192,6 +203,14 @@ export function formatChange(c: Change, now?: Date): string {
       return c.message ? `${c.thread_id} ${formatMessage(c.message, now)}` : `+ message ${c.message_id} in ${c.thread_id}${by}`;
     case "message.deleted":
       return `- message ${c.message_id} in ${c.thread_id} deleted${by}`;
+    case "message.edited":
+      return `~ message ${c.message_id} in ${c.thread_id} edited${by}${c.message?.body ? `\n${indent(c.message.body)}` : ""}`;
+    case "reactions.changed": {
+      const r = (c.message?.reactions ?? []).map((x) => `${x.emoji} ${x.count}`).join(", ");
+      return `~ reactions on ${c.message_id}${by}${r ? ` (${r})` : ""}`;
+    }
+    case "labels.changed":
+      return `~ labels on ${c.message_id}${by} [${formatLabels(c.message?.labels ?? {})}]`;
     case "thread.updated": {
       const t = c.thread;
       const assignee = t?.task?.assignee && t.task.assignee.id !== c.actor?.id ? ` (assignee ${authorName(t.task.assignee)})` : "";

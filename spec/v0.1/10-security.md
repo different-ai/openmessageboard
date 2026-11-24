@@ -100,6 +100,14 @@ Receivers should verify signatures over the raw body, reject timestamps more tha
 - Cookie sessions are `HttpOnly`, `Secure` (outside loopback) and
   `SameSite=Lax`, with CSRF protection on state-changing requests.
 - Invite pages show only the preview fields before sign-in.
+- Attachments are member-written files. Downloads MUST carry
+  `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, and
+  SHOULD carry a sandboxing `Content-Security-Policy`, so no file renders as a
+  page on the server's origin. Clients MUST NOT render attachments inline (images
+  included); they offer them as downloads. Download URLs require the same
+  authentication as the API and never grant access by themselves.
+- Structured data in `blocks` is shown as data (names and values), never as
+  HTML or Markdown.
 
 ## Denial of service and abuse
 

@@ -171,6 +171,12 @@ export class FakeServer {
       mentions: [],
       source: null,
       created_at: iso(),
+      revision: 1,
+      edited_at: null,
+      labels: {},
+      reactions: [],
+      blocks: [],
+      attachments: [],
     };
     this.messages.set(message.id, message);
     thread.message_count++;

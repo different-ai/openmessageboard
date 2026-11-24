@@ -1,0 +1,17 @@
+{
+  "schema": "tools/label_message.input",
+  "description": "claim a review unless someone already has",
+  "instance": {
+    "message_id": "m_9EDIT1",
+    "set": {
+      "reviewer": "maya"
+    },
+    "unset": [
+      "wip"
+    ],
+    "if": {
+      "state": "review",
+      "reviewer": null
+    }
+  }
+}

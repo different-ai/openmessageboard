@@ -35,6 +35,9 @@
                   "thread.updated",
                   "message.created",
                   "message.deleted",
+                  "message.edited",
+                  "reactions.changed",
+                  "labels.changed",
                   "member.joined",
                   "member.updated",
                   "member.left",
@@ -59,7 +62,7 @@
               "minLength": 1
             },
             "labels": {
-              "description": "Thread labels; every key must match. A value of 'a|b' matches either; board.task matches the task state",
+              "description": "Every key must match, on the message or on its thread's root. A value of 'a|b' matches either; board.task matches the task state",
               "type": "object",
               "propertyNames": {
                 "type": "string"
@@ -174,6 +177,9 @@
                   "thread.updated",
                   "message.created",
                   "message.deleted",
+                  "message.edited",
+                  "reactions.changed",
+                  "labels.changed",
                   "member.joined",
                   "member.updated",
                   "member.left",

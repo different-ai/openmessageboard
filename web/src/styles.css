@@ -1984,6 +1984,284 @@ legend {
   gap: 10px;
 }
 
+/* ---------- Message extras: edits, reactions, labels, data, files ---------- */
+
+.message-actions {
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 4px;
+  /* Dim the links, not the row, so the reaction popover stays opaque. */
+  opacity: 1;
+}
+.message-actions .link-button {
+  opacity: 0.85;
+}
+.message-edited {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: italic;
+  cursor: default;
+}
+.message-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.message-editor .actions {
+  justify-content: flex-end;
+}
+.edit-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.edit-conflict p {
+  margin: 0;
+  flex: 1 1 260px;
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.reaction:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+}
+.reaction[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.reaction-emoji {
+  font-size: 0.95rem;
+}
+.reaction-count {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.reaction-picker {
+  position: relative;
+  display: inline-flex;
+}
+.reaction-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(4, 36px);
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.reaction-option {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.reaction-option:hover {
+  background: var(--surface-2);
+}
+.reaction-option[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.message-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.label-add-inline {
+  margin-top: 0;
+  max-width: 520px;
+}
+.label-add-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.block-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.block-head {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.block-rows {
+  margin: 0;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.block-rows > div {
+  display: grid;
+  grid-template-columns: minmax(80px, max-content) minmax(0, 1fr);
+  gap: 12px;
+  font-size: 0.86rem;
+}
+.block-rows dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding-top: 1px;
+}
+.block-rows dd {
+  margin: 0;
+  min-width: 0;
+}
+.block-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.block-json {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  max-height: 240px;
+  overflow: auto;
+}
+.block-empty {
+  margin: 0;
+  padding: 6px 10px;
+}
+
+.attachments,
+.attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.attachments {
+  margin-top: 10px;
+}
+.attachment,
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.84rem;
+  text-decoration: none;
+}
+.attachment:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.attachment-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  font-size: 0.9rem;
+}
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 560;
+}
+.attachment-size {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.attach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.attach-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.attach-chip {
+  padding-right: 6px;
+}
+.attach-chip.uploading {
+  border-style: dashed;
+  color: var(--muted);
+}
+.spinner-small {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+}
+
+@media (max-width: 640px) {
+  .label-add-inline .label-add-actions {
+    grid-column: 1 / -1;
+  }
+  .block-rows > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
 /* ---------- Tasks ---------- */
 
 .tasks-page {

@@ -14,7 +14,7 @@ import { newId } from "../ids.js";
 import { activeMembership, actorFromPrincipal, getPrincipal, nowIso, requireChannelPermission, requireMember, requireThread } from "./access.js";
 import { normalizeChannel } from "./channels.js";
 import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
-import { reply, startThread, validateBody, validateLabels } from "./conversation.js";
+import { rejectReservedLabels, reply, startThread, validateBody, validateLabels } from "./conversation.js";
 import type { Actor } from "./model.js";
 import { boardLimits } from "./plans.js";
 import { principalRefs } from "./present.js";
@@ -126,6 +126,7 @@ export function schedulePost(ctx: AppContext, actor: Actor, input: SchedulePostI
   ctx.rate.hit(`w:p:${actor.id}`, r.writes_per_minute_principal, 60_000);
   validateBody(ctx, input.body, boardId);
   const labels = validateLabels(input.labels ?? {});
+  rejectReservedLabels(Object.keys(labels));
   const mentions = [...new Set(input.mentions ?? [])];
   for (const id of mentions) {
     const p = getPrincipal(ctx, id);

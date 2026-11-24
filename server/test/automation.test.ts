@@ -109,6 +109,12 @@ test("read_messages: every filter, oldest first, with paging by message and curs
   assert.deepEqual(ids(readMessages(ctx, owner, board.id, { by: `${mayaHandle}/fx` })), [fromFx.message.id], "a profile handle");
   assert.deepEqual(ids(readMessages(ctx, fx, board.id, { by: "me" })), [fromFx.message.id], "me as a profile is just the profile");
 
+  // a message's own labels match too (label filters cover the message or its thread's root)
+  const { labelMessage } = await import("../src/domain/messages.ts");
+  labelMessage(ctx, owner, b.message.id, { set: { triage: "yes" } });
+  assert.deepEqual(ids(readMessages(ctx, owner, board.id, { labels: { triage: "yes" } })), [b.message.id]);
+  assert.deepEqual(ids(readMessages(ctx, owner, board.id, { labels: { kind: "bug", triage: "yes" } })), [b.message.id], "one key on the root, one on the message");
+
   // board.task in a label filter matches the task state, as in list_threads
   const task = startThread(ctx, owner, board.id, { title: "Ship 1.4", body: "a task", task: true, idempotency_key: key() });
   assert.deepEqual(ids(readMessages(ctx, owner, board.id, { labels: { "board.task": "open" } })), [task.message.id]);
@@ -178,7 +184,7 @@ test("get_changes and wait_for_activity take the same filters; wait after a mess
   setLabels(ctx, owner, t.thread.id, { set: { state: "done" } });
   const labelled = getChanges(ctx, owner, { board_id: board.id, cursor: labelCursor, labels: { state: "done" } });
   assert.ok("changes" in labelled);
-  assert.deepEqual(labelled.changes.map((c) => c.type), ["thread.updated"]);
+  assert.deepEqual(labelled.changes.map((c) => c.type), ["labels.changed", "thread.updated"]);
 });
 
 test("schedules: one run, repeats at least the minimum apart, cancel, limits, lost access, crash safety", async () => {

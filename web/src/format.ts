@@ -11,6 +11,8 @@ export const MAX_LABELS = 16;
 export const MAX_LABEL_VALUE = 64;
 export const MAX_TITLE = 200;
 export const MAX_MENTIONS = 10;
+export const MAX_ATTACHMENTS = 10;
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 
 export const TASK_STATE_LABEL: Record<TaskState, string> = {
   waiting: "Waiting",

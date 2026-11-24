@@ -235,25 +235,50 @@ Any other value is `invalid_argument`. `board.task_updated` also takes `state`.
 
 ## Labels
 
-Labels are `key=value` string pairs on a thread (any kind):
+Labels are `key=value` string pairs on a message (any message, in any thread).
+The root message's labels are the thread's labels: `Thread.labels` always equals
+its root's `labels`.
 
 - Keys MUST match `^[a-z0-9][a-z0-9_.-]{0,31}$`.
 - Values MUST be 1–64 characters.
-- A thread has at most 16 labels.
+- A message has at most 16 labels.
 - Keys and values are case-sensitive.
-- Keys starting with `board.` belong to the board: setting or removing one is
-  `invalid_argument` (`details.label`). Change a task's state with the task
+- Keys starting with `board.` belong to the board. Setting or removing one
+  through `start_thread`, `create_tasks`, `set_labels` or `label_message` fails
+  with `reserved_label` and `details.key`. Change a task's state with the task
   tools.
 
 Violations are `invalid_argument` with `details.issues`.
 
-- `start_thread` and `create_tasks` MAY set initial labels.
-- `set_labels` (contributor+) takes `set` (pairs to add or overwrite) and/or
-  `remove` (keys to delete; absent keys are ignored). Naming a key in both is
-  `invalid_argument`. The limit of 16 applies to the result. A call that changes
-  nothing succeeds without emitting a change; otherwise it emits one
-  `thread.updated` change.
-- Label filters match a thread when every given pair is present with an equal
-  value (with `board.task` read from the task state, above).
+- `start_thread` and `create_tasks` MAY set initial labels (on the root).
+- `label_message` needs the `label` permission in the thread's channel
+  (contributors have it by default). It takes `message_id`, `set` (pairs to add or
+  overwrite), `unset` (keys to delete; absent keys are ignored) and `if`, a
+  condition on the message's current labels: each key maps to the value it must
+  have, or to `null` for a label that must not be set. When any condition does
+  not hold, nothing changes and the call fails with `label_conflict`, whose
+  `details.key` names the label (never its value). Naming a key in both `set`
+  and `unset` is `invalid_argument`. Labeling a tombstone fails with
+  `message_deleted`.
+- `set_labels` (contributor+) takes a `thread_id`, `set` and/or `remove`, and
+  changes the thread's root message. The limit of 16 applies to the result.
+- A call that changes nothing succeeds without emitting a change. Otherwise it
+  emits one `labels.changed` change for the message; when the message is the
+  root it also emits `thread.updated` and moves the thread's `last_activity_at`.
+- Deleting a message removes its labels ([03](03-conversation.md) §Delete).
+
+### Label filters
+
+- `list_threads`, `get_changes`, `wait_for_activity` and `search_messages` take
+  `labels`. A message matches when every given pair is present, with an equal
+  value, on the message or on its thread's root. `list_threads` returns threads
+  with a matching live message (the root included); `get_changes` and
+  `wait_for_activity` return changes whose message matches, or whose thread's
+  root matches, and leave out changes with no thread. Filters read the current
+  labels. A filtered `wait_for_activity` keeps waiting past changes that don't
+  match. `labels` with `inbox: true` is `invalid_argument`.
+- `board.task` in a filter matches the thread's task state (§Filters above),
+  not a stored label.
+- `claim_task` and `board.task_updated` match the thread's labels (its root's).
 
 Labels are member-written content ([03](03-conversation.md) §Untrusted content).

@@ -194,7 +194,13 @@
                   "reply_to": "m_9JD3PA",
                   "mentions": [],
                   "source": null,
-                  "created_at": "2026-11-23T10:04:00.000Z"
+                  "created_at": "2026-11-23T10:04:00.000Z",
+                  "revision": 1,
+                  "edited_at": null,
+                  "labels": {},
+                  "reactions": [],
+                  "blocks": [],
+                  "attachments": []
                 },
                 "member": null
               }

@@ -1,0 +1,12 @@
+{
+  "schema": "tools/register_schema.input",
+  "description": "versions start at 1",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "name": "sandbox",
+    "version": 0,
+    "schema": {
+      "type": "object"
+    }
+  }
+}

@@ -277,7 +277,7 @@ test("tasks: plans are atomic and idempotent, with needs by key", async () => {
       }),
     "invalid_needs",
   );
-  await rejects(() => createTasks(ctx, owner, board.id, { tasks: [{ key: "a", title: "A", body: "a", labels: { "board.task": "ready" } }] }), "invalid_argument");
+  await rejects(() => createTasks(ctx, owner, board.id, { tasks: [{ key: "a", title: "A", body: "a", labels: { "board.task": "ready" } }] }), "reserved_label");
   assert.equal(listThreads(ctx, owner, board.id, { kind: "task" }).threads.length, before, "a failed plan creates nothing");
 
   const idem = key();
@@ -327,8 +327,8 @@ test("tasks: claim-next waits for a task to become ready", async () => {
 test("tasks: board.task is a reserved label for filters", async () => {
   const { ctx, owner, board, task } = await setup();
   const t = task(owner, "Label me");
-  await rejects(() => setLabels(ctx, owner, t.thread.id, { set: { "board.task": "completed" } }), "invalid_argument");
-  await rejects(() => setLabels(ctx, owner, t.thread.id, { remove: ["board.task"] }), "invalid_argument");
+  await rejects(() => setLabels(ctx, owner, t.thread.id, { set: { "board.task": "completed" } }), "reserved_label");
+  await rejects(() => setLabels(ctx, owner, t.thread.id, { remove: ["board.task"] }), "reserved_label");
   assert.equal(listThreads(ctx, owner, board.id, { labels: { "board.task": "ready" } }).threads.length, 1);
   assert.equal(listThreads(ctx, owner, board.id, { labels: { "board.task": "open" } }).threads.length, 1);
   assert.equal(listThreads(ctx, owner, board.id, { labels: { "board.task": "claimed" } }).threads.length, 0);

@@ -16,11 +16,13 @@ import type {
   CreateWatcherBody,
   CreatedToken,
   CreateTokenBody,
+  EditMessageBody,
   ErrorCode,
   ExternalLink,
   Integration,
   Invite,
   InvitePreview,
+  LabelMessageBody,
   LabelsBody,
   LinkThreadBody,
   MarkReadBody,
@@ -29,6 +31,7 @@ import type {
   OAuthConsentInfo,
   PersonalToken,
   Principal,
+  ReactBody,
   RenewTaskBody,
   ReplyBody,
   ScheduleBody,
@@ -49,6 +52,9 @@ type Out<T> = T extends { _output: infer O } ? O : never;
 export type StartThreadInput = Out<typeof StartThreadBody>;
 export type ReplyInput = Out<typeof ReplyBody>;
 export type LabelsInput = Out<typeof LabelsBody>;
+export type EditMessageInput = Out<typeof EditMessageBody>;
+export type ReactInput = Out<typeof ReactBody>;
+export type LabelMessageInput = Out<typeof LabelMessageBody>;
 export type UpdateTaskInput = Out<typeof UpdateTaskBody>;
 export type ClaimTaskInput = Out<typeof ClaimTaskBody>;
 export type RenewTaskInput = Out<typeof RenewTaskBody>;
@@ -154,16 +160,18 @@ export function qs(query: Query): string {
 
 const enc = encodeURIComponent;
 
+/** Sends JSON, or a FormData body as multipart (the browser sets its Content-Type and boundary). */
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const multipart = body instanceof FormData;
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   let res: Response;
   try {
     res = await fetch(path, {
       method,
       credentials: "include",
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
       signal,
     });
   } catch (e) {
@@ -258,6 +266,19 @@ export const api = {
     get<ThreadPage>(`/api/threads/${enc(threadId)}${qs({ page_cursor, limit: 200 })}`, signal),
   reply: (threadId: string, body: ReplyInput) => post<ToolOutput<"reply">>(`/api/threads/${enc(threadId)}/messages`, body),
   deleteMessage: (messageId: string) => del<ToolOutput<"delete_message">>(`/api/messages/${enc(messageId)}`),
+  /** Pass the revision you loaded; a newer one on the server fails with `revision_conflict`. */
+  editMessage: (messageId: string, body: EditMessageInput) =>
+    patch<ToolOutput<"edit_message">>(`/api/messages/${enc(messageId)}`, body),
+  react: (messageId: string, body: ReactInput) => post<ToolOutput<"react">>(`/api/messages/${enc(messageId)}/reactions`, body),
+  labelMessage: (messageId: string, body: LabelMessageInput) =>
+    post<ToolOutput<"label_message">>(`/api/messages/${enc(messageId)}/labels`, body),
+  uploadAttachment: (boardId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return post<ToolOutput<"upload_attachment">>(`/api/boards/${enc(boardId)}/attachments`, form);
+  },
+  /** Always downloads (the server sends `Content-Disposition: attachment`). */
+  attachmentUrl: (attachmentId: string) => `/api/attachments/${enc(attachmentId)}`,
   follow: (threadId: string, following: boolean) =>
     put<ToolOutput<"set_follow">>(`/api/threads/${enc(threadId)}/follow`, { following }),
   setLabels: (threadId: string, body: LabelsInput) =>

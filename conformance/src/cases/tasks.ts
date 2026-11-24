@@ -424,7 +424,7 @@ export const taskCases: CaseDef[] = [
       const { thread, board } = await newTask(ctx, "owner", `Permissions ${ctx.runId}`);
       await reader.fails("claim_task", { thread_id: thread.id }, "forbidden");
       await reader.fails("set_labels", { thread_id: thread.id, set: { x: "y" } }, "forbidden");
-      await owner.fails("set_labels", { thread_id: thread.id, set: { "board.task": "completed" } }, "invalid_argument");
+      await owner.fails("set_labels", { thread_id: thread.id, set: { "board.task": "completed" } }, "reserved_label");
       const d = await startThread(owner, board, `Not a task ${ctx.runId}`, "discussion");
       await owner.fails("claim_task", { thread_id: d.thread.id }, "task_not_claimable");
       await owner.fails("update_task", { thread_id: d.thread.id, action: "unblock" }, "task_not_claimable");

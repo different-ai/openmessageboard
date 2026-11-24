@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/label_message.input",
+  "title": "label_message input",
+  "description": "Set or remove key=value labels on a message. A thread root's labels are the thread's labels. Pass if to change labels only while they are as you read them.",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Message ID"
+    },
+    "set": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "unset": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "if": {
+      "description": "Labels the message must have now (null: must not be set); otherwise nothing changes and it fails with label_conflict",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "required": [
+    "message_id"
+  ]
+}

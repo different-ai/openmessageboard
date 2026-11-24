@@ -6,6 +6,9 @@ import { activeMemberCount } from "./boards.js";
 import type { Actor, MessageRow } from "./model.js";
 import { presentMessages } from "./present.js";
 import { boardLimits, limitsFor, planOf } from "./plans.js";
+import { boardAttachmentBytes, cleanupUnattached } from "./attachments.js";
+import { validateLabels } from "./conversation.js";
+import { messageLabelFilter } from "./messages.js";
 import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
 
 export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage {
@@ -30,6 +33,7 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
     allowances: [
       item("posts", posts, l.posts_per_month, "count", nextMonthStart(ctx)),
       item("storage", board.storage_bytes, l.storage_bytes, "bytes", null),
+      item("attachments", boardAttachmentBytes(ctx, boardId), l.attachment_bytes, "bytes", null),
       item("members", activeMemberCount(ctx, boardId), l.members_per_board, "count", null),
       item("live_connections", ctx.connections.countForBoard(boardId), l.live_connections_per_board, "count", null),
       item("webhook_subscriptions", subs, l.webhook_subscriptions_per_board, "count", null),
@@ -38,12 +42,13 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
       item("watchers", watchers, l.watchers_per_board, "count", null),
     ],
     plan: planOf(ctx, board.owner_id),
-    storage_formula: "UTF-8 bytes of every live message body plus thread titles; deleting a message frees its bytes",
+    storage_formula:
+      "UTF-8 bytes of every live message body and its structured data, thread titles, and attachment files; deleting a message frees its bytes (a file once no live message carries it)",
   };
 }
 
 /** Full-text search with FTS5. Query terms are quoted, so FTS syntax in input is treated as text. */
-export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20, channel?: string) {
+export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20, channel?: string, labels?: Record<string, string>) {
   requireMember(ctx, actor, boardId);
   const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
   ctx.rate.hit(`r:p:${actor.id}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
@@ -55,7 +60,7 @@ export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, q
   if (terms.length === 0) throw invalid("Search needs at least one word");
   const fts = terms.map((t) => `"${t}"`).join(" ");
   const params: unknown[] = [fts, boardId];
-  const where = readableSql("t.channel", readable, params) + channelFilterSql("t.channel", channel, params);
+  const where = readableSql("t.channel", readable, params) + channelFilterSql("t.channel", channel, params) + messageLabelFilter(validateLabels(labels ?? {}), params, "m", "t");
   params.push(Math.min(limit, 50));
   const rows = ctx.db
     .prepare(
@@ -65,7 +70,7 @@ export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, q
        ORDER BY rank LIMIT ?`,
     )
     .all(...params) as (MessageRow & { thread_title: string; snip: string })[];
-  const msgs = presentMessages(ctx, rows);
+  const msgs = presentMessages(ctx, rows, actor.id);
   return { results: rows.map((r, i) => ({ message: msgs[i]!, thread_title: r.thread_title, snippet: r.snip })) };
 }
 
@@ -94,6 +99,7 @@ export function runMaintenance(ctx: AppContext, emitAccess: (boardId: string, pr
   }
   ctx.db.prepare("DELETE FROM idempotency WHERE created_at < ?").run(new Date(ctx.now().getTime() - 86_400_000).toISOString());
   ctx.db.prepare("DELETE FROM agent_daily WHERE day < ?").run(new Date(ctx.now().getTime() - 3 * 86_400_000).toISOString().slice(0, 10));
+  cleanupUnattached(ctx);
   ctx.rate.sweep();
   return { expired: expired.length, purgedEvents };
 }

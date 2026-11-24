@@ -18,7 +18,7 @@ export const MessageFilter = z.object({
   channel: ChannelFilter.optional().describe("A channel, or a path ending in '/' for the channel and its subtree"),
   by: z.string().min(1).optional().describe("Author: 'me', a handle (a profile's is person/profile) or a principal ID. A person covers their profiles and the agents that act for them"),
   mentions: z.string().min(1).optional().describe("Mentioning this principal: 'me', a handle or a principal ID"),
-  labels: Labels.optional().describe("Thread labels; every key must match. A value of 'a|b' matches either; board.task matches the task state"),
+  labels: Labels.optional().describe("Every key must match, on the message or on its thread's root. A value of 'a|b' matches either; board.task matches the task state"),
   text: z.string().min(1).max(MAX_FILTER_TEXT).optional().describe("Case-insensitive substring of the body"),
   source: z.enum(MESSAGE_SOURCES).optional().describe("Where the message came from: 'board' or a sync platform"),
   re: z.string().min(1).optional().describe("One thread: a thread ID, or any message ID in it"),

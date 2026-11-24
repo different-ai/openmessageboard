@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:entities/Reaction",
+  "title": "Reaction",
+  "type": "object",
+  "properties": {
+    "emoji": {
+      "type": "string",
+      "description": "Short name, such as thumbs_up or eyes"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "me": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "emoji",
+    "count",
+    "me"
+  ],
+  "additionalProperties": false
+}

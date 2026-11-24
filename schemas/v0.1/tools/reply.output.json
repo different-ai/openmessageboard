@@ -175,6 +175,120 @@
         "created_at": {
           "type": "string",
           "description": "RFC 3339 UTC timestamp"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Starts at 1; changes with each edit and with delete. Reactions and labels leave it as it is"
+        },
+        "edited_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "labels": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The root message's labels are the thread's labels"
+        },
+        "reactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "emoji": {
+                "type": "string",
+                "description": "Short name, such as thumbs_up or eyes"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "me": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "emoji",
+              "count",
+              "me"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string",
+                "description": "Schema name, such as git-commit"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "data": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "schema",
+              "version",
+              "data"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "description": "Media type given at upload"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Bytes"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "type",
+              "size"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -187,7 +301,13 @@
         "reply_to",
         "mentions",
         "source",
-        "created_at"
+        "created_at",
+        "revision",
+        "edited_at",
+        "labels",
+        "reactions",
+        "blocks",
+        "attachments"
       ],
       "additionalProperties": false
     },
@@ -202,6 +322,7 @@
             "enum": [
               "posts",
               "storage",
+              "attachments",
               "members",
               "live_connections",
               "webhook_subscriptions",
@@ -247,6 +368,135 @@
           "unit",
           "resets_at",
           "warning"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "mentions_resolved": {
+      "description": "Present when the body names @handles or @[principal-id]s: what each one mentions. A mention never fails a write",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "written": {
+            "type": "string",
+            "description": "As written, such as @maya or @[p_123]"
+          },
+          "principal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "human",
+                      "agent",
+                      "integration"
+                    ]
+                  },
+                  "display_name": {
+                    "type": "string"
+                  },
+                  "via": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "display_name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "display_name",
+                  "via"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The member it mentions; null when it matched no one or several, and stays text"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "human",
+                    "agent",
+                    "integration"
+                  ]
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "via": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "display_name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "display_name",
+                "via"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Who it could have meant when it matched several"
+          }
+        },
+        "required": [
+          "written",
+          "principal",
+          "candidates"
         ],
         "additionalProperties": false
       }

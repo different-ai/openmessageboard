@@ -8,3 +8,4 @@ export * from "./export.js";
 export * from "./uris.js";
 export * from "./channels.js";
 export * from "./automation.js";
+export * from "./emoji.js";

@@ -182,8 +182,8 @@ export function resolveFilter(ctx: AppContext, actor: Actor, boardId: string, in
 }
 
 /**
- * Thread labels; the reserved `board.task` key matches the task state (`open` for every unfinished state), like
- * `list_threads`. When messages carry labels of their own, match those here too (either one).
+ * Labels on the message or on its thread's root (threads.labels mirrors the root), as messages.ts matches them; the
+ * reserved `board.task` key matches the task state (`open` for every unfinished state), like `list_threads`.
  */
 function labelSql(labels: [string, string[]][], params: unknown[], m: string, t: string): string {
   let sql = "";
@@ -195,8 +195,9 @@ function labelSql(labels: [string, string[]][], params: unknown[], m: string, t:
       continue;
     }
     // Keys are validated against LABEL_KEY_PATTERN, so they are safe inside the JSON path.
-    sql += ` AND ${m}.deleted_at IS NULL AND json_extract(${t}.labels, '$."${k}"') IN (${values.map(() => "?").join(",")})`;
-    params.push(...values);
+    const list = values.map(() => "?").join(",");
+    sql += ` AND ${m}.deleted_at IS NULL AND (json_extract(${m}.labels, '$."${k}"') IN (${list}) OR json_extract(${t}.labels, '$."${k}"') IN (${list}))`;
+    params.push(...values, ...values);
   }
   return sql;
 }

@@ -9,7 +9,13 @@ import { decodeCursor, decodePage, encodeCursor, encodePage } from "./cursors.js
 import type { Actor, EventRow, InboxRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
 import { presentInbox, presentMember, presentMessages, presentThreads, principalRefs } from "./present.js";
 import { FILTER_KEYS, boardOfRef, filteredPage, hasFilterInput, isEmptyFilter, resolveFilter, seqAfter, type FilterInput, type ResolvedFilter } from "./filters.js";
-import { AccessCache, ChannelAccess, channelFilterSql, channelMatches, readableSql, type AccessPrincipal } from "./grants.js";
+import { AccessCache, ChannelAccess, readableSql, type AccessPrincipal } from "./grants.js";
+
+/**
+ * Read filters on board changes: the message filters of filters.ts, resolved with `resolveFilter`. `labels` matches a
+ * change's message or its thread's root; changes without a matching message are left out.
+ */
+export type ChangeFilters = ResolvedFilter;
 
 function purgedUpto(ctx: AppContext): number {
   return Number((ctx.db.prepare("SELECT value FROM meta WHERE key = 'events_purged_upto'").get() as { value: string }).value);
@@ -39,6 +45,7 @@ export function presentChanges(ctx: AppContext, rows: EventRow[], viewerId: stri
     presentMessages(
       ctx,
       messageIds.length ? (ctx.db.prepare(`SELECT * FROM messages WHERE id IN (${messageIds.map(() => "?").join(",")})`).all(...messageIds) as MessageRow[]) : [],
+      viewerId,
     ).map((m) => [m.id, m]),
   );
   const refs = principalRefs(ctx, rows.flatMap((r) => [r.actor_id, r.subject_id]));
@@ -78,7 +85,7 @@ export function boardChanges(
   limit = 100,
   threadId?: string,
   channel?: string,
-  filter?: ResolvedFilter,
+  filter: ChangeFilters = {},
 ): ChangesPage {
   return read(ctx, () => {
     requireMember(ctx, actor, boardId);
@@ -103,15 +110,11 @@ export function boardChanges(
       const page = filteredPage(ctx, actor, boardId, s, f, n);
       return { changes: presentChanges(ctx, page.rows, actor.id), cursor: encodeCursor("b", boardId, page.next), has_more: page.more };
     }
+    // No filters: every change the caller can read.
     const params: unknown[] = [boardId, s];
     let sql = "SELECT e.* FROM events e LEFT JOIN threads t ON t.id = e.thread_id WHERE e.board_id = ? AND e.seq > ?";
-    if (threadId) {
-      sql += " AND e.thread_id = ?";
-      params.push(threadId);
-    }
     const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
     if (readable !== null) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${readableSql("t.channel", readable, params)}))`;
-    if (channel) sql += ` AND t.id IS NOT NULL${channelFilterSql("t.channel", channel, params)}`;
     sql += " ORDER BY e.seq LIMIT ?";
     params.push(n + 1);
     const rows = ctx.db.prepare(sql).all(...params) as EventRow[];

@@ -1,0 +1,14 @@
+{
+  "schema": "tools/get_attachment.output",
+  "description": "a small file comes back inline",
+  "instance": {
+    "attachment": {
+      "id": "a_8NOTE1",
+      "name": "notes.md",
+      "type": "text/markdown",
+      "size": 8
+    },
+    "url": "https://board.example.com/api/attachments/a_8NOTE1",
+    "data_base64": "IyBub3Rlcwo="
+  }
+}
