@@ -8,6 +8,7 @@ import {
   type DataSchema,
 } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
+import type { SchemaEngine } from "../platform.js";
 import { tx } from "../context.js";
 import { OmbError, invalid } from "../errors.js";
 import { nowIso, requireMember } from "./access.js";
@@ -74,8 +75,22 @@ export const BUILTIN_SCHEMAS: SchemaDef[] = [
 // Draft-07. Schemas never add themselves to the instance by $id, so boards can't collide.
 const ajv = new Ajv({ allErrors: true, strict: false, addUsedSchema: false });
 addFormats(ajv);
-type Validate = ReturnType<typeof ajv.compile>;
+
+/** The default engine: Ajv (compiles validators to code; runtimes that forbid that supply their own). */
+export const ajvSchemas: SchemaEngine = {
+  check(schema) {
+    if (!ajv.validateSchema(schema)) throw new Error(ajv.errorsText(ajv.errors));
+    ajv.compile(schema);
+  },
+  compile(schema) {
+    const validate = ajv.compile(schema);
+    return (data) => (validate(data) ? [] : (validate.errors ?? []).map((e) => ({ path: e.instancePath || "/", message: e.message ?? "invalid" })));
+  },
+};
+
+type Validate = ReturnType<SchemaEngine["compile"]>;
 const compiled = new Map<string, Validate>();
+const engine = (ctx: AppContext): SchemaEngine => ctx.platform.schemas ?? ajvSchemas;
 
 const schemaId = (name: string, version: number) => `${name}@${version}`;
 
@@ -141,11 +156,11 @@ function assertNoRegex(node: unknown, path: string): void {
   }
 }
 
-function validatorFor(boardId: string, def: SchemaDef): Validate {
+function validatorFor(ctx: AppContext, boardId: string, def: SchemaDef): Validate {
   const key = def.builtin ? `*:${schemaId(def.name, def.version)}` : `${boardId}:${schemaId(def.name, def.version)}`;
   let v = compiled.get(key);
   if (!v) {
-    v = ajv.compile(def.schema);
+    v = engine(ctx).compile(def.schema as Record<string, unknown>);
     compiled.set(key, v);
   }
   return v;
@@ -201,9 +216,8 @@ export function registerSchema(ctx: AppContext, actor: Actor, boardId: string, i
       throw new OmbError("schema_immutable", `${id} is already registered with a different definition; register the next version instead`, { schema: id });
     }
     assertNoRegex(schema, "");
-    if (!ajv.validateSchema(schema)) throw invalid(`Not a valid JSON Schema: ${ajv.errorsText(ajv.errors)}`);
     try {
-      ajv.compile(schema);
+      engine(ctx).check(schema as Record<string, unknown>);
     } catch (e) {
       throw invalid(`Not a valid JSON Schema: ${(e as Error).message}`);
     }
@@ -231,9 +245,9 @@ export function validateBlocks(ctx: AppContext, boardId: string, blocks: BlockIn
     if (!b.data || typeof b.data !== "object" || Array.isArray(b.data)) throw invalid(`blocks.${i}.data must be an object`);
     const def = findSchema(ctx, boardId, b.schema, b.version);
     if (!def) throw notFound(schemaId(b.schema, b.version));
-    const validate = validatorFor(boardId, def);
-    if (!validate(b.data)) {
-      const issues = (validate.errors ?? []).slice(0, 10).map((e) => ({ path: e.instancePath || "/", message: e.message ?? "invalid" }));
+    const problems = validatorFor(ctx, boardId, def)(b.data);
+    if (problems.length) {
+      const issues = problems.slice(0, 10);
       throw new OmbError("invalid_block", `blocks.${i} doesn't match ${schemaId(def.name, def.version)}: ${issues.map((x) => `${x.path} ${x.message}`).join("; ")}`, {
         schema: schemaId(def.name, def.version),
         index: i,

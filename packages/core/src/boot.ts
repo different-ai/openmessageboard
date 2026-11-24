@@ -11,11 +11,11 @@ import { createApp, type AppOptions } from "./http/app.js";
 import type { RouteModule } from "./http/util.js";
 import { EventSubscriptions } from "./mcp/events.js";
 import { runMaintenance } from "./domain/usage.js";
-import { startSchedules } from "./domain/schedules.js";
+import { runDueSchedules, startSchedules } from "./domain/schedules.js";
 import { WatcherWorker } from "./domain/watchers.js";
 import { expireTaskLeases } from "./domain/tasks.js";
 import { profileIdsOf } from "./domain/profiles.js";
-import { registerSyncRoutes, startSync } from "./sync/index.js";
+import { processOutbound, registerSyncRoutes, startSync } from "./sync/index.js";
 import type { Platform } from "./platform.js";
 
 /** Optional profiles an implementation adds. Sync ships in the core; workload identity is per runtime. */
@@ -43,8 +43,12 @@ export interface Booted {
   events: EventSubscriptions;
   /** Starts background work (deliveries, schedules, watchers, sync, maintenance); returns a stop function. */
   start(): () => void;
-  /** One pass of the background work that runs on timers, for runtimes that wake on alarms instead. */
+  /** Expiry, lease and disabled-account housekeeping (part of `tick`). */
   maintain(): void;
+  /** One pass of all background work, for runtimes that wake on alarms: deliveries, schedules, watchers, sync, housekeeping. */
+  tick(): Promise<void>;
+  /** The earliest time background work is due (a delivery retry, a schedule, a lease or access expiry), or null. */
+  nextWakeAt(): Date | null;
 }
 
 /** Builds the whole server for any runtime: context, auth, the HTTP and MCP app, and the background workers. */
@@ -88,10 +92,56 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
     }
   };
 
+  const watchers = new WatcherWorker(ctx);
+  let syncing = false;
+  const tick = async () => {
+    maintain();
+    try {
+      runDueSchedules(ctx);
+    } catch (e) {
+      console.error("schedules failed", e);
+    }
+    await Promise.allSettled([
+      events.tick(),
+      watchers.tick(),
+      (async () => {
+        if (!sync || syncing) return;
+        syncing = true;
+        try {
+          await processOutbound(ctx);
+        } finally {
+          syncing = false;
+        }
+      })(),
+    ]);
+  };
+
+  const nextWakeAt = (): Date | null => {
+    const due = [
+      "SELECT MIN(next_attempt_at) AS t FROM webhook_deliveries WHERE status = 'pending'",
+      "SELECT MIN(next_attempt_at) AS t FROM watcher_deliveries WHERE status = 'pending'",
+      "SELECT MIN(next_attempt_at) AS t FROM sync_outbound WHERE status = 'pending'",
+      "SELECT MIN(next_run_at) AS t FROM schedules WHERE state = 'pending'",
+      "SELECT MIN(task_lease_until) AS t FROM threads WHERE task_state = 'claimed'",
+      "SELECT MIN(access_ends_at) AS t FROM memberships WHERE access_ends_at IS NOT NULL AND expiry_notified = 0",
+      "SELECT MIN(expires_at) AS t FROM event_subscriptions WHERE status = 'active'",
+    ];
+    let min: string | null = null;
+    for (const q of due) {
+      try {
+        const t = (ctx.db.prepare(q).get() as { t: string | null } | undefined)?.t ?? null;
+        if (t && (!min || t < min)) min = t;
+      } catch {
+        /* a table an implementation leaves out */
+      }
+    }
+    return min ? new Date(min) : null;
+  };
+
   const start = () => {
     const stopEvents = events.start();
     const stopSchedules = startSchedules(ctx);
-    const stopWatchers = new WatcherWorker(ctx).start();
+    const stopWatchers = watchers.start();
     const stopSync = sync?.start(ctx) ?? (() => {});
     const maintenance = setInterval(maintain, config.testMode ? 1000 : 15_000);
     (maintenance as { unref?: () => void }).unref?.();
@@ -116,5 +166,5 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
     };
   };
 
-  return { ctx, app, auth, events, start, maintain };
+  return { ctx, app, auth, events, start, maintain, tick, nextWakeAt };
 }

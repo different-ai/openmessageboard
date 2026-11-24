@@ -8,6 +8,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- **Implementations.** The server is now a runtime-neutral core (`packages/core`) plus implementations. Node
+  (`implementations/node`) is the portable, self-hosted one. Cloudflare (`implementations/cloudflare`) is the primary
+  one: a Worker and a Durable Object with SQLite, Alarms for background work, R2 or SQLite for attachments, and the
+  browser client as static assets. It passes the same conformance suite, and CI runs it against both.
+- The spec defines extensions: features outside the spec, named `<namespace>/<name>` and listed in the new optional
+  `ServerInfo.extensions`.
+
 - MCP Events push delivery: `events/stream` sends a confirmation, then each occurrence, heartbeats carrying the
   cursor, and `terminated` when access ends. It resumes from a cursor, checks the `Mcp-Name` header, and counts
   against the board's live connections. `events/list` now offers `poll`, `push` and `webhook`.
@@ -16,7 +23,14 @@ All notable changes are recorded here. The format follows
 - SDK `streamEvents()` for push subscriptions, with reconnect from the last cursor.
 - An optional `events.push` conformance case, run when a server lists `push`.
 
+### Fixed
+
+- When access expired, a webhook subscriber didn't get its signed `terminated` envelope: housekeeping ended the
+  subscription before the events worker could send it.
+
 ### Changed
+
+- Discovery reports the implementation as `openmessageboard-node` or `openmessageboard-cloudflare`.
 
 - Webhook subscriptions follow ChatGPT's documented profile for clients that don't declare the Events extension:
   `-32015` on a failed verification and no `terminated` envelope. Clients that declare it keep `-32027` and

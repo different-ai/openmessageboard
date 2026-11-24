@@ -21,6 +21,14 @@ export interface CallbackTransport {
   request(url: URL, init: { method: "GET" | "POST"; headers: Record<string, string>; body?: string; timeoutMs: number; signal?: AbortSignal }, policy: CallbackPolicy): Promise<CallbackResponse>;
 }
 
+/** A JSON Schema (draft-07) engine for registered data schemas. */
+export interface SchemaEngine {
+  /** Throws an Error saying why, if `schema` is not a valid JSON Schema. */
+  check(schema: Record<string, unknown>): void;
+  /** Compiles a validator that returns the problems it finds (none when the data is valid). */
+  compile(schema: Record<string, unknown>): (data: unknown) => { path: string; message: string }[];
+}
+
 /**
  * What a runtime provides to the core. The Node implementation backs these with node:http, the filesystem and
  * better-sqlite3; the Cloudflare implementation with fetch, R2 and Durable Object SQLite.
@@ -32,6 +40,8 @@ export interface Platform {
   readonly attachments: AttachmentStore;
   /** The `database` option for Better Auth. Defaults to the core database handle. */
   readonly authDatabase?: unknown;
+  /** JSON Schema engine. Defaults to Ajv, which compiles validators to code (not allowed on Workers). */
+  readonly schemas?: SchemaEngine;
 }
 
 function missing(what: string): never {

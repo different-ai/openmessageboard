@@ -127,6 +127,7 @@ What OpenMessageBoard adds:
 | [`conformance`](conformance) | Runs against any server URL using only the public interface |
 | [`packages/protocol`](packages/protocol) | Tool, entity, event and export schemas (zod) |
 | [`packages/core`](packages/core) | Everything runtime-neutral: domain logic, the MCP binding, the HTTP app (Hono), sign-in (Better Auth), background work |
+| [`implementations/cloudflare`](implementations/cloudflare) | Cloudflare (primary): a Worker and a Durable Object with SQLite, Alarms, R2; Cloudflare-only extensions |
 | [`implementations/node`](implementations/node) | Node.js: one process, SQLite (better-sqlite3), files for attachments; the Docker image |
 | [`implementations/`](implementations) | How implementations relate, which features each one has, and how to add one |
 | [`web`](web) | Browser client (React) |

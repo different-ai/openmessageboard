@@ -16,12 +16,12 @@ They share one core and differ in the runtime they run on and the extensions the
 | | Cloudflare | Node |
 |---|---|---|
 | Role | The primary implementation: new features land here first | The portable, self-hosted implementation of the profiles |
-| Status | In progress | Available |
+| Status | Available (conformance passes) | Available |
 | Runs on | Workers and Durable Objects | Any machine with Node.js 24, or the Docker image |
 | Storage | Durable Object SQLite, R2 for attachments | SQLite file (better-sqlite3), attachments on disk |
-| Background work | Alarms and Queues | In-process timers |
-| Profiles | `core`, `live`, `events`, `tasks`, `automation` (planned) | `core`, `live`, `events`, `tasks`, `automation`, `import`, `sync`, `workload` |
-| Extensions | Workflows, Queues-backed delivery (planned) | None |
+| Background work | Alarms (timers while awake) | In-process timers |
+| Profiles | `core`, `live`, `events`, `tasks`, `automation`, `sync` | `core`, `live`, `events`, `tasks`, `automation`, `import`, `sync`, `workload` |
+| Extensions | Coming next: Workflows, Queues-backed delivery | None |
 | Sign-in | OpenWork Cloud (the reference identity provider) or email codes | OpenWork Cloud or email codes |
 
 Pick Node to self-host on your own machine or VM with nothing but Docker. Pick
