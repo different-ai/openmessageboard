@@ -6,10 +6,11 @@ import {
   MAX_MENTIONS,
   MAX_TITLE_CHARS,
   MAX_IDEMPOTENCY_KEY,
+  RESERVED_LABEL_PREFIX,
   type AllowanceUsage,
   type Message,
-  type TaskAction,
-  type TaskState,
+  type TaskClaim,
+  type TaskStateFilter,
   type Thread,
   type ThreadKind,
   type MessageSource,
@@ -23,8 +24,9 @@ import { activeMembership, currentMonth, getBoardRow, nextMonthStart, nowIso, re
 import { recordEvent } from "./boards.js";
 import { encodeCursor, encodePage, decodePage } from "./cursors.js";
 import type { Actor, BoardRow, MessageRow, ThreadRow } from "./model.js";
-import { presentMessage, presentMessages, presentThread, presentThreads, refOf } from "./present.js";
+import { presentMessage, presentMessages, presentThread, presentThreads } from "./present.js";
 import { boardLimits } from "./plans.js";
+import { finishTaskCreation, prepareTask, taskStateClause, type NewTask } from "./tasks.js";
 
 type Emit = (e: HubEvent) => void;
 
@@ -51,7 +53,7 @@ export function validateBody(ctx: AppContext, body: string, boardId?: string): n
   return bytes;
 }
 
-function validateTitle(title: string): string {
+export function validateTitle(title: string): string {
   const t = title.trim();
   if (!t) throw invalid("Title can't be empty");
   if ([...t].length > MAX_TITLE_CHARS) throw invalid(`Titles can be up to ${MAX_TITLE_CHARS} characters`);
@@ -67,6 +69,15 @@ export function validateLabels(labels: Record<string, string>): Record<string, s
   }
   if (Object.keys(out).length > MAX_LABELS) throw invalid(`A thread can have up to ${MAX_LABELS} labels`);
   return out;
+}
+
+/** Labels under `board.` belong to the board (`board.task` is the task state): members cannot set or remove them. */
+export function rejectReservedLabels(keys: Iterable<string>): void {
+  for (const k of keys) {
+    if (k.startsWith(RESERVED_LABEL_PREFIX)) {
+      throw invalid(`Labels under "${RESERVED_LABEL_PREFIX}" belong to the board; change a task's state with claim_task or update_task`, { label: k });
+    }
+  }
 }
 
 function resolveMentions(ctx: AppContext, boardId: string, ids: string[] | undefined): string[] {
@@ -86,7 +97,7 @@ function hashRequest(input: unknown): string {
 }
 
 /** Runs `fn` once per (principal, key); retries with the same key and payload return the stored result. */
-function idempotent<T>(ctx: AppContext, actor: Actor, key: string | undefined, input: unknown, fn: () => T): T {
+export function idempotent<T>(ctx: AppContext, actor: Actor, key: string | undefined, input: unknown, fn: () => T): T {
   if (key === undefined) return fn();
   if (!key || key.length > MAX_IDEMPOTENCY_KEY) throw invalid(`idempotency_key must be 1-${MAX_IDEMPOTENCY_KEY} characters`);
   const hash = hashRequest(input);
@@ -109,7 +120,7 @@ function monthlyPosts(ctx: AppContext, boardId: string): number {
 }
 
 /** Checks and charges one post plus its bytes. Caller holds a transaction. */
-function chargePost(ctx: AppContext, actor: Actor, board: BoardRow, bytes: number): void {
+export function chargePost(ctx: AppContext, actor: Actor, board: BoardRow, bytes: number): void {
   const limits = boardLimits(ctx, board.id);
   const used = monthlyPosts(ctx, board.id);
   if (used >= limits.posts_per_month) {
@@ -154,7 +165,7 @@ export function usageWarnings(ctx: AppContext, boardId: string): AllowanceUsage[
   return out.length ? out : undefined;
 }
 
-function checkWriteRate(ctx: AppContext, actor: Actor, boardId: string, opts?: WriteOptions): void {
+export function checkWriteRate(ctx: AppContext, actor: Actor, boardId: string, opts?: WriteOptions): void {
   if (opts?.internal) return;
   const r = ctx.config.rateLimits;
   if (actor.kind !== "integration") ctx.rate.hit(`w:p:${actor.id}`, r.writes_per_minute_principal, 60_000);
@@ -179,7 +190,7 @@ export function addInboxItem(
 
 // ---------- messages ----------
 
-function follow(ctx: AppContext, principalId: string, threadId: string): void {
+export function follow(ctx: AppContext, principalId: string, threadId: string): void {
   ctx.db.prepare("INSERT INTO follows (principal_id, thread_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(principalId, threadId, nowIso(ctx));
 }
 
@@ -242,7 +253,7 @@ function insertMessage(ctx: AppContext, emit: Emit, m: InsertMessageInput): Mess
   return row;
 }
 
-function loadThread(ctx: AppContext, id: string): ThreadRow {
+export function loadThread(ctx: AppContext, id: string): ThreadRow {
   return ctx.db.prepare("SELECT * FROM threads WHERE id = ?").get(id) as ThreadRow;
 }
 
@@ -252,8 +263,41 @@ export interface StartThreadInput {
   mentions?: string[] | undefined;
   labels?: Record<string, string> | undefined;
   task?: boolean | undefined;
-  assignee?: string | undefined;
+  needs?: string[] | undefined;
+  for?: string | undefined;
+  claim?: boolean | undefined;
   idempotency_key?: string | undefined;
+}
+
+export interface NewThread {
+  id?: string;
+  title: string;
+  body: string;
+  bytes: number;
+  labels: Record<string, string>;
+  mentions: string[];
+  kind: ThreadKind;
+  task?: NewTask | null;
+}
+
+/**
+ * Inserts a validated thread with its root message and `thread.created` change, charging one post.
+ * Caller holds a transaction.
+ */
+export function insertThread(ctx: AppContext, emit: Emit, actor: Actor, board: BoardRow, t: NewThread, opts: WriteOptions = {}): { thread: ThreadRow; message: MessageRow } {
+  chargePost(ctx, actor, board, t.bytes + Buffer.byteLength(t.title, "utf8"));
+  const now = nowIso(ctx);
+  const threadId = t.id ?? newId("t");
+  ctx.db
+    .prepare(
+      `INSERT INTO threads (id, board_id, title, kind, labels, task_state, task_for_id, created_by, created_at, last_activity_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(threadId, board.id, t.title, t.kind, JSON.stringify(t.labels), t.task?.state ?? null, t.task?.forId ?? null, actor.id, now, now);
+  const thread = loadThread(ctx, threadId);
+  const row = insertMessage(ctx, emit, { board, thread, author: actor, body: t.body, bytes: t.bytes, replyTo: null, mentions: t.mentions, isRoot: true, ...(opts.source ? { source: opts.source } : {}) });
+  recordEvent(ctx, emit, { boardId: board.id, type: "thread.created", threadId, messageId: row.id, actorId: actor.id });
+  return { thread, message: row };
 }
 
 export function startThread(
@@ -262,7 +306,7 @@ export function startThread(
   boardId: string,
   input: StartThreadInput,
   opts: WriteOptions = {},
-): { thread: Thread; message: Message; usage_warning?: AllowanceUsage[] } {
+): { thread: Thread; message: Message; claim?: TaskClaim; usage_warning?: AllowanceUsage[] } {
   checkWriteRate(ctx, actor, boardId, opts);
   const result = tx(ctx, (emit) => {
     const { board } = requireMember(ctx, actor, boardId, "contributor");
@@ -271,29 +315,13 @@ export function startThread(
       const title = validateTitle(input.title);
       const bytes = validateBody(ctx, input.body, board.id);
       const labels = validateLabels(input.labels ?? {});
+      rejectReservedLabels(Object.keys(labels));
       const mentions = resolveMentions(ctx, board.id, input.mentions);
       const kind: ThreadKind = input.task ? "task" : "discussion";
-      let assignee: string | null = null;
-      if (input.assignee !== undefined) {
-        if (kind !== "task") throw invalid("assignee only applies to tasks");
-        const [a] = resolveMentions(ctx, board.id, [input.assignee]);
-        assignee = a!;
-      }
-      chargePost(ctx, actor, board, bytes + Buffer.byteLength(title, "utf8"));
-      const now = nowIso(ctx);
-      const threadId = newId("t");
-      const state: TaskState | null = kind === "task" ? (assignee ? "claimed" : "open") : null;
-      ctx.db
-        .prepare(
-          `INSERT INTO threads (id, board_id, title, kind, labels, task_state, task_assignee_id, task_claimed_at, created_by, created_at, last_activity_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(threadId, board.id, title, kind, JSON.stringify(labels), state, assignee, assignee ? now : null, actor.id, now, now);
-      const thread = loadThread(ctx, threadId);
-      const row = insertMessage(ctx, emit, { board, thread, author: actor, body: input.body, bytes, replyTo: null, mentions, isRoot: true, ...(opts.source ? { source: opts.source } : {}) });
-      recordEvent(ctx, emit, { boardId: board.id, type: "thread.created", threadId, messageId: row.id, actorId: actor.id });
-      if (assignee && assignee !== actor.id) addInboxItem(ctx, emit, { principalId: assignee, kind: "task_assigned", boardId: board.id, threadId, messageId: row.id });
-      return { thread: presentThread(ctx, loadThread(ctx, threadId), actor.id), message: presentMessage(ctx, row) };
+      const task = prepareTask(ctx, actor, board.id, kind, input);
+      const { thread, message } = insertThread(ctx, emit, actor, board, { title, body: input.body, bytes, labels, mentions, kind, task }, opts);
+      const claim = task ? finishTaskCreation(ctx, emit, actor, board, thread.id, message.id, task, input.claim === true) : undefined;
+      return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id), message: presentMessage(ctx, message), ...(claim ? { claim } : {}) };
     });
   });
   const warn = usageWarnings(ctx, boardId);
@@ -307,7 +335,7 @@ export interface ReplyInput {
   idempotency_key?: string | undefined;
 }
 
-function replyInTx(ctx: AppContext, emit: Emit, actor: Actor, threadId: string, input: ReplyInput, opts: WriteOptions): { message: Message } {
+export function replyInTx(ctx: AppContext, emit: Emit, actor: Actor, threadId: string, input: ReplyInput, opts: WriteOptions): { message: Message } {
   const { board, thread } = requireThread(ctx, actor, threadId, "contributor");
   const { idempotency_key: key, ...payload } = input;
   return idempotent(ctx, actor, key, { op: "reply", threadId, ...payload }, () => {
@@ -402,16 +430,23 @@ export function getThread(
 export interface ListThreadsInput {
   filter?: "all" | "following" | "unread" | undefined;
   kind?: ThreadKind | undefined;
-  task_state?: TaskState | undefined;
+  task_state?: TaskStateFilter | undefined;
   assignee?: string | undefined;
+  for?: string | undefined;
   labels?: Record<string, string> | undefined;
   page_cursor?: string | undefined;
   limit?: number | undefined;
 }
 
-function labelClauses(labels: Record<string, string> | undefined, params: unknown[]): string {
+/** SQL for a label filter on `threads t`; the reserved `board.task` key matches the task state. */
+export function labelClauses(labels: Record<string, string> | undefined, params: unknown[]): string {
   let sql = "";
   for (const [k, v] of Object.entries(validateLabels(labels ?? {}))) {
+    const state = taskStateClause(k, v, params);
+    if (state !== null) {
+      sql += state;
+      continue;
+    }
     sql += ` AND json_extract(t.labels, '$."${k}"') = ?`;
     params.push(v);
   }
@@ -436,13 +471,14 @@ export function listThreads(ctx: AppContext, actor: Actor, boardId: string, inpu
       sql += " AND t.kind = ?";
       params.push(input.kind);
     }
-    if (input.task_state) {
-      sql += " AND t.task_state = ?";
-      params.push(input.task_state);
-    }
+    if (input.task_state) sql += taskStateClause("board.task", input.task_state, params) ?? "";
     if (input.assignee) {
       sql += " AND t.task_assignee_id = ?";
       params.push(input.assignee === "me" ? actor.id : input.assignee);
+    }
+    if (input.for) {
+      sql += " AND t.task_for_id = ?";
+      params.push(input.for === "me" ? actor.id : input.for);
     }
     sql += labelClauses(input.labels, params);
     const after = decodePage(input.page_cursor, `threads:${boardId}`);
@@ -478,6 +514,7 @@ export function setLabels(ctx: AppContext, actor: Actor, threadId: string, input
   return tx(ctx, (emit) => {
     const { thread } = requireThread(ctx, actor, threadId, "contributor");
     const current = JSON.parse(thread.labels) as Record<string, string>;
+    rejectReservedLabels([...Object.keys(input.set ?? {}), ...(input.remove ?? [])]);
     const both = (input.remove ?? []).filter((k) => input.set && k in input.set);
     if (both.length) throw invalid(`Label ${both.map((k) => `"${k}"`).join(", ")} is in both set and remove`);
     for (const k of input.remove ?? []) delete current[k];
@@ -488,100 +525,5 @@ export function setLabels(ctx: AppContext, actor: Actor, threadId: string, input
     ctx.db.prepare("UPDATE threads SET labels = ?, last_activity_at = ? WHERE id = ?").run(JSON.stringify(next), nowIso(ctx), thread.id);
     recordEvent(ctx, emit, { boardId: thread.board_id, type: "thread.updated", threadId: thread.id, actorId: actor.id });
     return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id) };
-  });
-}
-
-export function claimTask(
-  ctx: AppContext,
-  actor: Actor,
-  input: { thread_id?: string | undefined; board_id?: string | undefined; labels?: Record<string, string> | undefined },
-): { thread: Thread } {
-  if ((input.thread_id ? 1 : 0) + (input.board_id ? 1 : 0) !== 1) throw invalid("Pass exactly one of thread_id or board_id");
-  return tx(ctx, (emit) => {
-    let thread: ThreadRow;
-    if (input.thread_id) {
-      thread = requireThread(ctx, actor, input.thread_id, "contributor").thread;
-      if (thread.kind !== "task") throw new OmbError("task_not_claimable", "This thread is not a task", { state: null });
-      if (thread.task_state === "claimed") {
-        if (thread.task_assignee_id === actor.id) return { thread: presentThread(ctx, thread, actor.id) };
-        throw new OmbError("task_already_claimed", "Someone else has claimed this task", { assignee: thread.task_assignee_id ? refOf(ctx, thread.task_assignee_id) : null });
-      }
-      if (thread.task_state !== "open") throw new OmbError("task_not_claimable", `This task is ${thread.task_state}`, { state: thread.task_state });
-    } else {
-      requireMember(ctx, actor, input.board_id!, "contributor");
-      const params: unknown[] = [input.board_id];
-      const sql = "SELECT t.* FROM threads t WHERE t.board_id = ? AND t.kind = 'task' AND t.task_state = 'open'" + labelClauses(input.labels, params) + " ORDER BY t.created_at, t.id LIMIT 1";
-      const next = ctx.db.prepare(sql).get(...params) as ThreadRow | undefined;
-      if (!next) throw new OmbError("no_task_available", "No open task matches");
-      thread = next;
-    }
-    const now = nowIso(ctx);
-    const info = ctx.db
-      .prepare("UPDATE threads SET task_state = 'claimed', task_assignee_id = ?, task_claimed_at = ?, last_activity_at = ? WHERE id = ? AND task_state = 'open'")
-      .run(actor.id, now, now, thread.id);
-    if (info.changes === 0) {
-      const winner = loadThread(ctx, thread.id).task_assignee_id;
-      throw new OmbError("task_already_claimed", "Someone else claimed this task first", { assignee: winner ? refOf(ctx, winner) : null });
-    }
-    follow(ctx, actor.id, thread.id);
-    recordEvent(ctx, emit, { boardId: thread.board_id, type: "thread.updated", threadId: thread.id, actorId: actor.id });
-    return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id) };
-  });
-}
-
-export function updateTask(
-  ctx: AppContext,
-  actor: Actor,
-  threadId: string,
-  input: { action: TaskAction; result?: string | undefined; idempotency_key?: string | undefined },
-): { thread: Thread; message: Message | null } {
-  const boardId = (ctx.db.prepare("SELECT board_id FROM threads WHERE id = ?").get(threadId) as { board_id: string } | undefined)?.board_id;
-  if (boardId) checkWriteRate(ctx, actor, boardId, {});
-  return tx(ctx, (emit) => {
-    const { thread, membership } = requireThread(ctx, actor, threadId, "contributor");
-    const { idempotency_key: key, ...payload } = input;
-    return idempotent(ctx, actor, key, { op: "update_task", threadId, ...payload }, () => {
-      if (thread.kind !== "task" || !thread.task_state) throw new OmbError("task_not_claimable", "This thread is not a task", { state: null });
-      const isOwner = membership.role === "owner";
-      const isAssignee = thread.task_assignee_id === actor.id;
-      const isCreator = thread.created_by === actor.id;
-      const state = thread.task_state;
-      const now = nowIso(ctx);
-      let next: TaskState;
-      switch (input.action) {
-        case "complete":
-          if (!(isAssignee || isOwner)) throw forbidden("Only the assignee or the board owner can complete this task");
-          if (state !== "claimed" && !(isOwner && state === "open")) throw new OmbError("conflict", `A ${state} task can't be completed`, { state });
-          next = "done";
-          break;
-        case "release":
-          if (!(isAssignee || isOwner)) throw forbidden("Only the assignee or the board owner can release this task");
-          if (state !== "claimed") throw new OmbError("conflict", `A ${state} task can't be released`, { state });
-          next = "open";
-          break;
-        case "cancel":
-          if (!(isCreator || isOwner)) throw forbidden("Only the task's creator or the board owner can cancel it");
-          if (state !== "open" && state !== "claimed") throw new OmbError("conflict", `A ${state} task can't be cancelled`, { state });
-          next = "cancelled";
-          break;
-        case "reopen":
-          if (!(isCreator || isOwner)) throw forbidden("Only the task's creator or the board owner can reopen it");
-          if (state !== "done" && state !== "cancelled") throw new OmbError("conflict", `A ${state} task can't be reopened`, { state });
-          next = "open";
-          break;
-        default:
-          throw invalid("Unknown task action");
-      }
-      let message: Message | null = null;
-      if (input.result !== undefined && input.result.trim()) {
-        message = replyInTx(ctx, emit, actor, thread.id, { body: input.result }, {}).message;
-      }
-      const assignee = next === "open" ? null : next === "done" ? (thread.task_assignee_id ?? actor.id) : thread.task_assignee_id;
-      ctx.db
-        .prepare("UPDATE threads SET task_state = ?, task_assignee_id = ?, task_claimed_at = ?, task_completed_at = ?, last_activity_at = ? WHERE id = ?")
-        .run(next, assignee, next === "open" ? null : thread.task_claimed_at, next === "done" ? now : null, now, thread.id);
-      recordEvent(ctx, emit, { boardId: thread.board_id, type: "thread.updated", threadId: thread.id, actorId: actor.id });
-      return { thread: presentThread(ctx, loadThread(ctx, thread.id), actor.id), message };
-    });
   });
 }

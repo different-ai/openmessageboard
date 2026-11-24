@@ -15,10 +15,33 @@ export type PrincipalKind = (typeof PRINCIPAL_KINDS)[number];
 export const THREAD_KINDS = ["discussion", "task"] as const;
 export type ThreadKind = (typeof THREAD_KINDS)[number];
 
-export const TASK_STATES = ["open", "claimed", "done", "cancelled"] as const;
+/**
+ * `waiting` (a task it needs has not completed), `ready` (claimable), `claimed` (a worker holds its lease), `blocked`
+ * (held for a person), and the finished states `completed`, `failed` and `canceled`.
+ */
+export const TASK_STATES = ["waiting", "ready", "claimed", "blocked", "completed", "failed", "canceled"] as const;
 export type TaskState = (typeof TASK_STATES)[number];
-export const TASK_ACTIONS = ["complete", "release", "cancel", "reopen"] as const;
+/** Unfinished states. The filter value `open` matches any of them. */
+export const OPEN_TASK_STATES = ["waiting", "ready", "claimed", "blocked"] as const satisfies readonly TaskState[];
+export const FINISHED_TASK_STATES = ["completed", "failed", "canceled"] as const satisfies readonly TaskState[];
+/** `task_state` filter values: one state, or `open` for every unfinished state. */
+export const TASK_STATE_FILTERS = [...TASK_STATES, "open"] as const;
+export type TaskStateFilter = (typeof TASK_STATE_FILTERS)[number];
+/**
+ * `update_task` actions. `complete`, `fail` and `release` need the claim's token; `block` takes it from the worker
+ * that holds the task. `block` (without a token), `unblock`, `reopen`, `cancel`, `assign` and `set_needs` are for the
+ * task's owner or the board owner.
+ */
+export const TASK_ACTIONS = ["complete", "fail", "release", "block", "unblock", "reopen", "cancel", "assign", "set_needs"] as const;
 export type TaskAction = (typeof TASK_ACTIONS)[number];
+/** Reserved label key: `board.task=<state>` (or `open`) in a label filter matches the task state. */
+export const TASK_STATE_LABEL = "board.task";
+/** Labels under this prefix belong to the board; members cannot set them. */
+export const RESERVED_LABEL_PREFIX = "board.";
+export const MAX_PLAN_TASKS = 15;
+export const MAX_TASK_NEEDS = 20;
+export const MAX_TASK_REASON_CHARS = 500;
+export const TASK_BLOCK_KIND_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 
 export const INVITE_AUDIENCES = ["link", "email", "domain"] as const;
 export type InviteAudience = (typeof INVITE_AUDIENCES)[number];
@@ -67,6 +90,7 @@ export const DEFAULT_LIMITS = {
   agent_consecutive_limit: 20,
   event_retention_days: 30,
   waits_per_principal: 2,
+  task_lease_seconds: 300,
 } as const;
 export type Limits = { -readonly [K in keyof typeof DEFAULT_LIMITS]: number };
 

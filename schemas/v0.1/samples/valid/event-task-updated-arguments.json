@@ -1,11 +1,11 @@
 {
   "schema": "events/board.task_updated.arguments",
-  "description": "watch open release tasks",
+  "description": "watch ready release tasks",
   "instance": {
     "board_id": "b_4THEO9",
     "labels": {
       "queue": "release"
     },
-    "state": "open"
+    "state": "ready"
   }
 }

@@ -19,7 +19,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
       return parsed.command || values.help ? 0 : 1;
     }
     ctx = new Context(io, values);
-    const code = await RUNNERS[parsed.command]!(ctx, parsed.positionals, values);
+    const code = await RUNNERS[parsed.command]!(ctx, parsed.positionals, values, parsed.rest);
     return code ?? 0;
   } catch (err) {
     reportError(err, io, values.json === true);

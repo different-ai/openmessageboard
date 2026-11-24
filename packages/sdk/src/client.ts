@@ -11,6 +11,7 @@ import {
   type Message,
   type Principal,
   type ServerInfo,
+  type TaskClaim,
   type Thread,
   type ToolInput,
   type ToolName,
@@ -20,6 +21,7 @@ import type { z } from "zod";
 import { staticToken, type TokenProvider } from "./auth.js";
 import { discoverServer, normalizeServer } from "./discovery.js";
 import { OmbError, errorFromBody, isOmbError, toOmbError } from "./errors.js";
+import { ClaimedTask, type PlanTask } from "./tasks.js";
 import { waitForChanges, type WaitForChangesOptions, type WaitResult } from "./wait.js";
 import { watch, type WatchHandle, type WatchOptions, type WatchTarget } from "./watch.js";
 
@@ -267,11 +269,20 @@ export class OmbClient {
   listMembers(input: ToolInput<"list_members">, options?: CallOptions) {
     return this.call("list_members", input, options);
   }
+  /** Claims a task (`thread_id`) or the oldest ready one (`board_id`, `labels`, optional `wait_seconds`). */
   claimTask(input: ToolInput<"claim_task">, options?: CallOptions) {
-    return this.call("claim_task", input, options);
+    // The HTTP request must outlive a server-side wait.
+    const timeoutMs = options?.timeoutMs ?? (input.wait_seconds ? Math.max(this.#timeoutMs, (input.wait_seconds + 15) * 1000) : undefined);
+    return this.call("claim_task", input, timeoutMs ? { ...options, timeoutMs } : options);
+  }
+  renewTask(input: ToolInput<"renew_task">, options?: CallOptions) {
+    return this.call("renew_task", input, options);
   }
   updateTask(input: ToolInput<"update_task">, options?: CallOptions) {
     return this.call("update_task", input, options);
+  }
+  createTasks(input: ToolInput<"create_tasks">, options?: CallOptions) {
+    return this.call("create_tasks", input, options);
   }
   setLabels(input: ToolInput<"set_labels">, options?: CallOptions) {
     return this.call("set_labels", input, options);
@@ -340,15 +351,56 @@ export class OmbClient {
     return first && "seq" in first ? first.message : null;
   }
 
-  /** Claims the oldest open task on a board whose labels match. Resolves `null` when none is available. */
-  async claimNext(boardId: string, labels?: Labels, options?: CallOptions): Promise<Thread | null> {
-    try {
-      const { thread } = await this.claimTask({ board_id: boardId, ...(labels && Object.keys(labels).length ? { labels } : {}) }, options);
-      return thread;
-    } catch (err) {
-      if (isOmbError(err, "no_task_available")) return null;
-      throw err;
+  /** Claims one task by ID. Throws `task_already_claimed`, `task_waiting`, `task_blocked`, `task_finished` or `task_assigned` when it can't. */
+  async claim(threadId: string, options: CallOptions & { leaseSeconds?: number } = {}): Promise<ClaimedTask> {
+    const { leaseSeconds, ...call } = options;
+    const res = await this.claimTask({ thread_id: threadId, ...(leaseSeconds ? { lease_seconds: leaseSeconds } : {}) }, call);
+    return new ClaimedTask(this, res.thread, res.claim);
+  }
+
+  /**
+   * Claims the oldest ready task on a board whose labels match: tasks kept for you first, then unassigned ones.
+   * `waitSeconds` keeps waiting for one to become ready (any length; the server waits up to 25 s per request).
+   * Resolves `null` when none is ready in time.
+   */
+  async claimNext(
+    boardId: string,
+    labels?: Labels,
+    options: CallOptions & { waitSeconds?: number; leaseSeconds?: number } = {},
+  ): Promise<ClaimedTask | null> {
+    const { waitSeconds, leaseSeconds, ...call } = options;
+    const deadline = Date.now() + (waitSeconds ?? 0) * 1000;
+    for (;;) {
+      const remaining = Math.ceil((deadline - Date.now()) / 1000);
+      try {
+        const res = await this.claimTask(
+          {
+            board_id: boardId,
+            ...(labels && Object.keys(labels).length ? { labels } : {}),
+            ...(remaining > 0 ? { wait_seconds: Math.min(remaining, 25) } : {}),
+            ...(leaseSeconds ? { lease_seconds: leaseSeconds } : {}),
+          },
+          call,
+        );
+        return new ClaimedTask(this, res.thread, res.claim);
+      } catch (err) {
+        if (!isOmbError(err, "no_task_available")) throw err;
+        if (Date.now() >= deadline || call.signal?.aborted) return null;
+      }
     }
+  }
+
+  /** A claim stored earlier (`{ epoch, token }` from `ClaimedTask.claim`), for another process to settle. */
+  async heldTask(threadId: string, claim: TaskClaim, options?: CallOptions): Promise<ClaimedTask> {
+    const { thread } = await this.getThread({ thread_id: threadId, limit: 1 }, options);
+    return new ClaimedTask(this, thread, claim);
+  }
+
+  /** Creates up to 15 tasks in one write, all or none. `needs` can name another task in the plan by `{ key }`. */
+  async createMany(boardId: string, tasks: PlanTask[], options: CallOptions & { idempotencyKey?: string } = {}): Promise<Thread[]> {
+    const { idempotencyKey, ...call } = options;
+    const res = await this.createTasks({ board_id: boardId, tasks, ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}) }, call);
+    return res.threads;
   }
 
   /**
@@ -418,7 +470,9 @@ export const TOOL_METHODS = {
   search_messages: "searchMessages",
   list_members: "listMembers",
   claim_task: "claimTask",
+  renew_task: "renewTask",
   update_task: "updateTask",
+  create_tasks: "createTasks",
   set_labels: "setLabels",
   create_invite: "createInvite",
   redeem_invite: "redeemInvite",

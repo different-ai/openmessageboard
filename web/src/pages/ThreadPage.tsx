@@ -3,10 +3,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { api, isApiError } from "../api";
 import { useBoard, useBoardChanges } from "../board";
 import { MarkdownEditor, extractMentions, useIdempotencyKey } from "../composer";
-import { formatDateTime, labelError, newIdempotencyKey, MAX_LABELS } from "../format";
+import { labelError, MAX_LABELS } from "../format";
 import { excerpt, Markdown } from "../markdown";
 import { Link, useTitle } from "../router";
 import { AccessRequired } from "./Status";
+import { TaskPanel } from "./TaskPanel";
 import {
   Author,
   Avatar,
@@ -179,6 +180,7 @@ export function ThreadPage({ threadId }: { threadId: string }) {
       <aside className="aside-col">
         {thread.task && (
           <TaskPanel
+            key={thread.id}
             thread={thread}
             onThread={setThread}
             onMessage={(m) => setMessages((list) => upsertMessage(list, m))}
@@ -383,161 +385,6 @@ function ReplyForm({
         </button>
       </div>
     </form>
-  );
-}
-
-function TaskPanel({
-  thread,
-  onThread,
-  onMessage,
-}: {
-  thread: Thread;
-  onThread: (t: Thread) => void;
-  onMessage: (m: Message) => void;
-}) {
-  const { board, meId, isOwner, canWrite } = useBoard();
-  const task = thread.task!;
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [completing, setCompleting] = useState(false);
-  const [result, setResult] = useState("");
-  const resultId = useId();
-  const toast = useToast();
-  const isAssignee = task.assignee?.id === meId;
-  const isCreator = thread.created_by.id === meId;
-  const canFinish = isAssignee || isOwner;
-  const canCancel = isCreator || isOwner;
-
-  async function run(label: string, fn: () => Promise<{ thread: Thread; message?: Message | null }>, done: string) {
-    setBusy(label);
-    setError(null);
-    try {
-      const res = await fn();
-      onThread(res.thread);
-      if (res.message) onMessage(res.message);
-      toast(done, "success");
-      setCompleting(false);
-      setResult("");
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const update = (action: "complete" | "release" | "cancel" | "reopen", extra?: string) =>
-    api.updateTask(thread.id, { action, result: extra || undefined, idempotency_key: newIdempotencyKey() });
-
-  return (
-    <section className="card panel" aria-labelledby="task-title">
-      <h2 id="task-title">Task</h2>
-      <dl className="facts">
-        <div>
-          <dt>State</dt>
-          <dd>
-            <TaskBadge state={task.state} />
-          </dd>
-        </div>
-        <div>
-          <dt>Assignee</dt>
-          <dd>{task.assignee ? <Author p={task.assignee} /> : <span className="muted">Nobody yet</span>}</dd>
-        </div>
-        {task.claimed_at && (
-          <div>
-            <dt>Claimed</dt>
-            <dd title={formatDateTime(task.claimed_at)}>
-              <TimeAgo iso={task.claimed_at} />
-            </dd>
-          </div>
-        )}
-        {task.completed_at && (
-          <div>
-            <dt>{task.state === "cancelled" ? "Closed" : "Completed"}</dt>
-            <dd>
-              <TimeAgo iso={task.completed_at} />
-            </dd>
-          </div>
-        )}
-      </dl>
-      {canWrite && (
-        <div className="task-actions">
-          {task.state === "open" && (
-            <button
-              type="button"
-              className="button button-primary"
-              disabled={!!busy}
-              onClick={() => run("claim", () => api.claimTask(board.id, { thread_id: thread.id }), "You claimed this task.")}
-            >
-              {busy === "claim" ? "Claiming…" : "Claim"}
-            </button>
-          )}
-          {task.state === "claimed" && canFinish && !completing && (
-            <button type="button" className="button button-primary" disabled={!!busy} onClick={() => setCompleting(true)}>
-              Complete…
-            </button>
-          )}
-          {task.state === "claimed" && canFinish && (
-            <button
-              type="button"
-              className="button"
-              disabled={!!busy}
-              onClick={() => run("release", () => update("release"), "Task released. It's open again.")}
-            >
-              {busy === "release" ? "Releasing…" : "Release"}
-            </button>
-          )}
-          {(task.state === "open" || task.state === "claimed") && canCancel && (
-            <button
-              type="button"
-              className="button"
-              disabled={!!busy}
-              onClick={() => run("cancel", () => update("cancel"), "Task cancelled.")}
-            >
-              {busy === "cancel" ? "Cancelling…" : "Cancel task"}
-            </button>
-          )}
-          {(task.state === "done" || task.state === "cancelled") && canCancel && (
-            <button
-              type="button"
-              className="button"
-              disabled={!!busy}
-              onClick={() => run("reopen", () => update("reopen"), "Task reopened.")}
-            >
-              {busy === "reopen" ? "Reopening…" : "Reopen"}
-            </button>
-          )}
-        </div>
-      )}
-      {completing && (
-        <form
-          className="stack complete-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run("complete", () => update("complete", result.trim()), "Task marked done.");
-          }}
-        >
-          <div className="field">
-            <label htmlFor={resultId}>Result (optional)</label>
-            <textarea
-              id={resultId}
-              rows={4}
-              value={result}
-              onChange={(e) => setResult(e.target.value)}
-              placeholder="What was done? Posted as a reply. Markdown supported."
-            />
-          </div>
-          <div className="actions">
-            <button type="button" className="button" onClick={() => setCompleting(false)}>
-              Back
-            </button>
-            <button type="submit" className="button button-primary" disabled={!!busy}>
-              {busy === "complete" ? "Completing…" : "Mark done"}
-            </button>
-          </div>
-        </form>
-      )}
-      <ErrorNote error={error} />
-    </section>
   );
 }
 

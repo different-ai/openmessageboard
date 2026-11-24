@@ -9,6 +9,7 @@ import { decodeCursor, encodeCursor } from "../domain/cursors.js";
 import { presentChanges } from "../domain/changes.js";
 import type { Actor, EventRow, InboxRow, MessageRow, ThreadRow } from "../domain/model.js";
 import { presentInbox, presentMessages, presentThreads } from "../domain/present.js";
+import { labelsMatch } from "../domain/tasks.js";
 import { boardLimits, limitsFor } from "../domain/plans.js";
 import { CallbackError, newWebhookId, postSigned, validateCallbackUrl, type CallbackPolicy } from "./webhook-http.js";
 
@@ -152,7 +153,7 @@ export function occurrencesAfter(
       if (!row || row.kind !== "task") continue;
       const thread = presentThreads(ctx, [row], actor.id)[0]!;
       if (args.state && thread.task?.state !== args.state) continue;
-      if (args.labels && Object.entries(args.labels).some(([k, v]) => thread.labels[k] !== v)) continue;
+      if (args.labels && !labelsMatch(thread, args.labels)) continue;
       const change = presentChanges(ctx, [r], actor.id)[0]!;
       out.push({
         eventId: `${row.id}-${r.seq}`,

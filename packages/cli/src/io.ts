@@ -1,3 +1,4 @@
+import type { ChildProcess } from "node:child_process";
 import { OmbError } from "@openmessageboard/sdk";
 
 export interface Input extends NodeJS.EventEmitter {
@@ -17,6 +18,10 @@ export interface Io {
   now?: () => Date;
   /** Registers a Ctrl-C handler; returns an unregister function. */
   onInterrupt?: (handler: () => void) => () => void;
+  /** Registers a SIGINT or SIGTERM handler (`tasks run`); returns an unregister function. */
+  onSignal?: (signal: "SIGINT" | "SIGTERM", handler: () => void) => () => void;
+  /** Starts a child process (`tasks run`). Defaults to `child_process.spawn` with inherited stdio. */
+  spawn?: (command: string, args: string[], env: NodeJS.ProcessEnv) => ChildProcess;
 }
 
 export async function readAll(input: Input): Promise<string> {

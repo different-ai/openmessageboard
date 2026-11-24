@@ -7,6 +7,8 @@ import {
   type Message,
   type PrincipalRef,
   type SyncPlatform,
+  type TaskNeed,
+  type TaskState,
   type Thread,
   type InboxItem,
   type Invite,
@@ -85,9 +87,10 @@ function parseLabels(raw: string): Record<string, string> {
 /** Presents threads for a viewer (following and unread counts are per viewer). */
 export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: string | null): Thread[] {
   if (rows.length === 0) return [];
-  const refs = principalRefs(ctx, rows.flatMap((t) => [t.created_by, t.task_assignee_id]));
+  const refs = principalRefs(ctx, rows.flatMap((t) => [t.created_by, t.task_assignee_id, t.task_for_id]));
   const ids = rows.map((t) => t.id);
   const ph = ids.map(() => "?").join(",");
+  const tasks = taskDetails(ctx, rows);
   const following = new Set<string>();
   const unread = new Map<string, number>();
   if (viewerId) {
@@ -126,9 +129,18 @@ export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: str
       t.kind === "task" && t.task_state
         ? {
             state: t.task_state,
+            owner: refs.get(t.created_by)!,
+            for: t.task_for_id ? (refs.get(t.task_for_id) ?? null) : null,
             assignee: t.task_assignee_id ? (refs.get(t.task_assignee_id) ?? null) : null,
             claimed_at: t.task_claimed_at,
+            lease_until: t.task_state === "claimed" ? t.task_lease_until : null,
             completed_at: t.task_completed_at,
+            needs: tasks.needs.get(t.id) ?? [],
+            result: t.task_result_message_id ? (tasks.results.get(t.task_result_message_id) ?? null) : null,
+            failure_reason: t.task_state === "failed" ? t.task_reason : null,
+            blocked_reason: t.task_state === "blocked" ? t.task_reason : null,
+            blocked_kind: t.task_state === "blocked" ? t.task_blocked_kind : null,
+            canceled_reason: t.task_state === "canceled" ? t.task_reason : null,
           }
         : null,
     created_by: refs.get(t.created_by)!,
@@ -139,6 +151,34 @@ export function presentThreads(ctx: AppContext, rows: ThreadRow[], viewerId: str
     unread_count: unread.get(t.id) ?? 0,
     links: links.get(t.id) ?? [],
   }));
+}
+
+/** Prerequisites and result bodies for the task rows among `rows`, in two queries. */
+function taskDetails(ctx: AppContext, rows: ThreadRow[]): { needs: Map<string, TaskNeed[]>; results: Map<string, string> } {
+  const needs = new Map<string, TaskNeed[]>();
+  const results = new Map<string, string>();
+  const taskIds = rows.filter((t) => t.kind === "task").map((t) => t.id);
+  if (taskIds.length) {
+    for (const r of ctx.db
+      .prepare(
+        `SELECT n.task_id, p.id, p.title, p.task_state FROM task_needs n JOIN threads p ON p.id = n.needs_id
+         WHERE n.task_id IN (${taskIds.map(() => "?").join(",")}) ORDER BY p.created_at, p.id`,
+      )
+      .all(...taskIds) as { task_id: string; id: string; title: string; task_state: TaskState }[]) {
+      const list = needs.get(r.task_id) ?? [];
+      list.push({ thread_id: r.id, title: r.title, state: r.task_state });
+      needs.set(r.task_id, list);
+    }
+  }
+  const resultIds = rows.map((t) => t.task_result_message_id).filter((x): x is string => !!x);
+  if (resultIds.length) {
+    for (const m of ctx.db
+      .prepare(`SELECT id, body FROM messages WHERE id IN (${resultIds.map(() => "?").join(",")}) AND deleted_at IS NULL`)
+      .all(...resultIds) as { id: string; body: string | null }[]) {
+      if (m.body !== null) results.set(m.id, m.body);
+    }
+  }
+  return { needs, results };
 }
 
 export function presentThread(ctx: AppContext, row: ThreadRow, viewerId: string | null): Thread {

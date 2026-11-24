@@ -2,6 +2,7 @@ import {
   AddAgentToBoardBody,
   ClaimTaskBody,
   CreateAgentBody,
+  CreateTasksBody,
   CreateBoardBody,
   CreateInviteBody,
   CreateTokenBody,
@@ -9,12 +10,13 @@ import {
   FollowBody,
   LabelsBody,
   MarkReadBody,
+  RenewTaskBody,
   ReplyBody,
   StartThreadBody,
   UpdateBoardBody,
   UpdateMemberBody,
   UpdateTaskBody,
-  TASK_STATES,
+  TASK_STATE_FILTERS,
   THREAD_KINDS,
   type ServerInfo,
 } from "@openmessageboard/protocol";
@@ -24,6 +26,7 @@ import { invalid } from "../errors.js";
 import * as boards from "../domain/boards.js";
 import * as invites from "../domain/invites.js";
 import * as convo from "../domain/conversation.js";
+import * as tasks from "../domain/tasks.js";
 import * as changes from "../domain/changes.js";
 import * as usage from "../domain/usage.js";
 import * as portability from "../domain/portability.js";
@@ -99,13 +102,14 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
     const q = c.req.query();
     const filter = z.enum(["all", "following", "unread"]).optional().parse(q.filter || undefined);
     const kind = z.enum(THREAD_KINDS).optional().parse(q.kind || undefined);
-    const taskState = z.enum(TASK_STATES).optional().parse(q.task_state || undefined);
+    const taskState = z.enum(TASK_STATE_FILTERS).optional().parse(q.task_state || undefined);
     return c.json(
       convo.listThreads(ctx, requireActor(c), c.req.param("boardId"), {
         filter,
         kind,
         task_state: taskState,
         assignee: q.assignee || undefined,
+        for: q.for || undefined,
         labels: labelsFromQuery(c.req.queries("label") ?? []),
         page_cursor: q.page_cursor || undefined,
         limit: int(q.limit),
@@ -120,11 +124,13 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   app.delete("/api/messages/:messageId", (c) => c.json(convo.deleteMessage(ctx, requireActor(c), c.req.param("messageId"))));
   app.put("/api/threads/:threadId/follow", async (c) => c.json(convo.setFollow(ctx, requireActor(c), c.req.param("threadId"), (await parseBody(c, FollowBody)).following)));
   app.post("/api/threads/:threadId/labels", async (c) => c.json(convo.setLabels(ctx, requireActor(c), c.req.param("threadId"), await parseBody(c, LabelsBody))));
-  app.post("/api/threads/:threadId/task", async (c) => c.json(convo.updateTask(ctx, requireActor(c), c.req.param("threadId"), await parseBody(c, UpdateTaskBody))));
+  app.post("/api/threads/:threadId/task", async (c) => c.json(tasks.updateTask(ctx, requireActor(c), c.req.param("threadId"), await parseBody(c, UpdateTaskBody))));
+  app.post("/api/threads/:threadId/task/renew", async (c) => c.json(tasks.renewTask(ctx, requireActor(c), c.req.param("threadId"), await parseBody(c, RenewTaskBody))));
+  app.post("/api/boards/:boardId/tasks", async (c) => c.json(tasks.createTasks(ctx, requireActor(c), c.req.param("boardId"), await parseBody(c, CreateTasksBody))));
   app.post("/api/boards/:boardId/tasks/claim", async (c) => {
-    const body = await parseBody(c, ClaimTaskBody);
-    const input = body.thread_id ? { thread_id: body.thread_id } : { board_id: c.req.param("boardId"), labels: body.labels };
-    return c.json(convo.claimTask(ctx, requireActor(c), input));
+    const { thread_id, labels, wait_seconds, lease_seconds } = await parseBody(c, ClaimTaskBody);
+    const input = thread_id ? { thread_id, lease_seconds } : { board_id: c.req.param("boardId"), labels, wait_seconds, lease_seconds };
+    return c.json(await tasks.claimTask(ctx, requireActor(c), input, c.req.raw.signal));
   });
 
   // inbox and changes

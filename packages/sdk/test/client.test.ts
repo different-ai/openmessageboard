@@ -99,6 +99,51 @@ describe("OmbClient against the fake server", () => {
     assert.deepEqual(fake.calls.at(-1)?.args, { board_id: fake.boardId, labels: { area: "ios" } });
   });
 
+  it("claimNext waits in server-side slices and returns a ClaimedTask that renews and completes", async () => {
+    const { thread } = fake.addThread("Fix it", undefined, "Do it", { task: true, labels: { area: "ios" } });
+    let calls = 0;
+    fake.tools.claim_task = (args) => {
+      calls++;
+      if (calls === 1) throw new ToolError("no_task_available", "Nothing yet");
+      return { thread: { ...thread, task: { ...thread.task!, state: "claimed" } }, claim: { epoch: 3, token: "tok-1", until: "2026-11-24T12:05:00.000Z" } };
+    };
+    fake.tools.renew_task = (args) => {
+      assert.equal(args.token, "tok-1");
+      return { thread, claim: { epoch: 3, token: "tok-1", until: "2026-11-24T12:10:00.000Z" } };
+    };
+    let settled: Record<string, unknown> | undefined;
+    fake.tools.update_task = (args) => {
+      settled = args;
+      if (args.action === "fail") throw new ToolError("claim_lost", "This claim is over", { state: "ready" });
+      return { thread, message: null };
+    };
+    const claimed = await client.claimNext(fake.boardId, { area: "ios" }, { waitSeconds: 30 });
+    assert.ok(claimed);
+    assert.equal(calls, 2);
+    assert.equal(fake.calls.filter((c) => c.name === "claim_task").at(-1)?.args.wait_seconds, 25);
+    assert.equal(claimed.id, thread.id);
+    assert.equal(claimed.epoch, 3);
+    await claimed.renew();
+    assert.equal(claimed.until, "2026-11-24T12:10:00.000Z");
+    await claimed.complete("Done.", { idempotencyKey: "k-1" });
+    assert.deepEqual(settled, { thread_id: thread.id, action: "complete", token: "tok-1", result: "Done.", idempotency_key: "k-1" });
+    await assert.rejects(claimed.fail("gave up"), (err: unknown) => err instanceof OmbError && err.code === "claim_lost");
+    delete fake.tools.claim_task;
+    delete fake.tools.renew_task;
+    delete fake.tools.update_task;
+  });
+
+  it("createMany sends the plan in one call", async () => {
+    fake.tools.create_tasks = () => ({ threads: [] });
+    await client.createMany(fake.boardId, [{ key: "a", title: "A", body: "a" }, { title: "B", body: "b", needs: [{ key: "a" }] }], { idempotencyKey: "plan-1" });
+    assert.deepEqual(fake.calls.at(-1)?.args, {
+      board_id: fake.boardId,
+      tasks: [{ key: "a", title: "A", body: "a" }, { title: "B", body: "b", needs: [{ key: "a" }] }],
+      idempotency_key: "plan-1",
+    });
+    delete fake.tools.create_tasks;
+  });
+
   it("waitForReply resolves with the next message from someone else", async () => {
     const fresh = new FakeServer();
     await fresh.start();

@@ -75,6 +75,15 @@ export interface ThreadRow {
   task_assignee_id: string | null;
   task_claimed_at: string | null;
   task_completed_at: string | null;
+  task_for_id: string | null;
+  task_lease_until: string | null;
+  task_claim_epoch: number;
+  /** Fences a claim (not a credential: actions also need the claimer's own identity). */
+  task_claim_token: string | null;
+  task_result_message_id: string | null;
+  /** The failure, block or cancel reason, for the state the task is in. */
+  task_reason: string | null;
+  task_blocked_kind: string | null;
   created_by: string;
   created_at: string;
   last_activity_at: string;
