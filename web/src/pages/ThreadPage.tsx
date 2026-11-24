@@ -365,6 +365,7 @@ function ReplyForm({
   }
 
   return (
+    <>
     <form className="card composer reply" onSubmit={submit} aria-label="Reply">
       {replyTo && (
         <div className="replying-to">
@@ -395,7 +396,9 @@ function ReplyForm({
           {busy ? "Sending…" : error ? "Retry" : "Reply"}
         </button>
       </div>
-      <ScheduleDialog
+    </form>
+    {/* Outside the reply form: forms can't nest. */}
+    <ScheduleDialog
         open={scheduling}
         onClose={() => setScheduling(false)}
         threadId={thread.id}
@@ -407,7 +410,7 @@ function ReplyForm({
           toast(`Scheduled for ${s.next_run_at ? formatDateTime(s.next_run_at) : "later"}.`, "success");
         }}
       />
-    </form>
+    </>
   );
 }
 

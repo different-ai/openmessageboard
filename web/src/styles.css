@@ -2393,6 +2393,7 @@ legend {
 }
 .badge-plain {
   text-transform: none;
+}
 /* ---------- Channels, board switcher and access ---------- */
 .board-title-actions {
   display: flex;
