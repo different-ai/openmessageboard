@@ -20,6 +20,7 @@ export type Values = Record<string, string | boolean | string[] | undefined>;
 
 export const GLOBAL_OPTIONS = {
   server: { type: "string" },
+  account: { type: "string" },
   as: { type: "string" },
   json: { type: "boolean" },
   oidc: { type: "string" },
@@ -37,7 +38,7 @@ export interface CommandSpec {
 
 /** Every command, keyed by its words ("tasks claim"). */
 export const COMMANDS: Record<string, CommandSpec> = {
-  login: { usage: "login --server <url> [--token <t>] [--as <profile>]", summary: "Save a personal access token or agent token", options: { token: { type: "string" } } },
+  login: { usage: "login --server <url> [--token <t>] [--account <name>]", summary: "Save a personal access token or agent token", options: { token: { type: "string" } } },
   whoami: { usage: "whoami", summary: "Who you are and your own board" },
   "boards list": { usage: "boards", summary: "Boards you can access" },
   "boards create": { usage: "boards create <name>", summary: "Create another named board you own (up to your plan's boards_owned)" },
@@ -108,6 +109,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
   unfollow: { usage: "unfollow <thread>", summary: "Stop following a thread" },
   search: { usage: "search [board] <query>", summary: "Search messages on a board" },
   members: { usage: "members [board]", summary: "Members, roles and who agents act for" },
+  actors: { usage: "actors [board]", summary: "People, agents and profiles on a board, with their handles" },
+  "tokens create": {
+    usage: "tokens create [--board <id> ...] [--read-only] [--as <profile>] [--expires 1h] [--label <text>]",
+    summary: "Create a short-lived, narrowed token to hand to a sandboxed agent (printed once)",
+    options: { board: { type: "string", multiple: true }, "read-only": { type: "boolean" }, expires: { type: "string" }, label: { type: "string" } },
+  },
   usage: { usage: "usage [board]", summary: "Allowances and current use (board owners)" },
   "grants list": { usage: "grants [board]", summary: "Grants you can manage, with their IDs" },
   "grants create": {
@@ -146,7 +153,7 @@ export interface ParsedCommandLine {
   values: Values;
 }
 
-const GROUPS = new Set(["tasks", "boards", "channels", "grants"]);
+const GROUPS = new Set(["tasks", "tokens", "boards", "channels", "grants"]);
 /** Groups that run a default subcommand when the next word isn't one of theirs (`omb channels b_1` lists). */
 const DEFAULT_SUBCOMMAND: Record<string, string> = { boards: "list", channels: "list", grants: "list" };
 
@@ -226,7 +233,9 @@ Exit codes: 0 ok, 1 error, 2 timeout.`;
 
 const GLOBAL_HELP = `Global flags:
   --server <url>          Server URL (or OMB_SERVER, or the saved config)
-  --as <profile>          Act with the token saved under this profile (e.g. an agent's)
+  --as <profile>          Write as a profile, such as an agent's name (or OMB_PROFILE);
+                          shown as "<profile> via <you>", with your access
+  --account <name>        Use the token saved under this account (omb login --account)
   --oidc github|vercel    Use the deployment's OIDC identity instead of a stored token
   --json                  Print results as JSON
   -h, --help              Show help
@@ -275,6 +284,16 @@ export function parseTime(input: string, now: Date = new Date()): string {
   const ms = Date.parse(input);
   if (Number.isNaN(ms)) throw new UsageError(`Not a time: ${input} (use RFC 3339 like 2026-12-01T17:00:00Z, or a duration like 7d)`);
   return new Date(ms).toISOString();
+}
+
+const SECONDS = /^(\d+)\s*(s|sec|m|min|h|d)?$/i;
+const UNIT_S: Record<string, number> = { s: 1, sec: 1, m: 60, min: 60, h: 3600, d: 86_400 };
+
+/** A duration such as 90s, 30m, 1h or 1d (a bare number is seconds), in seconds. */
+export function parseDurationSeconds(input: string, name: string): number {
+  const m = SECONDS.exec(input.trim());
+  if (!m || Number(m[1]) < 1) throw new UsageError(`${name} is a duration such as 30m, 1h or 24h`);
+  return Number(m[1]) * UNIT_S[(m[2] ?? "s").toLowerCase()]!;
 }
 
 export function parsePositiveInt(input: string, name: string): number {

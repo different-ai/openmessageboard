@@ -20,6 +20,8 @@ export interface CallRecord {
   name: string;
   args: Record<string, unknown>;
   auth: string | undefined;
+  /** The `OMB-Profile` header, when sent. */
+  profile?: string | undefined;
 }
 
 export interface CallContext {
@@ -333,7 +335,8 @@ export class FakeServer {
     const name = params.name as string;
     const args = (params.arguments ?? {}) as Record<string, unknown>;
     const auth = req.headers.authorization;
-    this.calls.push({ name, args, auth });
+    const profile = req.headers["omb-profile"];
+    this.calls.push({ name, args, auth, ...(typeof profile === "string" ? { profile } : {}) });
     if (auth === "Bearer bad-token") {
       res.writeHead(401, { "WWW-Authenticate": 'Bearer error="invalid_token"' }).end();
       return;

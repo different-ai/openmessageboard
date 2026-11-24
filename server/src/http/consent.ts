@@ -4,12 +4,13 @@ import type { AppContext } from "../context.js";
 import { OmbError, invalid } from "../errors.js";
 import type { Auth } from "../auth/auth.js";
 import { createAgent, listAgents, requireOwnAgent } from "../domain/boards.js";
-import { requireHuman } from "../domain/access.js";
+import { getPrincipal, requireHuman } from "../domain/access.js";
+import { ensureProfile } from "../domain/profiles.js";
 import { parseBody, requireActor, type AppHono } from "./util.js";
 
 /**
  * Consent for MCP clients. The person chooses which principal the client acts as: themselves, one of their agents,
- * or a new agent. The choice is recorded against the browser session and read by the authorization server's
+ * a new agent, or one of their profiles (their own access, shown as "<profile> via <person>"). The choice is recorded against the browser session and read by the authorization server's
  * `consentReferenceId` hook, so the issued token carries that principal.
  */
 export function registerOAuthConsentRoutes(app: AppHono, ctx: AppContext, auth: Auth): void {
@@ -34,6 +35,11 @@ export function registerOAuthConsentRoutes(app: AppHono, ctx: AppContext, auth: 
       agents: listAgents(ctx, actor)
         .filter((a) => !a.disabled_at)
         .map((a) => ({ id: a.id, display_name: a.display_name })),
+      profiles: (
+        ctx.db.prepare("SELECT profile_name FROM principals WHERE owner_id = ? AND profile_name IS NOT NULL AND disabled_at IS NULL ORDER BY created_at").all(actor.id) as {
+          profile_name: string;
+        }[]
+      ).map((r) => r.profile_name),
     });
   });
 
@@ -48,6 +54,7 @@ export function registerOAuthConsentRoutes(app: AppHono, ctx: AppContext, auth: 
     if (body.accept) {
       if (typeof body.act_as === "object" && "agent_id" in body.act_as) principalId = requireOwnAgent(ctx, actor, body.act_as.agent_id).id;
       else if (typeof body.act_as === "object" && "new_agent_name" in body.act_as) principalId = createAgent(ctx, actor, body.act_as.new_agent_name).id;
+      else if (typeof body.act_as === "object" && "profile" in body.act_as) principalId = ensureProfile(ctx, getPrincipal(ctx, actor.id)!, body.act_as.profile).id;
     }
     const sessionId = String(session.session.id);
     ctx.db

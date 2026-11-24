@@ -1,5 +1,6 @@
 import { PERMISSIONS, type GrantPrincipal, type Permission, type Role } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
+import { boardInScope, cappedRole } from "../auth/scopes.js";
 import type { Actor } from "./model.js";
 
 /**
@@ -11,6 +12,8 @@ import type { Actor } from "./model.js";
  *     its person's member grants), then a role group, then `everyone`;
  *  3. grants tied there add up;
  *  4. the board role caps the result, and an agent never exceeds what its person can do in the channel.
+ * A profile (an agent principal that acts with its person's membership) resolves exactly as its person. A scoped
+ * token sees only its boards, its role is capped (`cappedRole`), and it never gets more than its `can` (no `manage`).
  * With no grant naming the member at any matching pattern, the role's defaults apply (a board with no grants
  * behaves exactly as before grants existed).
  *
@@ -22,6 +25,9 @@ export const ALL_PERMISSIONS = 31;
 
 /** What each role gets where no grant decides. */
 export const ROLE_DEFAULT: Record<Role, number> = { reader: BIT.read | BIT.react, contributor: BIT.read | BIT.post | BIT.react | BIT.label, owner: ALL_PERMISSIONS };
+/** Who is asking: a principal row or the authenticated actor (with a profile and a token scope, when set). */
+export type AccessPrincipal = Pick<Actor, "id" | "kind" | "ownerId"> & Partial<Pick<Actor, "profile" | "scope">>;
+
 /** The most each role can ever get. Contributors can be given `manage` by a grant; readers only read and react. */
 export const ROLE_CAP: Record<Role, number> = { reader: BIT.read | BIT.react, contributor: ALL_PERMISSIONS, owner: ALL_PERMISSIONS };
 
@@ -193,20 +199,31 @@ export class ChannelAccess {
     readonly subject: Subject | null,
     readonly person: Subject | null,
     readonly grants: ParsedGrant[],
+    /** A scoped token's permissions; everything else is masked out. */
+    private readonly tokenMask: number = ALL_PERMISSIONS,
   ) {}
 
-  /** Resolves `principal`'s membership (and, for agents, its person's) on the board. Non-members can do nothing. */
-  static load(ctx: AppContext, boardId: string, principal: { id: string; kind: Actor["kind"]; ownerId: string | null }, grants?: ParsedGrant[]): ChannelAccess {
-    const role = activeRole(ctx, boardId, principal.id);
-    if (!role) return new ChannelAccess(boardId, null, null, []);
-    const subject: Subject = { id: principal.id, kind: principal.kind, role, ownerId: principal.ownerId };
+  /**
+   * Resolves `principal`'s membership (and, for agents, its person's) on the board. Non-members, and boards outside
+   * a scoped token, can do nothing. A profile resolves as its person.
+   */
+  static load(ctx: AppContext, boardId: string, principal: AccessPrincipal, grants?: ParsedGrant[]): ChannelAccess {
+    const none = new ChannelAccess(boardId, null, null, []);
+    if (!boardInScope(principal, boardId)) return none;
+    const asPerson = !!principal.profile && !!principal.ownerId;
+    const id = asPerson ? principal.ownerId! : principal.id;
+    const found = activeRole(ctx, boardId, id);
+    if (!found) return none;
+    const role = cappedRole(principal, found);
+    const subject: Subject = asPerson ? { id, kind: "human", role, ownerId: null } : { id, kind: principal.kind, role, ownerId: principal.ownerId };
     let person: Subject | null = null;
-    if (principal.kind === "agent" && principal.ownerId) {
+    if (!asPerson && principal.kind === "agent" && principal.ownerId) {
       const ownerRole = activeRole(ctx, boardId, principal.ownerId);
-      if (!ownerRole) return new ChannelAccess(boardId, null, null, []);
+      if (!ownerRole) return none;
       person = { id: principal.ownerId, kind: "human", role: ownerRole, ownerId: null };
     }
-    return new ChannelAccess(boardId, subject, person, grants ?? loadGrants(ctx, boardId));
+    const tokenMask = principal.scope ? maskOf(principal.scope.can) : ALL_PERMISSIONS;
+    return new ChannelAccess(boardId, subject, person, grants ?? loadGrants(ctx, boardId), tokenMask);
   }
 
   /** Builds access for a known role without reading the membership (used for synthetic members). */
@@ -231,6 +248,7 @@ export class ChannelAccess {
     if (m === undefined) {
       m = decide(this.grants, this.subject, target).granted & ROLE_CAP[this.subject.role];
       if (this.person) m &= decide(this.grants, this.person, target).granted & ROLE_CAP[this.person.role];
+      m &= this.tokenMask;
       this.cache.set(key, m);
     }
     return m;
@@ -264,7 +282,7 @@ export class AccessCache {
   private readonly boards = new Map<string, ChannelAccess>();
   constructor(
     private readonly ctx: AppContext,
-    private readonly principal: { id: string; kind: Actor["kind"]; ownerId: string | null },
+    private readonly principal: AccessPrincipal,
   ) {}
   for(boardId: string): ChannelAccess {
     let a = this.boards.get(boardId);

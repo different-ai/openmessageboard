@@ -1,10 +1,23 @@
-import { ROLE_RANK, type Board, type Member, type Membership, type Agent, type CreatedToken, type EventType, boardUrl } from "@openmessageboard/protocol";
+import {
+  ROLE_RANK,
+  type Board,
+  type Member,
+  type Membership,
+  type Agent,
+  type CreatedToken,
+  type EventType,
+  type PersonalToken,
+  type TokenPermission,
+  type TokenScope,
+  boardUrl,
+} from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId, randomToken, sha256 } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { getBoardRow, getMembership, getPrincipal, isExpired, nowIso, requireHuman, requireMember } from "./access.js";
+import { getBoardRow, getMembership, getPrincipal, holderId, isExpired, nowIso, requireHuman, requireMember } from "./access.js";
+import { boardInScope, cappedRole } from "../auth/scopes.js";
 import type { Actor, BoardRow, MembershipRow, PrincipalRow } from "./model.js";
 import { presentBoard, presentMember, principalRefs } from "./present.js";
 import { boardLimits, limitsFor } from "./plans.js";
@@ -207,17 +220,19 @@ export function getBoard(ctx: AppContext, actor: Actor, boardId: string): Board 
   return presentBoard(ctx, board, membership);
 }
 
+/** The caller's active memberships. A profile has its person's; a scoped token sees only its boards, with its role cap. */
 export function listMemberships(ctx: AppContext, actor: Actor): Membership[] {
+  const holder = holderId(actor);
   const rows = ctx.db
     .prepare(
       `SELECT m.*, b.name AS board_name, b.owner_id FROM memberships m JOIN boards b ON b.id = m.board_id
        WHERE m.principal_id = ? AND b.disabled_at IS NULL ORDER BY b.created_at`,
     )
-    .all(actor.id) as (MembershipRow & { board_name: string; owner_id: string })[];
+    .all(holder) as (MembershipRow & { board_name: string; owner_id: string })[];
   return rows
-    .filter((r) => !isExpired(ctx, r))
+    .filter((r) => !isExpired(ctx, r) && boardInScope(actor, r.board_id))
     .filter((r) => {
-      if (actor.kind !== "agent" || !actor.ownerId) return true;
+      if (actor.kind !== "agent" || !actor.ownerId || actor.profile) return true;
       const owner = getMembership(ctx, r.board_id, actor.ownerId);
       return !!owner && !isExpired(ctx, owner);
     })
@@ -225,9 +240,9 @@ export function listMemberships(ctx: AppContext, actor: Actor): Membership[] {
       board_id: r.board_id,
       board_name: r.board_name,
       board_url: boardUrl(ctx.config.publicUrl, r.board_id),
-      role: r.role,
+      role: cappedRole(actor, r.role),
       access_ends_at: r.access_ends_at,
-      is_owner: r.owner_id === actor.id,
+      is_owner: r.owner_id === holder,
     }));
 }
 
@@ -386,7 +401,7 @@ export function createAgent(ctx: AppContext, actor: Actor, displayName: string):
 }
 
 export function listAgents(ctx: AppContext, actor: Actor): Agent[] {
-  const agents = ctx.db.prepare("SELECT * FROM principals WHERE owner_id = ? AND kind = 'agent' ORDER BY created_at").all(actor.id) as PrincipalRow[];
+  const agents = ctx.db.prepare("SELECT * FROM principals WHERE owner_id = ? AND kind = 'agent' AND profile_name IS NULL ORDER BY created_at").all(actor.id) as PrincipalRow[];
   return agents.map((a) => ({
     id: a.id,
     display_name: a.display_name,
@@ -399,15 +414,17 @@ export function listAgents(ctx: AppContext, actor: Actor): Agent[] {
     ).map((r) => ({ board_id: r.board_id, board_name: r.board_name, role: r.role })),
     tokens: (
       ctx.db
-        .prepare("SELECT id, prefix, created_at, last_used_at FROM api_tokens WHERE principal_id = ? AND revoked_at IS NULL ORDER BY created_at")
-        .all(a.id) as { id: string; prefix: string; created_at: string; last_used_at: string | null }[]
-    ).map((t) => ({ ...t })),
+        .prepare(
+          "SELECT id, prefix, created_at, last_used_at, scope, expires_at FROM api_tokens WHERE principal_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at",
+        )
+        .all(a.id, nowIso(ctx)) as TokenListRow[]
+    ).map(({ scope, ...t }) => ({ ...t, scope: presentScope(scope, t.expires_at) })),
   }));
 }
 
 export function requireOwnAgent(ctx: AppContext, actor: Actor, agentId: string): PrincipalRow {
   const agent = getPrincipal(ctx, agentId);
-  if (!agent || agent.kind !== "agent" || agent.owner_id !== actor.id) throw notFound("Agent");
+  if (!agent || agent.kind !== "agent" || agent.owner_id !== actor.id || agent.profile_name) throw notFound("Agent");
   return agent;
 }
 
@@ -471,14 +488,32 @@ export function addManagedMember(
 
 const TOKEN_PREFIX = { agent: "omb_at_", personal: "omb_pt_", test: "omb_tt_" } as const;
 
-export function mintToken(ctx: AppContext, principalId: string, kind: keyof typeof TOKEN_PREFIX, label?: string): CreatedToken {
+/** What a token row stores about its scope; `expires_at` lives in its own column. */
+export type StoredScope = { boards: string[] | null; can: TokenPermission[]; profile: string | null };
+type TokenListRow = { id: string; prefix: string; created_at: string; last_used_at: string | null; scope: string | null; expires_at: string | null };
+
+export function presentScope(raw: string | null, expiresAt: string | null): TokenScope | null {
+  if (!raw) return null;
+  const s = JSON.parse(raw) as StoredScope;
+  return { boards: s.boards ?? null, can: s.can, profile: s.profile ?? null, expires_at: expiresAt };
+}
+
+export function mintToken(
+  ctx: AppContext,
+  principalId: string,
+  kind: keyof typeof TOKEN_PREFIX,
+  label?: string,
+  opts: { scope?: StoredScope | null; expiresAt?: string | null } = {},
+): CreatedToken {
   const raw = TOKEN_PREFIX[kind] + randomToken(32);
   const id = newId("tok");
   const prefix = raw.slice(0, 12);
+  const scope = opts.scope ? JSON.stringify(opts.scope) : null;
+  const expiresAt = opts.expiresAt ?? null;
   ctx.db
-    .prepare("INSERT INTO api_tokens (id, principal_id, kind, token_hash, prefix, label, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(id, principalId, kind, sha256(raw), prefix, label ?? null, nowIso(ctx));
-  return { id, token: raw, prefix };
+    .prepare("INSERT INTO api_tokens (id, principal_id, kind, token_hash, prefix, label, created_at, scope, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, principalId, kind, sha256(raw), prefix, label ?? null, nowIso(ctx), scope, expiresAt);
+  return { id, token: raw, prefix, ...(scope ? { scope: presentScope(scope, expiresAt) } : {}) };
 }
 
 export function createAgentToken(ctx: AppContext, actor: Actor, agentId: string, label?: string): CreatedToken {
@@ -500,10 +535,13 @@ export function createPersonalToken(ctx: AppContext, actor: Actor, label?: strin
   return mintToken(ctx, actor.id, "personal", label);
 }
 
-export function listPersonalTokens(ctx: AppContext, actor: Actor) {
-  return ctx.db
-    .prepare("SELECT id, prefix, label, created_at, last_used_at FROM api_tokens WHERE principal_id = ? AND kind = 'personal' AND revoked_at IS NULL ORDER BY created_at")
-    .all(actor.id) as { id: string; prefix: string; label: string | null; created_at: string; last_used_at: string | null }[];
+export function listPersonalTokens(ctx: AppContext, actor: Actor): PersonalToken[] {
+  const rows = ctx.db
+    .prepare(
+      "SELECT id, prefix, label, created_at, last_used_at, scope, expires_at FROM api_tokens WHERE principal_id = ? AND kind = 'personal' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at",
+    )
+    .all(actor.id, nowIso(ctx)) as (TokenListRow & { label: string | null })[];
+  return rows.map(({ scope, ...t }) => ({ ...t, scope: presentScope(scope, t.expires_at) }));
 }
 
 export function revokePersonalToken(ctx: AppContext, actor: Actor, tokenId: string): void {
@@ -513,13 +551,21 @@ export function revokePersonalToken(ctx: AppContext, actor: Actor, tokenId: stri
   if (info.changes === 0) throw notFound("Token");
 }
 
-/** Resolves an `omb_*` bearer token to its principal. */
-export function principalForToken(ctx: AppContext, raw: string): { principal: PrincipalRow; kind: "agent" | "personal" | "test" } | null {
+/** Resolves an `omb_*` bearer token to its principal and scope. Expired tokens resolve to nothing. */
+export function principalForToken(
+  ctx: AppContext,
+  raw: string,
+): { principal: PrincipalRow; kind: "agent" | "personal" | "test"; scope: TokenScope | null } | null {
   if (!raw.startsWith("omb_")) return null;
   const row = ctx.db
-    .prepare("SELECT t.id AS token_id, t.kind AS token_kind, t.last_used_at, p.* FROM api_tokens t JOIN principals p ON p.id = t.principal_id WHERE t.token_hash = ? AND t.revoked_at IS NULL")
-    .get(sha256(raw)) as (PrincipalRow & { token_id: string; token_kind: "agent" | "personal" | "test"; last_used_at: string | null }) | undefined;
+    .prepare(
+      "SELECT t.id AS token_id, t.kind AS token_kind, t.last_used_at, t.scope AS token_scope, t.expires_at AS token_expires_at, p.* FROM api_tokens t JOIN principals p ON p.id = t.principal_id WHERE t.token_hash = ? AND t.revoked_at IS NULL",
+    )
+    .get(sha256(raw)) as
+    | (PrincipalRow & { token_id: string; token_kind: "agent" | "personal" | "test"; last_used_at: string | null; token_scope: string | null; token_expires_at: string | null })
+    | undefined;
   if (!row || row.disabled_at) return null;
+  if (row.token_expires_at !== null && row.token_expires_at <= nowIso(ctx)) return null;
   if (row.kind === "agent" && row.owner_id) {
     const owner = getPrincipal(ctx, row.owner_id);
     if (!owner || owner.disabled_at) return null;
@@ -528,6 +574,6 @@ export function principalForToken(ctx: AppContext, raw: string): { principal: Pr
   if (!row.last_used_at || Date.parse(now) - Date.parse(row.last_used_at) > 60_000) {
     ctx.db.prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?").run(now, row.token_id);
   }
-  const { token_id: _t, token_kind, last_used_at: _l, ...principal } = row;
-  return { principal: principal as PrincipalRow, kind: token_kind };
+  const { token_id: _t, token_kind, last_used_at: _l, token_scope, token_expires_at, ...principal } = row;
+  return { principal: principal as PrincipalRow, kind: token_kind, scope: presentScope(token_scope, token_expires_at) };
 }

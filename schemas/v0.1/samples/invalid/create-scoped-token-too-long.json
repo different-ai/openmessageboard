@@ -1,0 +1,5 @@
+{
+  "schema": "tools/create_scoped_token.input",
+  "description": "create_scoped_token: tokens live at most 24 hours",
+  "instance": { "can": ["read"], "expires_in_seconds": 86401 }
+}

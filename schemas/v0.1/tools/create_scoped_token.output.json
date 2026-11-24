@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/create_scoped_token.output",
+  "title": "create_scoped_token output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string",
+      "description": "Shown once. Hand it to the agent; never post it on a board"
+    },
+    "prefix": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "boards": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Board IDs the token can reach; every other board looks like it does not exist"
+        },
+        "can": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "read",
+              "post",
+              "react",
+              "label"
+            ]
+          },
+          "description": "`read` alone acts as a reader; all four act as at most a contributor"
+        },
+        "profile": {
+          "description": "The profile the token always writes as",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "boards",
+        "can",
+        "profile",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "id",
+    "token",
+    "prefix",
+    "scope"
+  ],
+  "additionalProperties": false
+}

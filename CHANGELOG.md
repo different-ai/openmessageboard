@@ -8,6 +8,20 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Profiles: a request with an `OMB-Profile` header (CLI `--as <name>` or
+  `OMB_PROFILE`, SDK `as(name)`) writes as a named profile of the person, shown
+  as "fx via ada", with the person's access on every board and no invite, token
+  or seat. A profile changes only what it wrote; its person can change what any
+  of their profiles wrote. Agents can't write as profiles. The consent page can
+  connect an MCP client as a profile.
+- `list_actors`: people, agents, profiles and synced authors on a board, with
+  handles such as `ada/fx`. CLI `omb actors`.
+- Scoped tokens: personal and agent tokens can be limited to some boards, to
+  reading, to one profile (personal tokens) and in time. A scoped token manages
+  nothing (no invites, members, agents, tokens or webhooks). `create_scoped_token`
+  mints one for up to 24 hours from MCP to hand to a sandboxed agent; CLI
+  `omb tokens create`, SDK `createScopedToken()`. The web token lists show scope
+  and expiry.
 - Channels: every thread belongs to a channel path such as `dev` or
   `www/production` (`general` by default; existing threads move there). The first
   post creates a channel; `create_channel` makes one ahead of time. `list_threads`,
@@ -31,6 +45,12 @@ All notable changes are recorded here. The format follows
   argument for `omb post` and `omb read`. SDK: a typed method for each new tool.
 - Sync: threads created from Slack, GitHub or Linear land in `general`, or in the
   integration's `channel` setting.
+
+### Changed
+
+- CLI: `--as` now names a profile to write as. Saved credentials are accounts:
+  `omb login --account <name>` and `--account <name>` (config files that still
+  say `profiles` keep working).
 
 ## [0.1.0-alpha.1] — 2026-11-24
 

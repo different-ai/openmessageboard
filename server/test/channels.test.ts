@@ -8,7 +8,7 @@ import type { AppContext } from "../src/context.ts";
 import { loadConfig } from "../src/config.ts";
 import { startServer } from "../src/main.ts";
 import { OmbError } from "../src/errors.ts";
-import { actorFromPrincipal } from "../src/domain/access.ts";
+import { actorFromPrincipal, getPrincipal } from "../src/domain/access.ts";
 import { addAgentToBoard, createAgent, createNamedBoard, ensureHuman, ensureOwnBoard, mintToken, updateBoard } from "../src/domain/boards.ts";
 import { boardChanges, getInbox } from "../src/domain/changes.ts";
 import { createChannel, createGrant, explainAccess, listChannels, listGrants, revokeGrant, updateGrant } from "../src/domain/channels.ts";
@@ -17,6 +17,7 @@ import { createInvite, redeemInvite } from "../src/domain/invites.ts";
 import { searchMessages } from "../src/domain/usage.ts";
 import { covers, specificity } from "../src/domain/grants.ts";
 import { whoami } from "../src/http/api.ts";
+import { ensureProfile, profileActor } from "../src/domain/profiles.ts";
 import type { Actor } from "../src/domain/model.ts";
 import { freePort, human, key, makeCtx } from "./helpers.ts";
 
@@ -210,6 +211,36 @@ test("agents: reached by their person's grants, capped by what their person can 
   createGrant(ctx, owner, boardId, { principals: [{ kind: "member", principal_id: a.id }], can: { ops: "all" } });
   createGrant(ctx, owner, boardId, { principals: [{ kind: "member", principal_id: maya.id }], can: { ops: "none" } });
   assert.throws(() => post(ctx, agent, boardId, "ops", "x"), code("forbidden"));
+});
+
+test("profiles resolve as their person; scoped tokens are capped by their can and boards", async () => {
+  const ctx = await makeCtx();
+  const { owner, maya, boardId } = await boardWith(ctx);
+  const fx = profileActor(maya, ensureProfile(ctx, getPrincipal(ctx, maya.id)!, "fx"));
+  const made = createChannel(ctx, owner, boardId, { path: "security", private: true });
+  const secret = post(ctx, owner, boardId, "security", "Rotate keys");
+  assert.throws(() => getThread(ctx, fx, secret.thread.id), code("not_found"));
+  assert.throws(() => createGrant(ctx, owner, boardId, { principals: [{ kind: "member", principal_id: fx.id }], can: { "*": "all" } }), code("invalid_argument"));
+  const mine = made.grants.find((g) => g.principals.some((p) => p.kind === "member"))!;
+  updateGrant(ctx, owner, mine.id, { add: [{ kind: "member", principal_id: maya.id }] });
+  // Maya's grant is her profile's grant.
+  assert.equal(getThread(ctx, fx, secret.thread.id).thread.id, secret.thread.id);
+  const ex = explainAccess(ctx, owner, boardId, "security", fx.id);
+  assert.equal(ex.level, "member");
+  assert.equal(ex.person_cap, null);
+  // A read-only token reads where its holder can, posts nowhere and manages nothing.
+  const readOnly: Actor = { ...maya, scope: { boards: null, can: ["read"], profile: null, expires_at: null } };
+  assert.deepEqual(listChannels(ctx, readOnly, boardId).channels.find((c) => c.path === "security")?.my_permissions, ["read"]);
+  assert.throws(() => post(ctx, readOnly, boardId, "general", "nope"), code("forbidden"));
+  assert.throws(() => createChannel(ctx, readOnly, boardId, { path: "mine", private: true }), code("forbidden"));
+  // Even the owner's full scoped token can't manage grants or create private channels.
+  const ownerToken: Actor = { ...owner, scope: { boards: null, can: ["read", "post", "react", "label"], profile: null, expires_at: null } };
+  assert.throws(() => createChannel(ctx, ownerToken, boardId, { path: "ops", private: true }), code("forbidden"));
+  assert.throws(() => createGrant(ctx, ownerToken, boardId, { principals: [{ kind: "everyone" }], can: { "*": ["read"] } }), code("forbidden"));
+  assert.equal(listGrants(ctx, ownerToken, boardId).grants.length, 0);
+  // A token scoped to other boards sees nothing here.
+  const elsewhere: Actor = { ...maya, scope: { boards: ["b_other"], can: ["read"], profile: null, expires_at: null } };
+  assert.throws(() => listChannels(ctx, elsewhere, boardId), code("not_found"));
 });
 
 test("named boards: plan limit, unique names, whoami lists every owned board", async () => {

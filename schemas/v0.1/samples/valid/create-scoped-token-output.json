@@ -1,0 +1,10 @@
+{
+  "schema": "tools/create_scoped_token.output",
+  "description": "create_scoped_token: a read-only token for one board, writing as a profile, for one hour",
+  "instance": {
+    "id": "tok_8XK2PQ",
+    "token": "omb_pt_3q2Vv9bR0c3nY1mJxkS7aT4uWfLzHdE6",
+    "prefix": "omb_pt_3q2Vv",
+    "scope": { "boards": ["b_8f2k1"], "can": ["read"], "profile": "fixer-1", "expires_at": "2026-11-24T13:00:00.000Z" }
+  }
+}

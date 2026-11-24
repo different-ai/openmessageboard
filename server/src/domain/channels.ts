@@ -20,6 +20,7 @@ import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
 import { activeMembership, getPrincipal, nowIso, requireMember } from "./access.js";
+import { requireScope } from "../auth/scopes.js";
 import { recordEvent } from "./boards.js";
 import { ChannelAccess, ROLE_CAP, decide, maskOf, parseGrant, permsOf, type GrantRow, type ParsedGrant } from "./grants.js";
 import type { Actor } from "./model.js";
@@ -138,8 +139,9 @@ function normalizePrincipals(ctx: AppContext, boardId: string, list: GrantPrinci
   const seen = new Map<string, GrantPrincipal>();
   for (const p of list) {
     if (p.kind === "member") {
+      // A profile has no membership of its own (it acts as its person), so grants name the person instead.
       const row = getPrincipal(ctx, p.principal_id);
-      if (!row || !activeMembership(ctx, boardId, { id: row.id, kind: row.kind, ownerId: row.owner_id })) {
+      if (!row || row.profile_name || !activeMembership(ctx, boardId, { id: row.id, kind: row.kind, ownerId: row.owner_id })) {
         throw invalid(`Principal ${p.principal_id} is not a member of this board`, { principal_id: p.principal_id });
       }
       seen.set(principalKey(p), { kind: "member", principal_id: p.principal_id });
@@ -268,6 +270,7 @@ export function createChannel(ctx: AppContext, actor: Actor, boardId: string, in
   return tx(ctx, (emit) => {
     requireMember(ctx, actor, boardId);
     const access = ChannelAccess.load(ctx, boardId, actor);
+    if (input.private) requireScope(actor, "manage");
     if (!input.private) {
       if (!access.can(path, "read") || !access.can(path, "post")) throw forbidden(`Creating ${path} needs read and post there`);
       const created = ensureChannel(ctx, boardId, path, actor.id);
@@ -282,7 +285,8 @@ export function createChannel(ctx: AppContext, actor: Actor, boardId: string, in
     if (existing) throw new OmbError("conflict", `Channel ${existing.path} already exists, so ${path} can't be made private this way; use grants`, { reason: "channel_exists", channel: existing.path });
     const reaching = access.grants.find((g) => g.can.some(([p]) => p === path || p === subtree || p.startsWith(subtree)));
     if (reaching) throw new OmbError("conflict", `Grant ${reaching.row.id} already reaches ${path}; change it instead`, { reason: "channel_granted", grant_id: reaching.row.id });
-    const creators: GrantPrincipal[] = [{ kind: "member", principal_id: actor.id }];
+    // A profile acts as its person, so the person is named; an agent is named with the person it acts for.
+    const creators: GrantPrincipal[] = actor.profile && actor.ownerId ? [] : [{ kind: "member", principal_id: actor.id }];
     if (actor.kind === "agent" && actor.ownerId) creators.push({ kind: "member", principal_id: actor.ownerId });
     const mine = insertGrant(ctx, boardId, actor.id, creators, new Map([[subtree, maskOf("all")]]));
     const closed = insertGrant(ctx, boardId, actor.id, [{ kind: "everyone" }], new Map([[subtree, 0]]));
@@ -309,7 +313,7 @@ export function explainAccess(ctx: AppContext, actor: Actor, boardId: string, ch
     if (!isOwner(mine) && !mine.can("*", "manage")) throw forbidden("Explaining someone else's access needs manage at *");
     const p = getPrincipal(ctx, principalId);
     if (!p) throw notFound("Member");
-    access = ChannelAccess.load(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id }, mine.grants);
+    access = ChannelAccess.load(ctx, boardId, { id: p.id, kind: p.kind, ownerId: p.owner_id, profile: p.profile_name ?? null }, mine.grants);
     if (!access.subject) throw notFound("Member");
     target = p.id;
   }
