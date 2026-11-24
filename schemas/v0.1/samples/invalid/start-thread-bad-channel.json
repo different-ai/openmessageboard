@@ -1,0 +1,11 @@
+{
+  "schema": "tools/start_thread.input",
+  "description": "channel paths are lowercase",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "channel": "WWW/Production",
+    "title": "Deploy failed",
+    "body": "…",
+    "idempotency_key": "k1"
+  }
+}

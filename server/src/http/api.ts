@@ -16,6 +16,7 @@ import {
   UpdateTaskBody,
   TASK_STATES,
   THREAD_KINDS,
+  ChannelFilter,
   type ServerInfo,
 } from "@openmessageboard/protocol";
 import { z } from "zod";
@@ -52,9 +53,14 @@ export function whoami(ctx: AppContext, actor: Actor, server: ServerInfo, create
     const owner = ctx.db.prepare("SELECT id, display_name FROM principals WHERE id = ?").get(actor.ownerId) as { id: string; display_name: string } | undefined;
     if (owner) principal.owner = { id: owner.id, kind: "human", display_name: owner.display_name, via: null };
   }
+  const owned = actor.kind === "human" ? boards.ownedBoards(ctx, actor.id) : [];
   return {
     principal,
     owned_board: own ? presentBoard(ctx, own, getMembership(ctx, own.id, actor.id)!) : null,
+    owned_boards: owned.flatMap((b) => {
+      const m = getMembership(ctx, b.id, actor.id);
+      return m ? [presentBoard(ctx, b, m)] : [];
+    }),
     memberships: boards.listMemberships(ctx, actor),
     server,
   };
@@ -82,6 +88,8 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   app.post("/api/boards", async (c) => {
     const actor = requireActor(c);
     const body = await parseBody(c, CreateBoardBody);
+    // A person's first board is their personal board (with this name, if given); later ones are named boards.
+    if (body.name && actor.kind === "human" && boards.ownedBoards(ctx, actor.id).length > 0) return c.json({ board: boards.createNamedBoard(ctx, actor, body.name) });
     const row = boards.ensureOwnBoard(ctx, actor, { create: true, ...(body.name ? { name: body.name } : {}) });
     if (!row) throw invalid("Only people can own boards");
     return c.json({ board: presentBoard(ctx, row, getMembership(ctx, row.id, actor.id)!) });
@@ -102,6 +110,7 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
     const taskState = z.enum(TASK_STATES).optional().parse(q.task_state || undefined);
     return c.json(
       convo.listThreads(ctx, requireActor(c), c.req.param("boardId"), {
+        channel: ChannelFilter.optional().parse(q.channel || undefined),
         filter,
         kind,
         task_state: taskState,
@@ -140,13 +149,15 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   );
   app.post("/api/inbox/read", async (c) => c.json(changes.markRead(ctx, requireActor(c), await parseBody(c, MarkReadBody))));
   app.get("/api/boards/:boardId/changes", (c) =>
-    c.json(changes.boardChanges(ctx, requireActor(c), c.req.param("boardId"), c.req.query("cursor") || undefined, int(c.req.query("limit")) ?? 100)),
+    c.json(
+      changes.boardChanges(ctx, requireActor(c), c.req.param("boardId"), c.req.query("cursor") || undefined, int(c.req.query("limit")) ?? 100, undefined, ChannelFilter.optional().parse(c.req.query("channel") || undefined)),
+    ),
   );
   app.get("/api/boards/:boardId/stream", (c) => boardStream(ctx, c, requireActor(c), c.req.param("boardId")));
   app.get("/api/inbox/stream", (c) => inboxStream(ctx, c, requireActor(c)));
   app.get("/api/boards/:boardId/search", (c) => {
     const q = c.req.query("q") ?? "";
-    return c.json(usage.searchMessages(ctx, requireActor(c), c.req.param("boardId"), q, int(c.req.query("limit")) ?? 20));
+    return c.json(usage.searchMessages(ctx, requireActor(c), c.req.param("boardId"), q, int(c.req.query("limit")) ?? 20, ChannelFilter.optional().parse(c.req.query("channel") || undefined)));
   });
 
   // members, invites, agents, tokens

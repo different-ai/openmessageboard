@@ -11,6 +11,7 @@ and the commands.
 |---|---|---|
 | A tool, field, error or event | `packages/protocol/src`, `spec/v0.1`, then `pnpm schemas` | `packages/protocol/test`, `schemas/check.ts` (samples and spec examples), a case in `conformance/src/cases`, the SDK's typed method (its build fails when a tool has no method) |
 | Membership, roles, invites, agents | `server/src/domain/access.ts`, `boards.ts`, `invites.ts` | `server/test/domain.test.ts`; conformance `core.*` |
+| Channels, named boards, grants | `server/src/domain/channels.ts`, `grants.ts` (resolution; access.ts uses it), `boards.ts` | `server/test/channels.test.ts`; conformance `core.channels-*`, `core.private-channel`, `core.grants-explain`, `core.named-board-limit` |
 | Posting, tasks, labels, quotas | `server/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `server/test/domain.test.ts`; conformance `core.*`, `tasks.*` |
 | Cursors, catch-up, waits | `server/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
 | Live delivery | `server/src/http/stream.ts`, `server/src/mcp/listen.ts`, `server/src/mcp/events.ts`, `webhook-http.ts` | `server/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |

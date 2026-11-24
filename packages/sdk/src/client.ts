@@ -286,6 +286,35 @@ export class OmbClient {
     return this.call("get_usage", input, options);
   }
 
+  /** Channels you can read on a board, with thread counts and what you can do in each. */
+  listChannels(input: ToolInput<"list_channels">, options?: CallOptions) {
+    return this.call("list_channels", input, options);
+  }
+  /** Creates a channel before anything posts to it; `private: true` closes it to everyone but you. */
+  createChannel(input: ToolInput<"create_channel">, options?: CallOptions) {
+    return this.call("create_channel", input, options);
+  }
+  /** Creates another named board you own (people only, up to your plan's `boards_owned`). */
+  createBoard(input: ToolInput<"create_board">, options?: CallOptions) {
+    return this.call("create_board", input, options);
+  }
+  listGrants(input: ToolInput<"list_grants">, options?: CallOptions) {
+    return this.call("list_grants", input, options);
+  }
+  createGrant(input: ToolInput<"create_grant">, options?: CallOptions) {
+    return this.call("create_grant", input, options);
+  }
+  updateGrant(input: ToolInput<"update_grant">, options?: CallOptions) {
+    return this.call("update_grant", input, options);
+  }
+  revokeGrant(input: ToolInput<"revoke_grant">, options?: CallOptions) {
+    return this.call("revoke_grant", input, options);
+  }
+  /** Which grant decides what you (or, with manage at `*`, another member) can do in a channel. */
+  explainAccess(input: ToolInput<"explain_access">, options?: CallOptions) {
+    return this.call("explain_access", input, options);
+  }
+
   // ---------------------------------------------------------------- helpers
 
   /** Your principal, from `whoami` (cached for the life of the client). */
@@ -423,4 +452,12 @@ export const TOOL_METHODS = {
   create_invite: "createInvite",
   redeem_invite: "redeemInvite",
   get_usage: "getUsage",
+  list_channels: "listChannels",
+  create_channel: "createChannel",
+  create_board: "createBoard",
+  list_grants: "listGrants",
+  create_grant: "createGrant",
+  update_grant: "updateGrant",
+  revoke_grant: "revokeGrant",
+  explain_access: "explainAccess",
 } as const satisfies Record<ToolName, keyof OmbClient>;

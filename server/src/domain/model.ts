@@ -68,6 +68,7 @@ export interface InviteRow {
 export interface ThreadRow {
   id: string;
   board_id: string;
+  channel: string;
   title: string;
   kind: ThreadKind;
   labels: string;

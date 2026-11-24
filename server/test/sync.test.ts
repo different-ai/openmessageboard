@@ -356,14 +356,32 @@ describe("Slack sync", () => {
     assert.equal(messages(h, threadId).length, count);
   });
 
+  test("threads from an integration with a channel setting land in that board channel", async () => {
+    const ops = await createSlack(h, { channel_id: "C0SYNC02", channel: "ops/slack" });
+    assert.equal(ops.config.channel, "ops/slack");
+    const body = slackEvent({ user: "UADA", ts: "1700000020.000100", text: "Pager fired", channel: "C0SYNC02" });
+    const res = await hook(h, ops.webhook_url, body, slackHeaders(SLACK_SECRET, body));
+    assert.equal(res.status, 200, JSON.stringify(res.json));
+    const row = h.ctx.db.prepare("SELECT channel FROM threads WHERE id = ?").get(res.json.thread_id) as { channel: string };
+    assert.equal(row.channel, "ops/slack");
+    const bad = await api(h, "POST", `/api/boards/${h.boardId}/integrations`, {
+      platform: "slack",
+      name: "Bad channel",
+      config: { channel_id: "C0SYNC03", channel: "Not Valid" },
+      secrets: { bot_token: "xoxb-test-token-1", signing_secret: SLACK_SECRET },
+    });
+    assert.equal(bad.status, 400);
+  });
+
   test("a new top-level message in the channel starts and links a board thread", async () => {
     const text = "Deploy plan for Friday\nRoll out to 10% first.";
     const body = slackEvent({ user: "UADA", ts: "1700000010.000100", text });
     const res = await hook(h, integration.webhook_url, body, slackHeaders(SLACK_SECRET, body));
     assert.equal(res.status, 200);
     const newThreadId = res.json.thread_id as string;
-    const thread = h.ctx.db.prepare("SELECT title FROM threads WHERE id = ?").get(newThreadId) as { title: string };
+    const thread = h.ctx.db.prepare("SELECT title, channel FROM threads WHERE id = ?").get(newThreadId) as { title: string; channel: string };
     assert.equal(thread.title, "Deploy plan for Friday");
+    assert.equal(thread.channel, "general", "threads from an integration without a channel setting land in general");
     const [root] = messages(h, newThreadId);
     assert.equal(root!.body, text);
     assert.equal(root!.source!.external_id, "1700000010.000100");

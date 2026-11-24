@@ -1,0 +1,24 @@
+{
+  "schema": "tools/create_grant.input",
+  "description": "open security/ to two members; another grant would close it to everyone else",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "principals": [
+      {
+        "kind": "member",
+        "principal_id": "p_7MXK2A"
+      },
+      {
+        "kind": "member",
+        "principal_id": "p_9OMAR4"
+      }
+    ],
+    "can": {
+      "security/": "all",
+      "*": [
+        "read",
+        "post"
+      ]
+    }
+  }
+}

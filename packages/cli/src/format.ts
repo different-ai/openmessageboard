@@ -1,4 +1,4 @@
-import type { Change, InboxItem, Member, Membership, Message, PrincipalRef, Thread, Usage } from "@openmessageboard/sdk";
+import type { AccessExplanation, Change, Channel, Grant, InboxItem, Member, Membership, Message, PrincipalRef, Thread, Usage } from "@openmessageboard/sdk";
 
 /** "release-agent (via Maya)" for agents, the display name otherwise. */
 export function authorName(p: PrincipalRef): string {
@@ -50,7 +50,7 @@ function taskSummary(t: Thread): string | undefined {
 }
 
 export function formatThreadHeader(t: Thread): string {
-  const meta = [t.id];
+  const meta = [t.id, t.channel];
   const task = taskSummary(t);
   if (task) meta.push(`task: ${task}`);
   if (Object.keys(t.labels).length) meta.push(formatLabels(t.labels));
@@ -64,7 +64,7 @@ export function formatThreadRow(t: Thread, now?: Date): string {
   if (t.unread_count > 0) meta.push(`${t.unread_count} unread`);
   if (Object.keys(t.labels).length) meta.push(formatLabels(t.labels));
   meta.push(relativeTime(t.last_activity_at, now));
-  return `${t.id}  ${badge}${t.title}\n  ${meta.join(" · ")}`;
+  return `${t.id}  ${badge}${t.title}\n  ${[t.channel, ...meta].join(" · ")}`;
 }
 
 /** Left-aligned columns separated by two spaces; the last column is not padded. */
@@ -157,4 +157,39 @@ export function formatChange(c: Change, now?: Date): string {
     case "board.updated":
       return `~ board updated${by}`;
   }
+}
+
+/** Channels grouped by path, with thread counts and what you can do in each. */
+export function formatChannels(channels: Channel[], now?: Date): string {
+  if (channels.length === 0) return "No channels yet. A first post creates one.";
+  return formatTable(
+    ["CHANNEL", "THREADS", "LAST ACTIVITY", "YOU CAN", ""],
+    channels.map((c) => [c.path, String(c.thread_count), c.last_activity_at ? relativeTime(c.last_activity_at, now) : "-", c.my_permissions.join(",") || "-", c.private ? "private" : ""]),
+  );
+}
+
+export function formatGrants(grants: Grant[], members: Member[] = []): string {
+  if (grants.length === 0) return "No grants you can manage. With no grants, board roles decide everything.";
+  const name = (id: string) => {
+    const m = members.find((x) => x.principal.id === id);
+    return m ? `@${m.handle}` : id;
+  };
+  return formatTable(
+    ["ID", "WHO", "CAN"],
+    grants.map((g) => [
+      g.id,
+      g.principals.map((p) => (p.kind === "member" ? name(p.principal_id) : p.kind)).join(", "),
+      Object.entries(g.can)
+        .map(([pattern, perms]) => `${pattern}=${perms.length ? perms.join(",") : "none"}`)
+        .join(" "),
+    ]),
+  );
+}
+
+export function formatAccess(a: AccessExplanation): string {
+  const lines = [`${authorName(a.principal)} (${a.role}) in ${a.channel}: ${a.can.length ? a.can.join(", ") : "nothing"}`];
+  lines.push(a.pattern ? `Decided by ${a.grant_ids.join(", ")} at ${a.pattern} (${a.level?.replace("_", " ")}), which gives ${a.granted.join(", ") || "none"}` : `No grant applies; the ${a.role} role's defaults hold`);
+  lines.push(`The ${a.role} role allows at most ${a.role_cap.join(", ")}`);
+  if (a.person_cap) lines.push(`The person this agent acts for can ${a.person_cap.join(", ") || "do nothing"} here`);
+  return lines.join("\n");
 }

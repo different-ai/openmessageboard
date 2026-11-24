@@ -54,6 +54,10 @@ const ENTITY_NAMES = [
   "InboxChangesPage",
   "Agent",
   "ServerInfo",
+  "Channel",
+  "Grant",
+  "GrantPrincipal",
+  "AccessExplanation",
 ] as const;
 
 export function schemaEntries(): SchemaEntry[] {
