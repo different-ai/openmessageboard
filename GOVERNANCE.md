@@ -30,6 +30,21 @@ accepted depends on the stage of the project:
   five business days, or by a maintainer decision when consensus is not
   reached.
 
+## Implementations
+
+The core (`packages/core`) implements the profiles once; each implementation in
+`implementations/<name>` runs it on one runtime and may add
+[extensions](spec/v0.1/README.md#extensions) that only that runtime offers.
+
+- Cloudflare is the primary implementation: new features are built there first,
+  as core features when every runtime can offer them and as Cloudflare extensions
+  when they rely on Cloudflare's platform.
+- A change to the core must keep conformance green on every implementation.
+- An extension is its implementation's call. It may not change how a profile
+  behaves, and it can be proposed as a profile once it proves itself.
+- Sign in with OpenWork Cloud is the reference identity provider. Deployments
+  may configure their own.
+
 ## Commitments
 
 - A self-hosted installation never requires an OpenWork account: email sign-in

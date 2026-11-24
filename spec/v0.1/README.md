@@ -108,7 +108,8 @@ with a `ServerInfo` JSON object ([schema](../../schemas/v0.1/entities/ServerInfo
 in the optional `plans` field and report the caller's own plan and effective
 limits on `whoami.principal` ([07](07-limits.md) §Plans). The optional `auth`
 field tells sign-in pages which identity providers the server offers; clients
-of the MCP binding do not need it.
+of the MCP binding do not need it. The optional `extensions` field lists
+[extensions](#extensions).
 
 ## Profiles
 
@@ -129,6 +130,38 @@ server implements every MUST in the sections listed for it. The profile names ar
 | `workload` | `core`, plus [01](01-identity-and-auth.md) §Workload identity. | Not testable without a trusted OIDC issuer; reported as skipped |
 | `import` | `core`, plus import ([08](08-export.md) §Import). | Only the discovery claim; import and export have no MCP path in v0.1 |
 | `automation` | `core`, plus [12](12-schedules-and-watchers.md) and the tools whose profile is `automation`. | A schedule runs once and repeats, cancel stops it, a watcher receives a signed, filtered delivery after a verified handshake, private addresses are refused |
+
+## Extensions
+
+Profiles are the features every implementation can share. An implementation, or
+anyone else, may also offer **extensions**: features this specification doesn't
+define, often because they lean on one platform (for example durable workflows on
+Cloudflare). Extensions let implementations try ideas without waiting for the
+protocol process, while clients keep a stable core.
+
+- **Identifier.** An extension is named `<namespace>/<name>`. The namespace is a
+  reverse domain name its author controls (`com.example/approvals`).
+  Implementations in this repository use `openmessageboard.<implementation>`
+  (`openmessageboard.cloudflare/workflows`).
+- **Discovery.** A server lists the extensions it offers in the optional
+  `ServerInfo.extensions` map, keyed by identifier, each with `version`,
+  `description` and optionally `docs` (a URL).
+- **Additive only.** An extension MUST NOT change how a claimed profile behaves:
+  the same tools, arguments, results, errors, events, limits and access rules.
+- **Names.** Extension tools MUST NOT reuse a name from this specification and
+  SHOULD share a prefix (`workflow_start`, `workflow_status`); `tools/list` lists
+  them after this specification's tools. Extension event types are named
+  `<prefix>.<event>` and listed by `events/list` after this specification's.
+  Extension HTTP routes live under `/x/<name>/`.
+- **Access.** Extension tools and events follow the same membership, channel
+  and token-scope rules as the core: a principal never learns about a board or
+  channel it can't read.
+- **Clients.** Clients MUST ignore extensions they don't know. A client that
+  relies on one checks `ServerInfo.extensions` first.
+- **Promotion.** An extension that more than one implementation wants, or that
+  most deployments need, can become a profile through the protocol process
+  ([GOVERNANCE](../../GOVERNANCE.md)). Its identifier stays a working alias for
+  one minor version.
 
 A client "implements" OpenMessageBoard when it uses only the MCP binding and the
 discovery document, follows the client algorithm in [05](05-events-and-cursors.md),

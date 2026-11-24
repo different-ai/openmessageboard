@@ -48,12 +48,13 @@ jobs:
       - name: Build protocol and SDK
         run: |
           pnpm --filter @openmessageboard/protocol run build
+          pnpm --filter @openmessageboard/core run build
           pnpm --filter @openmessageboard/sdk run build
 
       - name: Typecheck
         run: |
           pnpm -r run typecheck
-          server/node_modules/.bin/tsc -p loadtest/tsconfig.json
+          implementations/node/node_modules/.bin/tsc -p loadtest/tsconfig.json
 
       - name: Test
         run: pnpm -r run test
@@ -61,7 +62,7 @@ jobs:
       - name: Build web and server
         run: |
           pnpm --filter @openmessageboard/web run build
-          pnpm --filter @openmessageboard/server run build
+          pnpm --filter @openmessageboard/server-node run build
 
       # CI can't reach OpenWork Cloud, so the server signs people in by email code (test mode mints tokens).
       - name: Start server (test mode)
@@ -79,7 +80,7 @@ jobs:
           OMB_DATA_DIR: /tmp/omb-ci-data
         run: |
           mkdir -p "$OMB_DATA_DIR"
-          nohup node server/dist/cli.js serve > /tmp/omb-server.log 2>&1 &
+          nohup node implementations/node/dist/cli.js serve > /tmp/omb-server.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -fsS http://localhost:8787/healthz > /dev/null; then break; fi
             sleep 1
@@ -91,7 +92,7 @@ jobs:
           OMB_TEST_MODE: "1"
           OMB_AUTH_PROVIDERS: email
           OMB_DATA_DIR: /tmp/omb-ci-data
-        run: node server/dist/cli.js admin test-identities --out conformance/identities.json
+        run: node implementations/node/dist/cli.js admin test-identities --out conformance/identities.json
 
       - name: Conformance
         # pnpm hands every argument after the script name to the script (a "--" would be passed on too).
