@@ -68,7 +68,7 @@ jobs:
         env:
           OMB_TEST_MODE: "1"
           OMB_AUTH_PROVIDERS: email
-          OMB_LIMIT_POSTS_PER_MONTH: "150"
+          OMB_LIMIT_POSTS_PER_MONTH: "200"
           OMB_LIMIT_MEMBERS_PER_BOARD: "4"
           # Generous burst limits keep the conformance run fast; quota cases read limits from discovery.
           OMB_RATE_WRITES_PER_MINUTE_PRINCIPAL: "1000"

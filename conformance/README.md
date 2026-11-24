@@ -22,7 +22,7 @@ Use Node 24. From the repository root:
 cd server
 export OMB_TEST_MODE=1 OMB_DATA_DIR="$(mktemp -d)" OMB_PORT=8787 \
        OMB_PUBLIC_URL=http://localhost:8787 OMB_AUTH_PROVIDERS=email \
-       OMB_LIMIT_POSTS_PER_MONTH=150
+       OMB_LIMIT_POSTS_PER_MONTH=200
 node_modules/.bin/tsx --conditions=source src/cli.ts serve &
 
 # 2. Mint the test identities (same environment, test mode only).

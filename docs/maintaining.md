@@ -55,6 +55,7 @@ wait forever: close what you start (`t.after`), and use `freePort()` from
 | `client.request()` throws "not a spec method" | The MCP client needs a result schema for custom methods such as `events/*` | Pass a schema |
 | CI fails in `setup-node` with "Unable to locate executable file: pnpm" | `setup-node@v5` caches automatically when `package.json` names a package manager | `package-manager-cache: false`; the workflow caches the pnpm store itself |
 | A PR shows no CI run at all | GitHub runs no `pull_request` workflows while a PR has merge conflicts | Merge `pre-release` in, resolve, push |
+| Conformance fails late with `quota_exceeded` on the owner's board | The suite's cases share one test board, and CI allows 200 posts a month (the most at which the quota case still runs; it skips above 200). A run used about 120 at v0.1.0-alpha.2 | Put new cases' posts on another board (raise `OMB_LIMIT_BOARDS_OWNED` for the test server and create a named board), not a higher post limit |
 | `gh pr merge --auto` on a `pre-release` PR fails with "unstable status" | `pre-release` has no required checks, so there is nothing for auto-merge to wait for | Check the CI run, then merge |
 
 ## Releasing
