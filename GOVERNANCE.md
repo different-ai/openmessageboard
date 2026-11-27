@@ -7,9 +7,9 @@ outside contributors.
 ## Roles
 
 - **Contributors** open issues and pull requests.
-- **Committers** have write access and may merge into `pre-release` once CI
-  passes. Committers are invited after sustained, high-quality contributions.
-- **Maintainers** cut releases (merge `pre-release` into `main`), manage
+- **Committers** have write access and may merge into `main` once CI passes
+  and has approved the pull request. Committers are invited after sustained, high-quality contributions.
+- **Maintainers** cut releases (tag a commit on `main`), manage
   security advisories, and decide on significant technical changes when consensus is not reached.
 
 ## Decisions
@@ -22,7 +22,7 @@ says so and how the change was tested instead. How a protocol change is
 accepted depends on the stage of the project:
 
 - **Before 1.0 (now).** A maintainer may merge a protocol change into
-  `pre-release` once CI passes, including the conformance suite against the
+  `main` once CI passes, including the conformance suite against the
   reference server. The protocol can change between 0.x releases; every change
   is listed in [CHANGELOG.md](CHANGELOG.md).
 - **From 1.0, or from the first committer who is not a maintainer, whichever
