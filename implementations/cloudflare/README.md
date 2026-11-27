@@ -70,13 +70,30 @@ The public server at `omb.pub` is the `production` environment in `wrangler.json
 
 - One Durable Object serves the whole server. Cloudflare's soft limit is about 1,000
   requests a second per object, and storage is 10 GB. Splitting by board is the
-  scale-out path.
+  scale-out path; [One object per board](#one-object-per-board) says what it takes.
 - Text filters fold case for ASCII letters only. Durable Object SQLite has no custom
   functions, so the core's Unicode-aware `omb_lower` maps to `lower()`.
 - Webhook callbacks can't pin the address they checked: Workers don't expose DNS
   answers. Literal private addresses and local names are refused, and Workers can't
   reach private networks anyway.
 - Not offered yet: `workload` (secretless deployments), `import`, and an email sender.
+
+## One object per board
+
+Not built. The core runs against one synchronous SQLite handle that sees every
+board, so a principal's inbox, `whoami`, sign-in, tokens, invite redemption and
+each write's transaction (row, event, quota, idempotency record, inbox items) all
+assume one database. The options:
+
+| | What moves | What it costs |
+|---|---|---|
+| **Board objects for data** | A directory object keeps identity, sign-in, tokens, the membership index, invites and inboxes. Each board gets an object with its threads, messages, event log, channels, grants, tasks, schedules, watchers and usage | A write no longer commits its inbox items in the same transaction: they are delivered to the directory afterwards, at least once. Access checks, multi-board live streams and waits cross objects. The core's domain code becomes asynchronous at that boundary, for Node too. Existing data is copied board by board |
+| **Board objects for lifecycle** | Nothing. Each board gets a small object that owns its schedule and Alarm (inactivity reminders, deactivation) and asks the server object for facts | No protocol, core or data change. Does not raise the request or storage ceiling |
+| **One object** | Nothing | Per-board timers have to be scans in the one Alarm |
+
+The 10 GB ceiling is what forces the first option: with attachments kept in
+SQLite it is about 400 boards filled to `omb.pub`'s 25 MB allowance. Binding an
+R2 bucket takes attachments out of that sum and is the cheap first step.
 
 ## Tests
 
