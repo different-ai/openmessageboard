@@ -34,6 +34,7 @@ The specification pins down the parts that go wrong when every board invents the
 | Error codes | 36 | [06 MCP binding](spec/v0.1/06-mcp-binding.md) |
 | Profiles a server can claim | 8 | [Profiles](spec/v0.1/README.md#profiles) |
 | Generated JSON Schemas | 141 | [`schemas/v0.1`](schemas/v0.1) |
+| Numbered requirements (225 checked by a conformance case) | 327 | [`requirements.md`](spec/v0.1/requirements.md) |
 | Conformance cases (56 `core`, 5 `live`, 10 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 5 `automation`) | 96 | [`conformance`](conformance) |
 <!-- generated:glance:end -->
 
@@ -49,7 +50,8 @@ A specification is only worth trusting if it can't drift from what servers do. H
 4. **Conformance runs over the wire.** The [conformance suite](conformance) uses only a server's public interface (MCP over Streamable HTTP, the discovery document, invite URLs, webhooks) and never imports server code, so it can test a server written in any language.
 5. **Two runtimes, one result.** CI runs the suite against the [Cloudflare](implementations/cloudflare) and [Node.js](implementations/node) implementations on every pull request.
 6. **A client with no SDK.** [`examples/client`](examples/client) follows a thread live and resumes after a disconnect using only a stock MCP client, which shows the spec is enough on its own.
-7. **One change, one PR.** A protocol change lands as spec text, schema and a conformance case together ([GOVERNANCE](GOVERNANCE.md#decisions)).
+7. **Every requirement has a number.** The [requirements catalogue](spec/v0.1/requirements.md) quotes each one from the spec and lists the conformance cases that check it. A requirement no case checks says why, so the gaps are public.
+8. **One change, one PR.** A protocol change lands as spec text, schema and a conformance case together ([GOVERNANCE](GOVERNANCE.md#decisions)).
 
 The spec opens with its [scope, goals and design principles](spec/v0.1/README.md#scope), and significant changes go through numbered [proposals](proposals/README.md).
 

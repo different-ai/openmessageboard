@@ -46,6 +46,7 @@ export const filterCases: CaseDef[] = [
     id: "core.read-messages",
     profile: "core",
     title: "read_messages filters by author, mentions, labels, text, source and thread, oldest first, and pages with after and before",
+    covers: ["R05-08", "R05-12", "R05-13"],
     async run(ctx) {
       const f = await filterThread(ctx);
       const owner = await ctx.session("owner");
@@ -105,6 +106,7 @@ export const filterCases: CaseDef[] = [
     id: "core.changes-filters",
     profile: "core",
     title: "get_changes takes the same filters and after; non-matching changes move the cursor on",
+    covers: ["R05-10", "R05-11"],
     async run(ctx) {
       const f = await filterThread(ctx);
       const owner = await ctx.session("owner");
@@ -141,6 +143,7 @@ export const filterCases: CaseDef[] = [
     id: "core.wait-after-message",
     profile: "core",
     title: "wait_for_activity after a message returns an answer that already exists; a filtered wait skips other changes",
+    covers: ["R05-20", "R05-22"],
     timeoutMs: 90_000,
     async run(ctx) {
       const boardId = await mayaOnOwnerBoard(ctx);
@@ -195,6 +198,7 @@ export const automationCases: CaseDef[] = [
     id: "automation.schedule-once",
     profile: "automation",
     title: "A scheduled reply posts once, as its creator, then the schedule is done",
+    covers: ["R12-04", "R12-07"],
     timeoutMs: 60_000,
     async run(ctx) {
       const f = await filterThread(ctx);
@@ -219,6 +223,7 @@ export const automationCases: CaseDef[] = [
     id: "automation.schedule-repeat",
     profile: "automation",
     title: "A repeating schedule posts every interval, at least schedule_min_repeat_seconds apart, and stops after times",
+    covers: ["R12-01", "R12-06"],
     timeoutMs: 120_000,
     async run(ctx) {
       const min = (await ctx.limitsOf("owner")).schedule_min_repeat_seconds;
@@ -245,6 +250,7 @@ export const automationCases: CaseDef[] = [
     id: "automation.schedule-cancel",
     profile: "automation",
     title: "Cancelling stops a schedule; only its creator or the board owner may cancel; readers cannot schedule",
+    covers: ["R12-02", "R12-08"],
     timeoutMs: 60_000,
     async run(ctx) {
       const f = await filterThread(ctx);
@@ -273,6 +279,7 @@ export const automationCases: CaseDef[] = [
     id: "automation.watcher-delivery",
     profile: "automation",
     title: "A watcher gets a signed verification, then signed deliveries of matching changes only; only the owner manages it",
+    covers: ["R12-10", "R12-12", "R12-14"],
     timeoutMs: 60_000,
     async run(ctx) {
       const f = await filterThread(ctx);
@@ -320,6 +327,7 @@ export const automationCases: CaseDef[] = [
     id: "automation.watcher-refused",
     profile: "automation",
     title: "create_watcher refuses private, metadata and non-HTTPS URLs, bad secrets, and endpoints that fail the challenge",
+    covers: ["R10-09", "R10-10", "R12-11", "R12-13"],
     async run(ctx) {
       const boardId = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");

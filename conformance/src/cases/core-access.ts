@@ -24,6 +24,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.discovery",
     profile: "core",
     title: "GET /.well-known/openmessageboard returns a valid ServerInfo without authentication",
+    covers: ["R00-03", "R00-04", "R00-06", "R00-07", "R07-01"],
     async run(ctx) {
       const res = await httpRequest(`${ctx.url}/.well-known/openmessageboard`);
       check(res.status === 200, `expected HTTP 200, got ${res.status}`);
@@ -46,6 +47,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.unauthenticated",
     profile: "core",
     title: "The MCP endpoint answers 401 with RFC 9728 resource metadata to requests without a valid token",
+    covers: ["R01-08", "R01-09", "R01-10"],
     async run(ctx) {
       await ctx.discovery();
       const anon = await rawRpc(ctx.endpoint, null, "tools/list", {});
@@ -68,6 +70,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.oauth-metadata",
     profile: "core",
     title: "Authorization server metadata advertises PKCE S256, CIMD and iss in authorization responses",
+    covers: ["R01-11", "R01-18"],
     async run(ctx) {
       const info = await ctx.discovery();
       const issuer = new URL(info.issuer);
@@ -93,6 +96,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.mcp-connect",
     profile: "core",
     title: `Every identity connects with bearer tokens and negotiates MCP ${MCP_PROTOCOL_VERSION}`,
+    covers: ["R01-06", "R06-01"],
     async run(ctx) {
       const names: PrincipalName[] = [...HUMANS, "agent"];
       const legacy: string[] = [];
@@ -113,6 +117,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.tools-list",
     profile: "core",
     title: "tools/list returns the protocol tools in order with matching input and output schemas",
+    covers: ["R06-02", "R06-06", "R06-07"],
     async run(ctx) {
       const owner = await ctx.session("owner");
       const r = await owner.rpc("tools/list");
@@ -156,6 +161,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.personal-board-once",
     profile: "core",
     title: "Ten parallel whoami calls for one person create exactly one personal board",
+    covers: ["R02-03"],
     async run(ctx) {
       await ctx.discovery();
       const started = ctx.serverNow();
@@ -182,6 +188,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.whoami",
     profile: "core",
     title: "whoami describes humans and agents correctly",
+    covers: ["R01-03", "R01-31", "R02-02"],
     async run(ctx) {
       for (const n of HUMANS) {
         const { whoami: w } = await ctx.me(n);
@@ -215,6 +222,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.agent-rules",
     profile: "core",
     title: "Agents cannot redeem or create invites",
+    covers: ["R01-30", "R02-19"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -236,6 +244,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.invite-email",
     profile: "core",
     title: "Email invites admit only the invited address; others fail with invite_not_eligible and see nothing",
+    covers: ["R02-23", "R02-28"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -267,6 +276,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.invite-domain",
     profile: "core",
     title: "Domain invites match the exact domain; lookalike, subdomain and other domains fail",
+    covers: ["R02-14", "R02-15"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -295,6 +305,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.invite-expired",
     profile: "core",
     title: "An invite past its Join by fails with invite_expired",
+    covers: ["R02-21"],
     async run(ctx) {
       const mayaBoard = await ctx.boardOf("maya");
       const maya = await ctx.session("maya");
@@ -313,6 +324,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.invite-max-uses",
     profile: "core",
     title: "An invite with max_uses stops after its last use",
+    covers: ["R02-22"],
     async run(ctx) {
       const mayaBoard = await ctx.boardOf("maya");
       const maya = await ctx.session("maya");
@@ -331,6 +343,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.invite-unknown",
     profile: "core",
     title: "An unknown invite token returns not_found",
+    covers: ["R02-18"],
     async run(ctx) {
       await (await ctx.session("outsider")).fails("redeem_invite", { invite: randomToken() }, "not_found");
       await (await ctx.session("outsider")).fails("redeem_invite", { invite: `${await ctx.resourceBase()}/i/${randomToken()}` }, "not_found");
@@ -340,6 +353,8 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.invite-disabled",
     profile: "core",
     title: "A disabled invite fails with invite_disabled",
+    covers: [],
+    placeholder: true,
     async run(ctx) {
       ctx.skip("disabling an invite is a web-only owner action in v0.1; there is no MCP path to set it up");
     },
@@ -348,6 +363,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.non-member-not-found",
     profile: "core",
     title: "Non-members get not_found for board objects, indistinguishable from unknown IDs",
+    covers: ["R02-36"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       if (await ctx.isMember("outsider", t.boardId)) ctx.skip("outsider is a member of the owner's board; use a fresh server");
@@ -387,6 +403,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.reader-cannot-post",
     profile: "core",
     title: "A reader can read and follow but cannot post (forbidden)",
+    covers: ["R02-06", "R02-07", "R02-08"],
     async run(ctx) {
       const board = await quotaReaderOnOwnerBoard(ctx);
       const t = await sharedThread(ctx);
@@ -404,6 +421,7 @@ export const coreAccessCases: CaseDef[] = [
     id: "core.maya-joins",
     profile: "core",
     title: "Setup: maya is a contributor on the owner's board",
+    covers: ["R02-25"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const w = await (await ctx.session("maya")).ok("whoami", {});

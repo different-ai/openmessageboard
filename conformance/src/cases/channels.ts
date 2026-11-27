@@ -12,6 +12,7 @@ export const channelCases: CaseDef[] = [
     id: "core.channels-first-post",
     profile: "core",
     title: "A thread lands in general by default; the first post in a new channel creates it",
+    covers: ["R11-01", "R11-03"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -43,6 +44,7 @@ export const channelCases: CaseDef[] = [
     id: "core.channels-subtree",
     profile: "core",
     title: "A channel filter with a trailing slash covers the channel and every channel under it",
+    covers: ["R05-09", "R11-04"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -73,6 +75,7 @@ export const channelCases: CaseDef[] = [
     id: "core.private-channel",
     profile: "core",
     title: "A private channel hides its threads from members who weren't granted it: reads, changes, search, inbox and listen",
+    covers: ["R11-14", "R11-15", "R11-16", "R11-17", "R11-18", "R11-19"],
     timeoutMs: 180_000,
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
@@ -150,6 +153,7 @@ export const channelCases: CaseDef[] = [
     id: "core.grants-explain",
     profile: "core",
     title: "Grants decide per channel (most specific pattern, closest principal), the role caps them, and explain_access says why",
+    covers: ["R11-08", "R11-09", "R11-10", "R11-13"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -199,6 +203,7 @@ export const channelCases: CaseDef[] = [
     id: "core.named-board-limit",
     profile: "core",
     title: "People can create named boards up to boards_owned; names are unique among their boards; whoami lists every owned board",
+    covers: ["R11-05", "R11-06", "R11-07"],
     async run(ctx) {
       const owner = await ctx.session("owner");
       await ctx.boardOf("owner");

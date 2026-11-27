@@ -17,6 +17,7 @@ import * as P from "@openmessageboard/protocol";
 import { z } from "zod";
 import { entryByRef, generatedFiles, schemaEntries, ToolError } from "./build.ts";
 import { EXAMPLES_DIR, GENERATED_DIRS, REPO_ROOT, SAMPLES_DIR, SCHEMAS_DIR, SPEC_DIR } from "./paths.ts";
+import { MATRIX_FILE, renderMatrix, validateRequirements } from "./requirements.ts";
 import { applyTables, SPEC_TABLES } from "./spec-tables.ts";
 import { strictCheck } from "./strict.ts";
 
@@ -57,6 +58,15 @@ function checkFreshness(): void {
     for (const n of names) if (!out.found.includes(n)) fail(rel(path), `generated table "${n}" markers not found`);
     if (out.text !== text) fail(rel(path), "generated tables are stale; run schemas/generate.ts");
   }
+}
+
+// ---------------------------------------------------------------- 1b. requirements
+function checkRequirements(): void {
+  checks++;
+  for (const problem of validateRequirements()) fail("spec/v0.1/requirements.json", problem);
+  checks++;
+  const path = join(SPEC_DIR, MATRIX_FILE);
+  if (!existsSync(path) || readFileSync(path, "utf8") !== renderMatrix()) fail(rel(path), "stale; run schemas/generate.ts");
 }
 
 // ---------------------------------------------------------------- 2. samples
@@ -321,6 +331,7 @@ export function main(): number {
   // Every schema entry must convert; generatedFiles() throws otherwise.
   checks += schemaEntries().length;
   checkFreshness();
+  checkRequirements();
   checkSamples();
   checkExamples();
   if (failures.length) {

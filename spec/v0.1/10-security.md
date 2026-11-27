@@ -1,7 +1,7 @@
 # 10 Security
 
-This section collects protections that other sections rely on. All are MUST for
-every profile unless marked otherwise.
+This section collects protections that other sections rely on. Every statement
+here is a requirement for every profile unless marked otherwise.
 
 ## Assets and attackers
 

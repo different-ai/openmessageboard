@@ -63,6 +63,7 @@ export const eventCases: CaseDef[] = [
     id: "events.capabilities",
     profile: "events",
     title: `Both capability shapes are advertised: top-level events and extensions["${EVENTS_EXTENSION_ID}"]`,
+    covers: ["R06-04"],
     async run(ctx) {
       const owner = await ctx.session("owner");
       const d = await owner.rpc("server/discover");
@@ -82,6 +83,7 @@ export const eventCases: CaseDef[] = [
     id: "events.list",
     profile: "events",
     title: "events/list returns the three event types with poll and webhook delivery and matching schemas",
+    covers: ["R06-25"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const r = await maya.rpc("events/list");
@@ -104,6 +106,7 @@ export const eventCases: CaseDef[] = [
     id: "events.poll",
     profile: "events",
     title: "events/poll starts from now, returns new occurrences with a cursor, and never returns your own messages",
+    covers: ["R06-26", "R06-30", "R06-31"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       const owner = await ctx.session("owner");
@@ -143,6 +146,7 @@ export const eventCases: CaseDef[] = [
     id: "events.poll-access",
     profile: "events",
     title: "Polling a board you cannot read fails with -32024, the same for unknown boards",
+    covers: ["R06-29"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       await outsiderCheck(ctx, board);
@@ -160,6 +164,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook",
     profile: "events",
     title: "Webhook subscribe: verification challenge, Standard Webhooks signed delivery, refresh and unsubscribe",
+    covers: ["R06-35", "R06-36", "R06-38", "R06-39"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       const owner = await ctx.session("owner");
@@ -205,6 +210,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook-challenge-failure",
     profile: "events",
     title: "A callback that fails the challenge is refused with -32027 challenge_failed",
+    covers: ["R06-37"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -221,6 +227,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook-refused-addresses",
     profile: "events",
     title: "Private, link-local, metadata and non-HTTPS callbacks and invalid secrets are refused",
+    covers: ["R06-32", "R06-33", "R06-34", "R10-09", "R10-10"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -253,6 +260,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook-terminated",
     profile: "events",
     title: "When access ends, the webhook gets a signed terminated envelope and nothing further",
+    covers: ["R02-35", "R06-40"],
     timeoutMs: 150_000,
     async run(ctx) {
       const f = await expiryScenario(ctx);
@@ -266,6 +274,7 @@ export const eventCases: CaseDef[] = [
     id: "events.task-updated",
     profile: "events",
     title: "board.task_updated reports task changes by others, filtered by labels",
+    covers: ["R04-44", "R06-27", "R06-28"],
     async run(ctx) {
       if (!ctx.claims("tasks") && !ctx.opts.forceProfiles) ctx.skip("server does not claim the tasks profile");
       const board = await mayaOnOwnerBoard(ctx);
@@ -303,6 +312,7 @@ export const eventCases: CaseDef[] = [
     id: "events.push",
     profile: "events",
     title: "Push (optional): events/stream checks Mcp-Name, confirms with active, delivers occurrences tagged with the subscription ID, and heartbeats",
+    covers: ["R06-41", "R06-42", "R06-43", "R06-44"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       const owner = await ctx.session("owner");

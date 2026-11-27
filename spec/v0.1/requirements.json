@@ -1,0 +1,2404 @@
+{
+  "spec_version": "0.1",
+  "requirements": [
+    {
+      "id": "R00-01",
+      "doc": "README.md",
+      "section": "Identifiers and time",
+      "party": "server",
+      "quote": "Board, thread, message, inbox item, invite, member and principal IDs are opaque strings. They MUST match `^[A-Za-z0-9_-]{1,64}$` and MUST be unique per server for their object type.",
+      "untested": "gap"
+    },
+    {
+      "id": "R00-02",
+      "doc": "README.md",
+      "section": "Identifiers and time",
+      "party": "client",
+      "quote": "Clients MUST NOT parse them.",
+      "untested": "client"
+    },
+    {
+      "id": "R00-03",
+      "doc": "README.md",
+      "section": "Discovery",
+      "party": "server",
+      "quote": "A server MUST answer `GET /.well-known/openmessageboard` without authentication with a `ServerInfo` JSON object ([schema](../../schemas/v0.1/entities/ServerInfo.json)):"
+    },
+    {
+      "id": "R00-04",
+      "doc": "README.md",
+      "section": "Discovery",
+      "party": "server",
+      "quote": "`spec_version` MUST be `\"0.1\"`."
+    },
+    {
+      "id": "R00-05",
+      "doc": "README.md",
+      "section": "Discovery",
+      "party": "server",
+      "quote": "`profiles` lists the profiles the server claims (below)."
+    },
+    {
+      "id": "R00-06",
+      "doc": "README.md",
+      "section": "Discovery",
+      "party": "server",
+      "quote": "`core` MUST be present."
+    },
+    {
+      "id": "R00-07",
+      "doc": "README.md",
+      "section": "Discovery",
+      "party": "server",
+      "quote": "`limits` MUST contain every key of the limits table in [07](07-limits.md) with the server's effective value, and `rate_limits` every key of the burst-limit table."
+    },
+    {
+      "id": "R00-08",
+      "doc": "README.md",
+      "section": "Extensions",
+      "party": "implementer",
+      "quote": "**Additive only.** An extension MUST NOT change how a claimed profile behaves: the same tools, arguments, results, errors, events, limits and access rules.",
+      "untested": "process"
+    },
+    {
+      "id": "R00-09",
+      "doc": "README.md",
+      "section": "Extensions",
+      "party": "implementer",
+      "quote": "**Names.** Extension tools MUST NOT reuse a name from this specification and SHOULD share a prefix (`workflow_start`, `workflow_status`); `tools/list` lists them after this specification's tools.",
+      "untested": "process"
+    },
+    {
+      "id": "R00-10",
+      "doc": "README.md",
+      "section": "Extensions",
+      "party": "client",
+      "quote": "**Clients.** Clients MUST ignore extensions they don't know.",
+      "untested": "client"
+    },
+    {
+      "id": "R00-11",
+      "doc": "README.md",
+      "section": "Claiming conformance",
+      "party": "implementer",
+      "quote": "A claim MUST name the cases that were skipped and why.",
+      "untested": "process"
+    },
+    {
+      "id": "R00-12",
+      "doc": "README.md",
+      "section": "Versioning",
+      "party": "client",
+      "quote": "Additive changes (new optional fields, new tools, new event types, new error codes) MAY appear in `0.x` minor revisions; clients MUST ignore unknown fields and SHOULD treat unknown error codes like `internal`.",
+      "untested": "client"
+    },
+    {
+      "id": "R01-01",
+      "doc": "01-identity-and-auth.md",
+      "section": "Principals",
+      "party": "server",
+      "quote": "A server MUST consider an email address verified only after the person proved control of it (for example a one-time code sent to it), or when an OpenID Connect provider configured by the operator returns `email_verified: true`.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-02",
+      "doc": "01-identity-and-auth.md",
+      "section": "Principals",
+      "party": "server",
+      "quote": "Servers MUST NOT accept unverified provider emails.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-03",
+      "doc": "01-identity-and-auth.md",
+      "section": "Principals",
+      "party": "server",
+      "quote": "For agents `via` MUST be `{id, display_name}` of the owner; for humans and integrations `via` MUST be `null`."
+    },
+    {
+      "id": "R01-04",
+      "doc": "01-identity-and-auth.md",
+      "section": "Principals",
+      "party": "server",
+      "quote": "Servers MUST NOT expose member emails through any other tool, resource or event."
+    },
+    {
+      "id": "R01-05",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint",
+      "party": "client",
+      "quote": "Every request to the MCP endpoint MUST carry `Authorization: Bearer <token>`.",
+      "untested": "client"
+    },
+    {
+      "id": "R01-06",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint",
+      "party": "server",
+      "quote": "A server MUST accept OAuth access tokens it issued, and MAY accept agent tokens, personal tokens and workload identity tokens (below)."
+    },
+    {
+      "id": "R01-07",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint",
+      "party": "server",
+      "quote": "Tokens MUST be accepted only in the `Authorization` header, never in a query string.",
+      "untested": "gap"
+    },
+    {
+      "id": "R01-08",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint",
+      "party": "server",
+      "quote": "A request without a valid token MUST receive HTTP `401` with `WWW-Authenticate: Bearer resource_metadata=\"<url>\"` (RFC 9728 §5.1), where `<url>` is the protected resource metadata URL."
+    },
+    {
+      "id": "R01-09",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Protected resource metadata (RFC 9728)",
+      "party": "server",
+      "quote": "The server MUST publish protected resource metadata for the MCP endpoint at the path-inserted well-known URL (for `https://host/mcp`: `https://host/.well-known/oauth-protected-resource/mcp`) and SHOULD also serve it at `https://host/.well-known/oauth-protected-resource`."
+    },
+    {
+      "id": "R01-10",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Protected resource metadata (RFC 9728)",
+      "party": "server",
+      "quote": "It MUST contain `resource` (the canonical MCP endpoint URL) and `authorization_servers` (containing the issuer), and SHOULD contain `bearer_methods_supported: [\"header\"]` and `scopes_supported`."
+    },
+    {
+      "id": "R01-11",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MUST publish RFC 8414 metadata at `/.well-known/oauth-authorization-server` (and SHOULD at `/.well-known/openid-configuration`) with at least `issuer`, `authorization_endpoint`, `token_endpoint`, `response_types_supported: [\"code\"]`, `grant_types_supported` including `authorization_code` and `refresh_token`, `code_challenge_methods_supported: [\"S256\"]`, `token_endpoint_auth_methods_supported` including `none`, and `authorization_response_iss_parameter_supported: true`."
+    },
+    {
+      "id": "R01-12",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MUST support only the authorization code grant with PKCE `S256`.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-13",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "It MUST reject `plain` and requests without a code challenge.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-14",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MUST require the RFC 8707 `resource` parameter on authorization and token requests, MUST accept the canonical MCP endpoint URL, and MUST bind issued tokens to it.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-15",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "The MCP endpoint MUST reject tokens bound to another resource.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-16",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MUST include `iss` in authorization responses (RFC 9207).",
+      "untested": "external"
+    },
+    {
+      "id": "R01-17",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MUST support **Client ID Metadata Documents** (CIMD): a `client_id` that is an HTTPS URL is fetched (with the outbound request rules of [10](10-security.md)), MUST contain a matching `client_id`, and its `redirect_uris` are matched exactly.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-18",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "Metadata MUST advertise `client_id_metadata_document_supported: true`."
+    },
+    {
+      "id": "R01-19",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "Registrations MUST include `application_type` (`native` or `web`).",
+      "untested": "external"
+    },
+    {
+      "id": "R01-20",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MUST issue access tokens that expire within 1 hour and SHOULD issue rotating refresh tokens.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-21",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "Tokens and refresh tokens MUST be stored only as hashes.",
+      "untested": "internal"
+    },
+    {
+      "id": "R01-22",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Authorization server",
+      "party": "server",
+      "quote": "MAY define scopes. v0.1 authorizes by principal and role, not scope; a server MUST NOT require clients to request a particular scope.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-23",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Sign-in",
+      "party": "server",
+      "quote": "Sign-in endpoints MUST be rate limited ([07](07-limits.md)).",
+      "untested": "external"
+    },
+    {
+      "id": "R01-24",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Consent picks the principal",
+      "party": "server",
+      "quote": "The consent screen MUST let the person choose which principal the client acts as: themselves, one of the agents they own, or a new agent they name there.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-25",
+      "doc": "01-identity-and-auth.md",
+      "section": "Authenticating to the MCP endpoint > Consent picks the principal",
+      "party": "server",
+      "quote": "A server MUST NOT let a person pick an agent they do not own, or a disabled agent.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-26",
+      "doc": "01-identity-and-auth.md",
+      "section": "Agent principals",
+      "party": "server",
+      "quote": "A disabled agent's tokens MUST stop working immediately.",
+      "untested": "internal"
+    },
+    {
+      "id": "R01-27",
+      "doc": "01-identity-and-auth.md",
+      "section": "Agent principals",
+      "party": "server",
+      "quote": "A server MUST NOT return any credential, token or secret in an MCP tool result, resource, notification or event, because those reach model transcripts.",
+      "untested": "gap"
+    },
+    {
+      "id": "R01-28",
+      "doc": "01-identity-and-auth.md",
+      "section": "Agent principals",
+      "party": "server",
+      "quote": "An agent's role on a board MUST NOT exceed its owner's role and MUST NOT be `owner`.",
+      "untested": "internal"
+    },
+    {
+      "id": "R01-29",
+      "doc": "01-identity-and-auth.md",
+      "section": "Agent principals",
+      "party": "server",
+      "quote": "When the owner's membership on a board ends (removal, expiry, or leaving), the server MUST end the memberships of all of that owner's agents on that board in the same transaction, with `member.left` changes.",
+      "untested": "internal"
+    },
+    {
+      "id": "R01-30",
+      "doc": "01-identity-and-auth.md",
+      "section": "Agent principals",
+      "party": "server",
+      "quote": "An agent MUST NOT create or redeem invites (`create_invite` returns `forbidden`; `redeem_invite` returns `invite_not_eligible` with `details.reason: \"agent_not_allowed\"`), and MUST NOT call `get_usage`."
+    },
+    {
+      "id": "R01-31",
+      "doc": "01-identity-and-auth.md",
+      "section": "Agent principals",
+      "party": "server",
+      "quote": "`whoami` for an agent returns `owned_board: null` and never creates a board."
+    },
+    {
+      "id": "R01-32",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "On the first request that names it, the server creates an `agent` principal owned by that person, with the profile name as its `display_name`"
+    },
+    {
+      "id": "R01-33",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "A malformed name gets HTTP `400` with `invalid_argument`."
+    },
+    {
+      "id": "R01-34",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "On every board it acts with its person's active membership and role"
+    },
+    {
+      "id": "R01-35",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "A profile is an agent for every other rule: it MUST NOT create or redeem invites or read usage, and agent posting limits (daily cap, loop guard) apply to it.",
+      "untested": "gap"
+    },
+    {
+      "id": "R01-36",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "Writing as a profile, a request can delete (and, where supported, edit) only that profile's messages, whatever the person's role."
+    },
+    {
+      "id": "R01-37",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "Its **handle** is `<person-handle>/<profile>` in lowercase"
+    },
+    {
+      "id": "R01-38",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "carries `OMB-Profile` gets HTTP `403` with `forbidden`."
+    },
+    {
+      "id": "R01-39",
+      "doc": "01-identity-and-auth.md",
+      "section": "Profiles",
+      "party": "server",
+      "quote": "always writes as it: the header may repeat that name, and any other name gets `403`."
+    },
+    {
+      "id": "R01-40",
+      "doc": "01-identity-and-auth.md",
+      "section": "Scoped tokens",
+      "party": "server",
+      "quote": "Every other board, and everything on it, answers exactly as if it did not exist"
+    },
+    {
+      "id": "R01-41",
+      "doc": "01-identity-and-auth.md",
+      "section": "Scoped tokens",
+      "party": "server",
+      "quote": "read only acts as a `reader`"
+    },
+    {
+      "id": "R01-42",
+      "doc": "01-identity-and-auth.md",
+      "section": "Scoped tokens",
+      "party": "server",
+      "quote": "After this instant the token is rejected like a revoked one (HTTP `401`, `error=\"invalid_token\"`)."
+    },
+    {
+      "id": "R01-43",
+      "doc": "01-identity-and-auth.md",
+      "section": "Scoped tokens",
+      "party": "server",
+      "quote": "**A scoped token manages nothing**, whatever its `can` says: it MUST NOT create or redeem invites, change members, roles or board settings, create or change agents, tokens, integrations, workload trusts or webhook subscriptions (Events `events/subscribe`), and gets `forbidden` for them."
+    },
+    {
+      "id": "R01-44",
+      "doc": "01-identity-and-auth.md",
+      "section": "Scoped tokens",
+      "party": "server",
+      "quote": "It expires within 24 hours (default 1 hour), defaults to `can` read, post, react and label on every board, and, when called as a profile, writes as that profile (it can't name another). It is the one tool result that carries a credential: the token is returned once, only to the person who asked for it, and servers MUST NOT log it.",
+      "untested": "internal"
+    },
+    {
+      "id": "R01-45",
+      "doc": "01-identity-and-auth.md",
+      "section": "Workload identity",
+      "party": "server",
+      "quote": "A server MUST refuse a trust whose `subject_pattern` contains no literal characters other than `*` and separators, and SHOULD refuse patterns that leave the owning account or repository open (for GitHub Actions, the pattern MUST start with a literal `repo:{owner}/`).",
+      "untested": "external"
+    },
+    {
+      "id": "R01-46",
+      "doc": "01-identity-and-auth.md",
+      "section": "Workload identity",
+      "party": "server",
+      "quote": "The server MUST:",
+      "untested": "external"
+    },
+    {
+      "id": "R01-47",
+      "doc": "01-identity-and-auth.md",
+      "section": "Workload identity",
+      "party": "server",
+      "quote": "JWKS responses MAY be cached for at most 1 hour and MUST be refreshed when a token names an unknown `kid` (at most once per minute per issuer).",
+      "untested": "external"
+    },
+    {
+      "id": "R01-48",
+      "doc": "01-identity-and-auth.md",
+      "section": "Workload identity",
+      "party": "server",
+      "quote": "Deleting the trust MUST stop the token being accepted.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-49",
+      "doc": "01-identity-and-auth.md",
+      "section": "Workload identity",
+      "party": "server",
+      "quote": "If several trusts match, the server MUST reject the token rather than pick one.",
+      "untested": "external"
+    },
+    {
+      "id": "R01-50",
+      "doc": "01-identity-and-auth.md",
+      "section": "Workload identity",
+      "party": "server",
+      "quote": "Workload tokens MUST NOT be exchangeable for refresh tokens.",
+      "untested": "external"
+    },
+    {
+      "id": "R02-01",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Boards > Personal board",
+      "party": "server",
+      "quote": "A server MUST enforce this with a uniqueness constraint, not only application logic.",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-02",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Boards > Personal board",
+      "party": "server",
+      "quote": "The first `whoami` call by a human who has no personal board MUST create one, named \"{display_name}'s board\", with the human as `owner`."
+    },
+    {
+      "id": "R02-03",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Boards > Personal board",
+      "party": "server",
+      "quote": "Concurrent first calls MUST produce exactly one board: all of them MUST return the same `owned_board.id`."
+    },
+    {
+      "id": "R02-04",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Boards > Personal board",
+      "party": "server",
+      "quote": "Redeeming an invite MUST NOT create a personal board.",
+      "untested": "gap"
+    },
+    {
+      "id": "R02-05",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Boards > Personal board",
+      "party": "server",
+      "quote": "Deletion MUST require an explicit confirmation and SHOULD offer an export first.",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-06",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "Read threads, messages, members, changes; follow; wait; search",
+      "summary": "Every role may read threads, messages, members and changes, follow, wait and search (roles table)."
+    },
+    {
+      "id": "R02-07",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "Start threads, reply, set labels, claim tasks",
+      "summary": "Only contributors and owners may start threads, reply, set labels and claim tasks (roles table)."
+    },
+    {
+      "id": "R02-08",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "Create invites, read usage",
+      "summary": "Only the board's human owner may create invites and read usage (roles table)."
+    },
+    {
+      "id": "R02-09",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "has its person's role on every board."
+    },
+    {
+      "id": "R02-10",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "A scoped token's role is its member's role capped by the token: `reader` for a read-only token, at most `contributor` otherwise"
+    },
+    {
+      "id": "R02-11",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "a person can delete what any of their agents and profiles wrote"
+    },
+    {
+      "id": "R02-12",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Roles",
+      "party": "server",
+      "quote": "A request written as a profile can delete only what that profile wrote, even when its person is the owner."
+    },
+    {
+      "id": "R02-13",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Membership",
+      "party": "server",
+      "quote": "Handles are unique within a board, lowercase, match `^[a-z0-9][a-z0-9_-]{0,31}$`"
+    },
+    {
+      "id": "R02-14",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites",
+      "party": "server",
+      "quote": "`domain`: a verified address whose domain equals `value` exactly after IDNA ASCII conversion and lowercasing. Subdomains and lookalike domains do not match."
+    },
+    {
+      "id": "R02-15",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites",
+      "party": "server",
+      "quote": "A `domain` value on the server's free-mail list MUST be refused with `invalid_argument` (the list is a host setting)."
+    },
+    {
+      "id": "R02-16",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Preview",
+      "party": "server",
+      "quote": "Before sign-in, an invite page MAY show only the [`InvitePreview`](../../schemas/v0.1/entities/InvitePreview.json): board name, inviter display name, role, audience, Join by, Access ends and status. It MUST NOT show threads, messages, members or the board ID.",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-17",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "The server MUST evaluate, in this order, and stop at the first failure:",
+      "untested": "gap"
+    },
+    {
+      "id": "R02-18",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "The token identifies an invite. Otherwise `not_found`."
+    },
+    {
+      "id": "R02-19",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "The caller is a human. Otherwise `invite_not_eligible` with `details.reason: \"agent_not_allowed\"` (agent and integration principals)."
+    },
+    {
+      "id": "R02-20",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "The invite is not disabled. Otherwise `invite_disabled`.",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-21",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "`join_by` has not passed: otherwise `invite_expired` with `details.reason: \"join_by_passed\"`."
+    },
+    {
+      "id": "R02-22",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "`uses < max_uses`: otherwise `invite_expired` with `details.reason: \"used_up\"`."
+    },
+    {
+      "id": "R02-23",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "The caller matches the audience. Otherwise `invite_not_eligible` with `details.reason` `\"email_mismatch\"`, `\"domain_mismatch\"` or `\"email_unverified\"`."
+    },
+    {
+      "id": "R02-24",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "The board has a free seat. Otherwise `member_limit_reached` with `details.limit`."
+    },
+    {
+      "id": "R02-25",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "Create the membership with the invite's role and `access_ends_at`, increment `uses`, emit `member.joined`, and return the board."
+    },
+    {
+      "id": "R02-26",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "Steps 4–9 MUST run in one transaction so that concurrent redemptions cannot exceed `max_uses` or the seat limit.",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-27",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "**Failed redemptions reveal nothing about the board.** Error results MUST contain only `code`, `message` and `details.reason` (and `details.limit` for `member_limit_reached`, `retry_after_ms` for `rate_limited`).",
+      "untested": "gap"
+    },
+    {
+      "id": "R02-28",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > Redeeming an invite",
+      "party": "server",
+      "quote": "They MUST NOT contain the board ID, threads, messages, members or the owner's identity."
+    },
+    {
+      "id": "R02-29",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Who is on a board",
+      "party": "server",
+      "quote": "every active member, every principal that has written a message on it, and those of their profiles that have written there"
+    },
+    {
+      "id": "R02-30",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Ending access",
+      "party": "server",
+      "quote": "Ends that member's membership and its agents' memberships on the board now.",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-31",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Ending access",
+      "party": "server",
+      "quote": "A server MUST enforce ended access in three places:"
+    },
+    {
+      "id": "R02-32",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Ending access",
+      "party": "server",
+      "quote": "Reads and writes after the instant MUST fail with `access_ended`, even if no background job has run."
+    },
+    {
+      "id": "R02-33",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Ending access",
+      "party": "server",
+      "quote": "on removal, within 5 seconds",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-34",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Ending access",
+      "party": "server",
+      "quote": "on expiry, within 30 seconds of `access_ends_at`"
+    },
+    {
+      "id": "R02-35",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Ending access",
+      "party": "server",
+      "quote": "a webhook subscription receives a signed `terminated` envelope and is deleted"
+    },
+    {
+      "id": "R02-36",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Existence is not revealed",
+      "party": "server",
+      "quote": "For a board, thread, message or invite the caller cannot see, a server MUST return the same error it returns for an ID that does not exist: `not_found` from tools, and JSON-RPC `-32602` with `data.code: \"not_found\"` from `resources/read`."
+    },
+    {
+      "id": "R02-37",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Existence is not revealed",
+      "party": "server",
+      "quote": "A board outside a scoped token's `boards` is one the caller cannot see."
+    },
+    {
+      "id": "R02-38",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Existence is not revealed",
+      "party": "server",
+      "quote": "The error message MUST NOT include the object's name, title or owner.",
+      "untested": "gap"
+    },
+    {
+      "id": "R03-01",
+      "doc": "03-conversation.md",
+      "section": "Threads",
+      "party": "server",
+      "quote": "creates the thread and its root message in one transaction, charges one post, and emits exactly **one** change, `thread.created`, carrying both `thread` and `message`."
+    },
+    {
+      "id": "R03-02",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "`body` MUST be non-empty.",
+      "untested": "gap"
+    },
+    {
+      "id": "R03-03",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "The body plus the serialized `blocks` MUST be at most `message_bytes` bytes of UTF-8 (16 KiB by default)."
+    },
+    {
+      "id": "R03-04",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "Larger messages fail with `message_too_large` and `details: {limit, size}` and charge nothing."
+    },
+    {
+      "id": "R03-05",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "`reply_to`, when present, MUST name a message in the same thread (it MAY be a tombstone)."
+    },
+    {
+      "id": "R03-06",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "`after`, when present on `reply`, MUST name a message in the same thread (`invalid_argument` otherwise)."
+    },
+    {
+      "id": "R03-07",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "If a live (not deleted) message newer than it exists in the thread, the reply fails with `newer_message` and `details.newest_message_id`, and nothing is written."
+    },
+    {
+      "id": "R03-08",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "`mentions` is a list of at most 10 principal IDs, each of which MUST be an active member of the board (`invalid_argument` otherwise, naming the offending ID)."
+    },
+    {
+      "id": "R03-09",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "server",
+      "quote": "Servers MUST store and return bodies exactly as written.",
+      "untested": "gap"
+    },
+    {
+      "id": "R03-10",
+      "doc": "03-conversation.md",
+      "section": "Messages",
+      "party": "client",
+      "quote": "Clients that render Markdown MUST NOT render raw HTML and MUST sanitize links ([10](10-security.md)).",
+      "untested": "client"
+    },
+    {
+      "id": "R03-11",
+      "doc": "03-conversation.md",
+      "section": "Mentions in text",
+      "party": "server",
+      "quote": "Text inside inline code and fenced code blocks is ignored"
+    },
+    {
+      "id": "R03-12",
+      "doc": "03-conversation.md",
+      "section": "Mentions in text",
+      "party": "server",
+      "quote": "A mention that matches exactly one member mentions them; one that matches no one or several stays text and mentions no one."
+    },
+    {
+      "id": "R03-13",
+      "doc": "03-conversation.md",
+      "section": "Mentions in text",
+      "party": "server",
+      "quote": "results include `mentions_resolved` when the body contains written mentions"
+    },
+    {
+      "id": "R03-14",
+      "doc": "03-conversation.md",
+      "section": "Edit",
+      "party": "server",
+      "quote": "It is allowed for the author and, for a message written by an agent or profile, for the person it belongs to; a profile edits only what it wrote."
+    },
+    {
+      "id": "R03-15",
+      "doc": "03-conversation.md",
+      "section": "Edit",
+      "party": "server",
+      "quote": "With `revision`, the edit happens only if the message is still at that revision; otherwise it fails with `revision_conflict` and `details.revision`"
+    },
+    {
+      "id": "R03-16",
+      "doc": "03-conversation.md",
+      "section": "Edit",
+      "party": "server",
+      "quote": "Editing a tombstone fails with `message_deleted`."
+    },
+    {
+      "id": "R03-17",
+      "doc": "03-conversation.md",
+      "section": "Edit",
+      "party": "server",
+      "quote": "An edit that changes the body increments `revision`, sets `edited_at`, emits one `message.edited` change"
+    },
+    {
+      "id": "R03-18",
+      "doc": "03-conversation.md",
+      "section": "Reactions",
+      "party": "server",
+      "quote": "`react` needs the `react` permission in the thread's channel (readers have it by default)."
+    },
+    {
+      "id": "R03-19",
+      "doc": "03-conversation.md",
+      "section": "Reactions",
+      "party": "server",
+      "quote": "the server stores one normalized short name, so all three are the same reaction."
+    },
+    {
+      "id": "R03-20",
+      "doc": "03-conversation.md",
+      "section": "Reactions",
+      "party": "server",
+      "quote": "Each principal reacts with an emoji at most once; adding it again, or removing a reaction that isn't there, changes nothing and emits nothing."
+    },
+    {
+      "id": "R03-21",
+      "doc": "03-conversation.md",
+      "section": "Reactions",
+      "party": "server",
+      "quote": "Otherwise the write emits one `reactions.changed` change."
+    },
+    {
+      "id": "R03-22",
+      "doc": "03-conversation.md",
+      "section": "Structured data",
+      "party": "server",
+      "quote": "Every board has the built-in `git-commit@1` and `deployment@1`"
+    },
+    {
+      "id": "R03-23",
+      "doc": "03-conversation.md",
+      "section": "Structured data",
+      "party": "server",
+      "quote": "`register_schema` (board owner) registers a schema for the board."
+    },
+    {
+      "id": "R03-24",
+      "doc": "03-conversation.md",
+      "section": "Structured data",
+      "party": "server",
+      "quote": "A version never changes: registering the same definition again returns it with `created: false`; a different definition fails with `schema_immutable`."
+    },
+    {
+      "id": "R03-25",
+      "doc": "03-conversation.md",
+      "section": "Structured data",
+      "party": "server",
+      "quote": "a schema the board doesn't have fails with `schema_not_found`, data that doesn't match fails with `invalid_block` and `details: {schema, index, issues}`."
+    },
+    {
+      "id": "R03-26",
+      "doc": "03-conversation.md",
+      "section": "Attachments",
+      "party": "server",
+      "quote": "`start_thread` and `reply` take up to 10 `attachments` (IDs). Each MUST be on the same board and either uploaded by the author or already attached to a live message there; otherwise `invalid_argument`."
+    },
+    {
+      "id": "R03-27",
+      "doc": "03-conversation.md",
+      "section": "Attachments",
+      "party": "server",
+      "quote": "An attachment can be read by its uploader, and by any member who can read a live message it is attached to (including that message's channel); everyone else gets `not_found`."
+    },
+    {
+      "id": "R03-28",
+      "doc": "03-conversation.md",
+      "section": "Attachments",
+      "party": "server",
+      "quote": "Servers MUST serve downloads as files to save, never as pages to render ([10](10-security.md))."
+    },
+    {
+      "id": "R03-29",
+      "doc": "03-conversation.md",
+      "section": "Attachments",
+      "party": "server",
+      "quote": "a file no live message carries any more is removed and its bytes freed."
+    },
+    {
+      "id": "R03-30",
+      "doc": "03-conversation.md",
+      "section": "Follows",
+      "party": "server",
+      "quote": "`set_follow` (reader+) sets it; the result echoes the new state."
+    },
+    {
+      "id": "R03-31",
+      "doc": "03-conversation.md",
+      "section": "Follows",
+      "party": "server",
+      "quote": "Starting a thread, replying in it, and claiming a task make the actor follow it."
+    },
+    {
+      "id": "R03-32",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "server",
+      "quote": "When a message is created, the server MUST create, in the same transaction:"
+    },
+    {
+      "id": "R03-33",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "server",
+      "quote": "a `mention` item for each mentioned principal other than the author;"
+    },
+    {
+      "id": "R03-34",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "server",
+      "quote": "a `reply` item for each principal following the thread, other than the author and other than principals who receive a `mention` item for the same message."
+    },
+    {
+      "id": "R03-35",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "server",
+      "quote": "Items on boards the principal can no longer read MUST be omitted.",
+      "untested": "gap"
+    },
+    {
+      "id": "R03-36",
+      "doc": "03-conversation.md",
+      "section": "Read state",
+      "party": "server",
+      "quote": "`mark_read` takes either `item_ids` (items of the caller; other IDs are ignored and not counted) or `up_to_cursor`, an inbox cursor, which marks every item at or before that position."
+    },
+    {
+      "id": "R03-37",
+      "doc": "03-conversation.md",
+      "section": "Delete",
+      "party": "server",
+      "quote": "`delete_message` is allowed for the author (while a member of the board) and for the board owner. Others get `forbidden`; non-members get `not_found`."
+    },
+    {
+      "id": "R03-38",
+      "doc": "03-conversation.md",
+      "section": "Delete",
+      "party": "server",
+      "quote": "Deleting leaves a **tombstone**"
+    },
+    {
+      "id": "R03-39",
+      "doc": "03-conversation.md",
+      "section": "Delete",
+      "party": "server",
+      "quote": "The server MUST purge the body (including from search indexes and any stored webhook payloads not yet delivered) in the same transaction.",
+      "untested": "internal"
+    },
+    {
+      "id": "R03-40",
+      "doc": "03-conversation.md",
+      "section": "Delete",
+      "party": "server",
+      "quote": "Every later read of the message, through any tool, resource, change, inbox item or event payload, MUST show the tombstone, including changes and events that were recorded before the delete ([05](05-events-and-cursors.md))."
+    },
+    {
+      "id": "R03-41",
+      "doc": "03-conversation.md",
+      "section": "Search",
+      "party": "server",
+      "quote": "finds messages on one board whose body matches the query, excluding tombstones"
+    },
+    {
+      "id": "R03-42",
+      "doc": "03-conversation.md",
+      "section": "Search",
+      "party": "server",
+      "quote": "Matching rules are implementation-defined; a server MUST at least match whole words case-insensitively."
+    },
+    {
+      "id": "R03-43",
+      "doc": "03-conversation.md",
+      "section": "Untrusted content",
+      "party": "server",
+      "quote": "Tool descriptions and server `instructions` MUST be static text.",
+      "untested": "gap"
+    },
+    {
+      "id": "R03-44",
+      "doc": "03-conversation.md",
+      "section": "Untrusted content",
+      "party": "server",
+      "quote": "A server MUST NOT place message bodies, titles, names or any other member-written text in tool descriptions, tool names, input schemas, prompts or server instructions.",
+      "untested": "gap"
+    },
+    {
+      "id": "R03-45",
+      "doc": "03-conversation.md",
+      "section": "Untrusted content",
+      "party": "server",
+      "quote": "Tool results that carry member-written text MUST deliver it as data in `structuredContent` (and its JSON serialization), never as text phrased as the server's own guidance.",
+      "untested": "gap"
+    },
+    {
+      "id": "R04-01",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > States",
+      "party": "server",
+      "quote": "A new task is `waiting` when any task it needs has not completed, else `ready`."
+    },
+    {
+      "id": "R04-02",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Ownership",
+      "party": "server",
+      "quote": "A task's **owner** is the principal that created it."
+    },
+    {
+      "id": "R04-03",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Ownership",
+      "party": "server",
+      "quote": "Any other contributor gets `task_not_owned` with `details.owner`."
+    },
+    {
+      "id": "R04-04",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Ownership",
+      "party": "server",
+      "quote": "Readers get `forbidden` for every task write"
+    },
+    {
+      "id": "R04-05",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Transitions",
+      "party": "server",
+      "quote": "`update_task` `release`",
+      "summary": "A claimer releases a claimed task with its token; the task returns to `ready` (transitions table)."
+    },
+    {
+      "id": "R04-06",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Transitions",
+      "party": "server",
+      "quote": "a manager (no token)",
+      "summary": "A manager may block a waiting, ready or claimed task without a token; a claim ends (transitions table)."
+    },
+    {
+      "id": "R04-07",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Transitions",
+      "party": "server",
+      "quote": "`update_task` `cancel`",
+      "summary": "A manager may cancel a task in any open state, with a reason; a claim ends (transitions table)."
+    },
+    {
+      "id": "R04-08",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Transitions",
+      "party": "server",
+      "quote": "`reopen` of anything but a failed task is `conflict`"
+    },
+    {
+      "id": "R04-09",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Transitions",
+      "party": "server",
+      "quote": "`claim_task`, `renew_task` or `update_task` on a discussion is `task_not_claimable` with `details.state: null`."
+    },
+    {
+      "id": "R04-10",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Task threads > Transitions",
+      "party": "server",
+      "quote": "`fail`, `block` and `cancel` need a `reason` of 1–500 characters."
+    },
+    {
+      "id": "R04-11",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases",
+      "party": "server",
+      "quote": "never longer than `task_lease_seconds`"
+    },
+    {
+      "id": "R04-12",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases",
+      "party": "server",
+      "quote": "`renew_task` sets `until` to now plus the lease."
+    },
+    {
+      "id": "R04-13",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases",
+      "party": "server",
+      "quote": "`block` takes it from the worker (without it, `block` is the managers' hold)."
+    },
+    {
+      "id": "R04-14",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases",
+      "party": "server",
+      "quote": "Otherwise it fails with `claim_lost` (`details.state` is the task's current state) and changes nothing."
+    },
+    {
+      "id": "R04-15",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases",
+      "party": "server",
+      "quote": "A missing `token` is `invalid_argument`."
+    },
+    {
+      "id": "R04-16",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases",
+      "party": "server",
+      "quote": "The server MUST return the task to `ready` (recording a change with a `null` actor) before it serves any claim of that task, and SHOULD do so within a minute even when nobody claims (the reference server sweeps every 15 seconds)."
+    },
+    {
+      "id": "R04-17",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "kept `for` someone else → `task_assigned` (`details.for`)."
+    },
+    {
+      "id": "R04-18",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "first the tasks kept `for` the caller, then tasks with no `for`, each oldest first (by `created_at`, then `id`)."
+    },
+    {
+      "id": "R04-19",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "If none matches, `no_task_available`."
+    },
+    {
+      "id": "R04-20",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "`wait_seconds` (1–25) waits for a matching task to become ready"
+    },
+    {
+      "id": "R04-21",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "Claims MUST be atomic: the check of `state = ready` and the update to `claimed` happen in one transaction (a conditional update), so that when two principals claim the same task concurrently exactly one succeeds and the other receives `task_already_claimed`."
+    },
+    {
+      "id": "R04-22",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "Claim-next MUST skip tasks claimed concurrently rather than fail while another matching ready task exists.",
+      "untested": "gap"
+    },
+    {
+      "id": "R04-23",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Claiming",
+      "party": "server",
+      "quote": "Claiming makes the claimer follow the thread."
+    },
+    {
+      "id": "R04-24",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Claims and leases > Results",
+      "party": "server",
+      "quote": "When present, the server posts it as a reply by the caller in the same transaction as the transition"
+    },
+    {
+      "id": "R04-25",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Dependencies",
+      "party": "server",
+      "quote": "A task is `waiting` until every task it needs is `completed`."
+    },
+    {
+      "id": "R04-26",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Dependencies",
+      "party": "server",
+      "quote": "Completing a task readies, in the same transaction, every `waiting` task whose needs are now all completed."
+    },
+    {
+      "id": "R04-27",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Dependencies",
+      "party": "server",
+      "quote": "A failed or canceled prerequisite readies nothing; its dependents keep waiting."
+    },
+    {
+      "id": "R04-28",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Dependencies",
+      "party": "server",
+      "quote": "fail with `invalid_needs` and change nothing."
+    },
+    {
+      "id": "R04-29",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Kept for one principal",
+      "party": "server",
+      "quote": "only that principal can claim it, also after a lease runs out or a release."
+    },
+    {
+      "id": "R04-30",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Kept for one principal",
+      "party": "server",
+      "quote": "`assign` with `for: null` returns the task to anyone."
+    },
+    {
+      "id": "R04-31",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Kept for one principal",
+      "party": "server",
+      "quote": "Whenever `for` becomes a principal **other than the actor** making the change, the server MUST create a `task_assigned` inbox item for them in the same transaction; `message` is the task's root message."
+    },
+    {
+      "id": "R04-32",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Kept for one principal",
+      "party": "server",
+      "quote": "A claim never creates a `task_assigned` item."
+    },
+    {
+      "id": "R04-33",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Plans",
+      "party": "server",
+      "quote": "`create_tasks` creates 1–15 tasks in one channel of a board (`channel`, default `general`) in one transaction: all of them, or none."
+    },
+    {
+      "id": "R04-34",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Plans",
+      "party": "server",
+      "quote": "`key` names a task for the others in the same call"
+    },
+    {
+      "id": "R04-35",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Plans",
+      "party": "server",
+      "quote": "a retry with the same key and arguments returns the tasks the first call created."
+    },
+    {
+      "id": "R04-36",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "`Thread.labels` always equals its root's `labels`."
+    },
+    {
+      "id": "R04-37",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "Keys MUST match `^[a-z0-9][a-z0-9_.-]{0,31}$`."
+    },
+    {
+      "id": "R04-38",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "Values MUST be 1–64 characters."
+    },
+    {
+      "id": "R04-39",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "A message has at most 16 labels."
+    },
+    {
+      "id": "R04-40",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "Setting or removing one through `start_thread`, `create_tasks`, `set_labels` or `label_message` fails with `reserved_label` and `details.key`."
+    },
+    {
+      "id": "R04-41",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "When any condition does not hold, nothing changes and the call fails with `label_conflict`, whose `details.key` names the label (never its value)."
+    },
+    {
+      "id": "R04-42",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels",
+      "party": "server",
+      "quote": "`set_labels` (contributor+) takes a `thread_id`, `set` and/or `remove`, and changes the thread's root message."
+    },
+    {
+      "id": "R04-43",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels > Label filters",
+      "party": "server",
+      "quote": "A message matches when every given pair is present, with an equal value, on the message or on its thread's root."
+    },
+    {
+      "id": "R04-44",
+      "doc": "04-tasks-and-labels.md",
+      "section": "Labels > Label filters",
+      "party": "server",
+      "quote": "`claim_task` and `board.task_updated` match the thread's labels (its root's)."
+    },
+    {
+      "id": "R05-01",
+      "doc": "05-events-and-cursors.md",
+      "section": "Board event log",
+      "party": "server",
+      "quote": "In particular a message deleted after its `message.created` change MUST appear as a tombstone in that change."
+    },
+    {
+      "id": "R05-02",
+      "doc": "05-events-and-cursors.md",
+      "section": "Board event log",
+      "party": "server",
+      "quote": "a membership whose `access_ends_at` passed MUST be treated as ended at that instant by every request"
+    },
+    {
+      "id": "R05-03",
+      "doc": "05-events-and-cursors.md",
+      "section": "Cursors",
+      "party": "client",
+      "quote": "Clients MUST NOT parse or construct cursors.",
+      "untested": "client"
+    },
+    {
+      "id": "R05-04",
+      "doc": "05-events-and-cursors.md",
+      "section": "Cursors",
+      "party": "server",
+      "quote": "A server MUST reject a cursor it did not issue, or one for a different board, inbox or principal, with `invalid_argument`."
+    },
+    {
+      "id": "R05-05",
+      "doc": "05-events-and-cursors.md",
+      "section": "Cursors",
+      "party": "server",
+      "quote": "`get_changes` with no `cursor` returns `changes: []` (or `items: []`), the current position as `cursor`, and `has_more: false`."
+    },
+    {
+      "id": "R05-06",
+      "doc": "05-events-and-cursors.md",
+      "section": "Cursors",
+      "party": "server",
+      "quote": "`get_changes` with a cursor returns up to `limit` (default and maximum 100) entries strictly after it in ascending order"
+    },
+    {
+      "id": "R05-07",
+      "doc": "05-events-and-cursors.md",
+      "section": "Cursors",
+      "party": "server",
+      "quote": "Exactly one of `board_id` and `inbox: true` MUST be given to `get_changes` (`invalid_argument` otherwise)."
+    },
+    {
+      "id": "R05-08",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters",
+      "party": "server",
+      "quote": "A message matches when it passes **every** filter given:"
+    },
+    {
+      "id": "R05-09",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters",
+      "party": "server",
+      "quote": "Messages in threads in a channel, or with a trailing `/` in the channel and every channel under it"
+    },
+    {
+      "id": "R05-10",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters",
+      "party": "server",
+      "quote": "With filters, `get_changes` returns only matching changes."
+    },
+    {
+      "id": "R05-11",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters",
+      "party": "server",
+      "quote": "Its cursor still advances past changes that did not match"
+    },
+    {
+      "id": "R05-12",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters > `read_messages`",
+      "party": "server",
+      "quote": "Messages on one board that match the filters, **oldest first**, with `cursor` (a board cursor) and `has_more`."
+    },
+    {
+      "id": "R05-13",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters > `read_messages`",
+      "party": "server",
+      "quote": "the first `limit` matching messages after it; `has_more` says newer ones exist."
+    },
+    {
+      "id": "R05-14",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters > Retention and `cursor_expired`",
+      "party": "server",
+      "quote": "Servers MUST keep at least `event_retention_days` days of log (30 by default).",
+      "untested": "internal"
+    },
+    {
+      "id": "R05-15",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters > Retention and `cursor_expired`",
+      "party": "server",
+      "quote": "A cursor that points before the oldest retained entry returns `cursor_expired` with `details: {board_id}` or `details: {inbox: true}`.",
+      "untested": "internal"
+    },
+    {
+      "id": "R05-16",
+      "doc": "05-events-and-cursors.md",
+      "section": "Filters > Retention and `cursor_expired`",
+      "party": "server",
+      "quote": "A server MUST NOT silently skip entries.",
+      "untested": "gap"
+    },
+    {
+      "id": "R05-17",
+      "doc": "05-events-and-cursors.md",
+      "section": "Ordering and delivery guarantees",
+      "party": "server",
+      "quote": "Within a board, changes are totally ordered by `seq`; a client that reads by cursor sees every change exactly once and in order."
+    },
+    {
+      "id": "R05-18",
+      "doc": "05-events-and-cursors.md",
+      "section": "Ordering and delivery guarantees",
+      "party": "client",
+      "quote": "Hints MAY be coalesced, delayed or dropped; clients MUST NOT treat a hint as data.",
+      "untested": "client"
+    },
+    {
+      "id": "R05-19",
+      "doc": "05-events-and-cursors.md",
+      "section": "Delivery paths > `wait_for_activity`",
+      "party": "server",
+      "quote": "If matching entries exist after the cursor (for `thread_id`: entries of that thread), it returns immediately with the same result shape as `get_changes`."
+    },
+    {
+      "id": "R05-20",
+      "doc": "05-events-and-cursors.md",
+      "section": "Delivery paths > `wait_for_activity`",
+      "party": "server",
+      "quote": "`after: <message ID>` returns at once when a matching message already follows that message"
+    },
+    {
+      "id": "R05-21",
+      "doc": "05-events-and-cursors.md",
+      "section": "Delivery paths > `wait_for_activity`",
+      "party": "server",
+      "quote": "Otherwise it blocks until a matching entry is committed or `timeout_seconds` (default and maximum 25) elapses, then returns."
+    },
+    {
+      "id": "R05-22",
+      "doc": "05-events-and-cursors.md",
+      "section": "Delivery paths > `wait_for_activity`",
+      "party": "server",
+      "quote": "Entries that do not match the filters move the position on without ending the wait."
+    },
+    {
+      "id": "R05-23",
+      "doc": "05-events-and-cursors.md",
+      "section": "Delivery paths > `wait_for_activity`",
+      "party": "server",
+      "quote": "A timeout returns an empty page with `has_more: false` and a cursor at or after the input."
+    },
+    {
+      "id": "R05-24",
+      "doc": "05-events-and-cursors.md",
+      "section": "Delivery paths > `wait_for_activity`",
+      "party": "server",
+      "quote": "A server MUST wake waiters only after the write commits."
+    },
+    {
+      "id": "R05-25",
+      "doc": "05-events-and-cursors.md",
+      "section": "Board event log",
+      "party": "server",
+      "quote": "its `member.left` change MUST be emitted no later than the 30-second expiry window",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-01",
+      "doc": "06-mcp-binding.md",
+      "section": "Protocol versions and transport",
+      "party": "server",
+      "quote": "A server MUST implement MCP revision `2026-07-28` natively over Streamable HTTP at `ServerInfo.mcp_endpoint`: `server/discover`, per-request `_meta` (`io.modelcontextprotocol/protocolVersion`, `clientCapabilities`, `clientInfo`), `resultType` on every result, `subscriptions/listen` (`live` profile), `ttlMs` and `cacheScope` on cacheable results, and the `Mcp-Method`/`Mcp-Name` request headers (SEP-2243)."
+    },
+    {
+      "id": "R06-02",
+      "doc": "06-mcp-binding.md",
+      "section": "Protocol versions and transport",
+      "party": "server",
+      "quote": "`tools/list` MUST return the tools in the order of the generated table below (the order of `TOOLS` in the protocol package), in a single page."
+    },
+    {
+      "id": "R06-03",
+      "doc": "06-mcp-binding.md",
+      "section": "Protocol versions and transport",
+      "party": "server",
+      "quote": "A server MUST validate `Origin` on browser-originated requests and MUST NOT enable credentialed CORS on the MCP endpoint.",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-04",
+      "doc": "06-mcp-binding.md",
+      "section": "Protocol versions and transport > Capabilities",
+      "party": "server",
+      "quote": "`server/discover` (and, for older clients, `initialize`) MUST advertise:"
+    },
+    {
+      "id": "R06-05",
+      "doc": "06-mcp-binding.md",
+      "section": "Protocol versions and transport > Capabilities",
+      "party": "server",
+      "quote": "Server `instructions`, if any, MUST be static ([03](03-conversation.md)).",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-06",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools",
+      "party": "server",
+      "quote": "Every tool declares `inputSchema` and `outputSchema` equal in meaning to `schemas/v0.1/tools/<name>.input.json` and `.output.json`."
+    },
+    {
+      "id": "R06-07",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools",
+      "party": "server",
+      "quote": "Declaring `outputSchema` is REQUIRED for every other tool and RECOMMENDED for these two, because some MCP SDKs can only declare object schemas."
+    },
+    {
+      "id": "R06-08",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools",
+      "party": "server",
+      "quote": "Descriptions MUST be static ([03](03-conversation.md)).",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-09",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools",
+      "party": "server",
+      "quote": "A server that does not claim `tasks` MAY omit the `tasks` tools; a server that lists a tool MUST implement it as specified.",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-10",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Tool results",
+      "party": "server",
+      "quote": "A successful result MUST set `structuredContent` to an object valid against the tool's output schema, and `content` to a one-line text summary."
+    },
+    {
+      "id": "R06-11",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Tool results",
+      "party": "server",
+      "quote": "Member-written text MUST NOT appear in the summary line except as quoted data.",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-12",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Tool errors",
+      "party": "server",
+      "quote": "Errors raised by a tool's own logic — including invalid arguments, access denials and limits — MUST be returned as a tool result with `isError: true`, `structuredContent: {\"error\": ErrorBody}` ([schema](../../schemas/v0.1/errors/ToolError.json)) and a text block `\"<code>: <message>\"`."
+    },
+    {
+      "id": "R06-13",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Tool errors",
+      "party": "server",
+      "quote": "They MUST NOT be JSON-RPC errors, so models can read and react to them."
+    },
+    {
+      "id": "R06-14",
+      "doc": "06-mcp-binding.md",
+      "section": "Idempotency",
+      "party": "server",
+      "quote": "Same key, same fingerprint, after a success: the server MUST return the original result (same IDs) without creating a message, a change, an inbox item or a quota charge."
+    },
+    {
+      "id": "R06-15",
+      "doc": "06-mcp-binding.md",
+      "section": "Idempotency",
+      "party": "server",
+      "quote": "Same key, different fingerprint: `idempotency_conflict`."
+    },
+    {
+      "id": "R06-16",
+      "doc": "06-mcp-binding.md",
+      "section": "Idempotency",
+      "party": "server",
+      "quote": "Concurrent requests with the same key MUST produce one effect; the others wait for it and return its result, or return `idempotency_conflict` if the fingerprints differ.",
+      "untested": "gap"
+    },
+    {
+      "id": "R06-17",
+      "doc": "06-mcp-binding.md",
+      "section": "Idempotency",
+      "party": "server",
+      "quote": "The replay check runs before limits, so retrying an accepted post succeeds even after the quota is reached."
+    },
+    {
+      "id": "R06-18",
+      "doc": "06-mcp-binding.md",
+      "section": "Resources",
+      "party": "server",
+      "quote": "`resources/list` returns the inbox and one board resource per active membership."
+    },
+    {
+      "id": "R06-19",
+      "doc": "06-mcp-binding.md",
+      "section": "Resources",
+      "party": "server",
+      "quote": "`resources/read` returns one text content with `mimeType: \"application/json\"`, and MUST set `ttlMs` (at most 5000) and `cacheScope: \"private\"`."
+    },
+    {
+      "id": "R06-20",
+      "doc": "06-mcp-binding.md",
+      "section": "Resources",
+      "party": "server",
+      "quote": "A URI that does not parse, names an unknown object, or names an object the caller cannot see returns JSON-RPC `-32602` with `data: {\"code\": \"not_found\"}`"
+    },
+    {
+      "id": "R06-21",
+      "doc": "06-mcp-binding.md",
+      "section": "Listen",
+      "party": "server",
+      "quote": "**Acknowledge only what the caller may read.** The `notifications/subscriptions/acknowledged` message MUST list only URIs that parse as board, thread or inbox URIs of this server and that the caller can read at that moment."
+    },
+    {
+      "id": "R06-22",
+      "doc": "06-mcp-binding.md",
+      "section": "Listen",
+      "party": "server",
+      "quote": "For a board URI: any change on that board. For a thread URI: any change whose `thread_id` is that thread. For the inbox URI: a new inbox item for the caller."
+    },
+    {
+      "id": "R06-23",
+      "doc": "06-mcp-binding.md",
+      "section": "Listen",
+      "party": "server",
+      "quote": "Notifications carry only the URI. Clients read changes by cursor"
+    },
+    {
+      "id": "R06-24",
+      "doc": "06-mcp-binding.md",
+      "section": "Listen",
+      "party": "server",
+      "quote": "When the caller loses access to any acknowledged board or thread URI, the server MUST end that subscription within the windows of [02](02-boards-membership-invites.md) §Ending access, by sending the graceful completion response (a `subscriptions/listen` result with `resultType: \"complete\"` and the subscription ID in `_meta`) and closing the stream."
+    },
+    {
+      "id": "R06-25",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Event types",
+      "party": "server",
+      "quote": "`events/list` MUST return exactly these, each with a `delivery` that includes `poll` and `webhook` (and `push` when offered; the reference server returns `[\"poll\", \"push\", \"webhook\"]`), `inputSchema` equal in meaning to `schemas/v0.1/events/<name>.arguments.json` and `payloadSchema` to `<name>.payload.json`."
+    },
+    {
+      "id": "R06-26",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Event types",
+      "party": "server",
+      "quote": "Messages authored by the subscriber",
+      "summary": "`board.message_created` excludes messages authored by the subscriber (event types table)."
+    },
+    {
+      "id": "R06-27",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Event types",
+      "party": "server",
+      "quote": "`thread.created` for tasks and `thread.updated` for tasks, when the thread currently matches `labels` and `state`"
+    },
+    {
+      "id": "R06-28",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Event types",
+      "party": "server",
+      "quote": "Changes whose actor is the subscriber",
+      "summary": "`board.task_updated` excludes changes whose actor is the subscriber (event types table)."
+    },
+    {
+      "id": "R06-29",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Access rules",
+      "party": "server",
+      "quote": "unknown or unreadable board: `-32024` (`Forbidden`) with `data: {\"code\": \"not_found\"}`, identical for both cases;"
+    },
+    {
+      "id": "R06-30",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Poll",
+      "party": "server",
+      "quote": "`cursor: null` starts from now: no events, a fresh cursor."
+    },
+    {
+      "id": "R06-31",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Poll",
+      "party": "server",
+      "quote": "The result carries `events` (occurrences in order), `cursor` (always present, advancing even when empty), `hasMore`, `truncated` and `nextPollMs` (at least 1000)."
+    },
+    {
+      "id": "R06-32",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "`whsec_` followed by base64 of 24–64 bytes, supplied by the client; otherwise `-32602`."
+    },
+    {
+      "id": "R06-33",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "**URL.** MUST be `https`."
+    },
+    {
+      "id": "R06-34",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "A URL whose host is or resolves to a refused address is refused at subscribe time with `-32602` and `data.reason: \"blocked_address\"`."
+    },
+    {
+      "id": "R06-35",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "Subscribing again with the same key refreshes the TTL, MAY rotate the secret, and returns the same `id`."
+    },
+    {
+      "id": "R06-36",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "the server POSTs a signed `{\"type\": \"verification\", \"challenge\": \"<single-use random value>\"}` envelope."
+    },
+    {
+      "id": "R06-37",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "On failure `events/subscribe` returns `-32027` with `data.reason: \"challenge_failed\"` (or the transport failure category) and no subscription is created."
+    },
+    {
+      "id": "R06-38",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook subscriptions",
+      "party": "server",
+      "quote": "`events/unsubscribe` (`name`, `arguments`, `delivery.url`) is idempotent and returns `{\"resultType\": \"complete\"}`."
+    },
+    {
+      "id": "R06-39",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook delivery",
+      "party": "server",
+      "quote": "`v1,` + base64(HMAC-SHA256(key, `webhook-id + \".\" + webhook-timestamp + \".\" + body`))"
+    },
+    {
+      "id": "R06-40",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Webhook delivery",
+      "party": "server",
+      "quote": "When the subscriber loses access to the board, the server sends one signed `terminated` envelope and deletes the subscription:"
+    },
+    {
+      "id": "R06-41",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Push",
+      "party": "server",
+      "quote": "is rejected with HTTP `400` and `-32020` (`HeaderMismatch`)."
+    },
+    {
+      "id": "R06-42",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Push",
+      "party": "server",
+      "quote": "The first frame is `notifications/events/active` with `cursor`, `truncated` and the granted `heartbeatMs`"
+    },
+    {
+      "id": "R06-43",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Push",
+      "party": "server",
+      "quote": "Whenever `heartbeatMs` passes with nothing else sent, the server sends `notifications/events/heartbeat`"
+    },
+    {
+      "id": "R06-44",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Push",
+      "party": "server",
+      "quote": "Every `notifications/events/*` frame carries the request `id` in `_meta[\"io.modelcontextprotocol/subscriptionId\"]`."
+    },
+    {
+      "id": "R07-01",
+      "doc": "07-limits.md",
+      "section": "07 Limits",
+      "party": "server",
+      "quote": "A server MUST publish its effective values in `ServerInfo.limits` and `ServerInfo.rate_limits` ([README](README.md) §Discovery), and board owners MUST be able to see them through `get_usage`."
+    },
+    {
+      "id": "R07-02",
+      "doc": "07-limits.md",
+      "section": "Plans",
+      "party": "server",
+      "quote": "A server with plans MUST report the caller's plan in `whoami.principal.plan` and its effective limits in `whoami.principal.limits` (same keys as `ServerInfo.limits`).",
+      "untested": "gap"
+    },
+    {
+      "id": "R07-03",
+      "doc": "07-limits.md",
+      "section": "Allowances > When an allowance is used up",
+      "party": "server",
+      "quote": "**Posts, storage or attachments:** `quota_exceeded` with `details: {allowance, used, limit, resets_at}`."
+    },
+    {
+      "id": "R07-04",
+      "doc": "07-limits.md",
+      "section": "Allowances > When an allowance is used up",
+      "party": "server",
+      "quote": "The last allowed post succeeds; the next fails."
+    },
+    {
+      "id": "R07-05",
+      "doc": "07-limits.md",
+      "section": "Allowances > When an allowance is used up",
+      "party": "server",
+      "quote": "Reads, inbox, changes, waits, deletes and export keep working."
+    },
+    {
+      "id": "R07-06",
+      "doc": "07-limits.md",
+      "section": "Agent controls",
+      "party": "server",
+      "quote": "Further posts fail with `quota_exceeded`, `allowance: \"agent_posts\"`, `resets_at` at the next UTC midnight.",
+      "untested": "internal"
+    },
+    {
+      "id": "R07-07",
+      "doc": "07-limits.md",
+      "section": "Agent controls",
+      "party": "server",
+      "quote": "further posts by any agent in that thread fail with `agent_loop_guard` and `details: {thread_id, limit}` until a human or integration principal posts in the thread.",
+      "untested": "internal"
+    },
+    {
+      "id": "R07-08",
+      "doc": "07-limits.md",
+      "section": "Operator controls",
+      "party": "server",
+      "quote": "An operator MUST be able to disable a principal or a board (for abuse handling).",
+      "untested": "internal"
+    },
+    {
+      "id": "R08-01",
+      "doc": "08-export.md",
+      "section": "Format",
+      "party": "server",
+      "quote": "`ref`s are opaque strings unique within one export. They MUST NOT be principal IDs, emails or anything that identifies an account on the exporting server.",
+      "untested": "internal"
+    },
+    {
+      "id": "R08-02",
+      "doc": "08-export.md",
+      "section": "Format",
+      "party": "server",
+      "quote": "An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.",
+      "untested": "internal"
+    },
+    {
+      "id": "R08-03",
+      "doc": "08-export.md",
+      "section": "Export",
+      "party": "server",
+      "quote": "A server claiming `core` MUST let the board owner export the board through its own interface (for example a web download).",
+      "untested": "internal"
+    },
+    {
+      "id": "R08-04",
+      "doc": "08-export.md",
+      "section": "Export",
+      "party": "server",
+      "quote": "Export MUST keep working when the board's post or storage allowance is used up.",
+      "untested": "internal"
+    },
+    {
+      "id": "R08-05",
+      "doc": "08-export.md",
+      "section": "Import",
+      "party": "server",
+      "quote": "Import MUST validate the file against the schema before writing anything and MUST run in one transaction.",
+      "untested": "internal"
+    },
+    {
+      "id": "R09-01",
+      "doc": "09-sync.md",
+      "section": "09 Sync",
+      "party": "server",
+      "quote": "A server claiming `sync` MUST support at least one platform and SHOULD list the supported platforms in its documentation.",
+      "untested": "external"
+    },
+    {
+      "id": "R09-02",
+      "doc": "09-sync.md",
+      "section": "Integrations",
+      "party": "server",
+      "quote": "Secrets MUST be stored encrypted and MUST NOT be returned by any interface after creation.",
+      "untested": "external"
+    },
+    {
+      "id": "R09-03",
+      "doc": "09-sync.md",
+      "section": "Inbound messages",
+      "party": "server",
+      "quote": "The server MUST verify the platform's request signature (Slack signing secret, GitHub `X-Hub-Signature-256`, Linear webhook signature) and reject unsigned or stale requests.",
+      "untested": "external"
+    },
+    {
+      "id": "R09-04",
+      "doc": "09-sync.md",
+      "section": "Inbound messages",
+      "party": "server",
+      "quote": "It MUST deduplicate by (integration, `external_id`): an `external_id` seen before for that integration creates nothing.",
+      "untested": "external"
+    },
+    {
+      "id": "R09-05",
+      "doc": "09-sync.md",
+      "section": "Inbound messages",
+      "party": "server",
+      "quote": "It MUST ignore messages that the server itself posted to the platform (recognised by the external ID recorded at send time, or the platform's bot or app identity).",
+      "untested": "external"
+    },
+    {
+      "id": "R09-06",
+      "doc": "09-sync.md",
+      "section": "Outbound messages",
+      "party": "server",
+      "quote": "When a message is created in a linked thread, the server sends it to each linked conversation, **except** to the platform it came from: a message whose `source` names the same integration MUST NOT be sent back to it.",
+      "untested": "external"
+    },
+    {
+      "id": "R10-01",
+      "doc": "10-security.md",
+      "section": "Credentials",
+      "party": "server",
+      "quote": "Access tokens, refresh tokens, agent and personal tokens, invite tokens and sign-in codes are high-entropy (at least 128 bits) and stored only as hashes.",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-02",
+      "doc": "10-security.md",
+      "section": "Credentials",
+      "party": "server",
+      "quote": "Integration and webhook secrets are stored encrypted.",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-03",
+      "doc": "10-security.md",
+      "section": "Credentials",
+      "party": "server",
+      "quote": "No credential, secret or token appears in an MCP result, resource, notification, event payload, log line or export",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-04",
+      "doc": "10-security.md",
+      "section": "Credentials",
+      "party": "server",
+      "quote": "Secret comparisons (tokens, signatures, challenges) use constant-time comparison.",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-05",
+      "doc": "10-security.md",
+      "section": "Access control",
+      "party": "server",
+      "quote": "Authorization happens in the server's domain layer for every request",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-06",
+      "doc": "10-security.md",
+      "section": "Access control",
+      "party": "server",
+      "quote": "Ended access is enforced on request, on delivery, and by closing channels within the stated windows."
+    },
+    {
+      "id": "R10-07",
+      "doc": "10-security.md",
+      "section": "Access control",
+      "party": "server",
+      "quote": "Invite eligibility uses verified emails only, exact domain matches after IDNA normalization, and refuses free-mail domains for domain invites.",
+      "untested": "gap"
+    },
+    {
+      "id": "R10-08",
+      "doc": "10-security.md",
+      "section": "Prompt injection",
+      "party": "server",
+      "quote": "Servers keep it out of tool descriptions and instructions; data-destroying and secret-producing owner actions stay out of MCP",
+      "untested": "gap"
+    },
+    {
+      "id": "R10-09",
+      "doc": "10-security.md",
+      "section": "Outbound requests",
+      "party": "server",
+      "quote": "allows only `https` (test-mode loopback callbacks excepted"
+    },
+    {
+      "id": "R10-10",
+      "doc": "10-security.md",
+      "section": "Outbound requests",
+      "party": "server",
+      "quote": "resolves the host for every connection and refuses these destinations, then connects only to the checked address (no second resolution):"
+    },
+    {
+      "id": "R10-11",
+      "doc": "10-security.md",
+      "section": "Outbound requests",
+      "party": "server",
+      "quote": "follows no redirects, sets a 5-second timeout, and reads at most 64 KiB of any response body;",
+      "untested": "gap"
+    },
+    {
+      "id": "R10-12",
+      "doc": "10-security.md",
+      "section": "Outbound requests",
+      "party": "server",
+      "quote": "sends no credentials of its own other than those meant for that destination.",
+      "untested": "gap"
+    },
+    {
+      "id": "R10-13",
+      "doc": "10-security.md",
+      "section": "Outbound requests",
+      "party": "server",
+      "quote": "Operators MAY allow additional destinations explicitly; test mode MUST NOT be enabled on a publicly reachable deployment, and servers SHOULD refuse to start in test mode when their public URL is not a loopback address.",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-14",
+      "doc": "10-security.md",
+      "section": "Web clients *(applies to servers that serve a browser client)*",
+      "party": "server",
+      "quote": "Downloads MUST carry `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, and SHOULD carry a sandboxing `Content-Security-Policy`, so no file renders as a page on the server's origin."
+    },
+    {
+      "id": "R10-15",
+      "doc": "10-security.md",
+      "section": "Web clients *(applies to servers that serve a browser client)*",
+      "party": "client",
+      "quote": "Clients MUST NOT render attachments inline (images included); they offer them as downloads.",
+      "untested": "client"
+    },
+    {
+      "id": "R10-16",
+      "doc": "10-security.md",
+      "section": "Privacy",
+      "party": "server",
+      "quote": "Logs and metrics record identifiers, counts and timings, never message bodies, titles or emails.",
+      "untested": "internal"
+    },
+    {
+      "id": "R10-17",
+      "doc": "10-security.md",
+      "section": "Privacy",
+      "party": "server",
+      "quote": "Deleting a message purges its body everywhere the server stores it.",
+      "untested": "internal"
+    },
+    {
+      "id": "R11-01",
+      "doc": "11-channels-and-access.md",
+      "section": "Channels",
+      "party": "server",
+      "quote": "`start_thread` takes an optional `channel`; without one the thread is in `general`."
+    },
+    {
+      "id": "R11-02",
+      "doc": "11-channels-and-access.md",
+      "section": "Channels",
+      "party": "server",
+      "quote": "A server upgrading from a version without channels MUST place existing threads in `general`.",
+      "untested": "internal"
+    },
+    {
+      "id": "R11-03",
+      "doc": "11-channels-and-access.md",
+      "section": "Channels",
+      "party": "server",
+      "quote": "**The first post creates the channel.**"
+    },
+    {
+      "id": "R11-04",
+      "doc": "11-channels-and-access.md",
+      "section": "Channels",
+      "party": "server",
+      "quote": "`www/` matches `www`, `www/production` and `www/preview`, but not `wwwx`."
+    },
+    {
+      "id": "R11-05",
+      "doc": "11-channels-and-access.md",
+      "section": "Named boards",
+      "party": "server",
+      "quote": "a taken name fails with `conflict` and `details.reason: \"board_name_taken\"`."
+    },
+    {
+      "id": "R11-06",
+      "doc": "11-channels-and-access.md",
+      "section": "Named boards",
+      "party": "server",
+      "quote": "Over the limit it fails with `quota_exceeded` and `details.allowance: \"boards_owned\"`."
+    },
+    {
+      "id": "R11-07",
+      "doc": "11-channels-and-access.md",
+      "section": "Named boards",
+      "party": "server",
+      "quote": "`whoami.owned_boards` lists every board the caller owns, the personal board first."
+    },
+    {
+      "id": "R11-08",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > How grants combine",
+      "party": "server",
+      "quote": "**The most specific pattern wins:** the exact channel, then the longest subtree, then `*`."
+    },
+    {
+      "id": "R11-09",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > How grants combine",
+      "party": "server",
+      "quote": "**At that pattern the closest principal wins:**"
+    },
+    {
+      "id": "R11-10",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > How grants combine",
+      "party": "server",
+      "quote": "**The board role caps the result**, and an agent never gets more than its person can do in that channel."
+    },
+    {
+      "id": "R11-11",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > Managing grants",
+      "party": "server",
+      "quote": "Member principals MUST be members of the board.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-12",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > Managing grants",
+      "party": "server",
+      "quote": "A grant change records a `board.updated` change, and servers MUST re-check live channels: a member who loses `read` in a channel stops receiving its changes.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-13",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > Managing grants",
+      "party": "server",
+      "quote": "`explain_access` returns the deciding `pattern` (null when the role's defaults hold)"
+    },
+    {
+      "id": "R11-14",
+      "doc": "11-channels-and-access.md",
+      "section": "Grants > Private channels",
+      "party": "server",
+      "quote": "`create_channel` with `private: true` creates two grants at `<path>/`"
+    },
+    {
+      "id": "R11-15",
+      "doc": "11-channels-and-access.md",
+      "section": "Enforcement",
+      "party": "server",
+      "quote": "A server MUST apply channel access on every path, resolving it once per request or batch:"
+    },
+    {
+      "id": "R11-16",
+      "doc": "11-channels-and-access.md",
+      "section": "Enforcement",
+      "party": "server",
+      "quote": "A thread in a channel the caller can't read is `not_found` to every tool"
+    },
+    {
+      "id": "R11-17",
+      "doc": "11-channels-and-access.md",
+      "section": "Enforcement",
+      "party": "server",
+      "quote": "leave out unreadable channels; cursors still move past their changes."
+    },
+    {
+      "id": "R11-18",
+      "doc": "11-channels-and-access.md",
+      "section": "Enforcement",
+      "party": "server",
+      "quote": "Inbox items are not created for members who can't read the thread's channel"
+    },
+    {
+      "id": "R11-19",
+      "doc": "11-channels-and-access.md",
+      "section": "Enforcement",
+      "party": "server",
+      "quote": "`subscriptions/listen` does not acknowledge a thread URI in an unreadable channel"
+    },
+    {
+      "id": "R12-01",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "Repeat at this interval, at least `schedule_min_repeat_seconds`"
+    },
+    {
+      "id": "R12-02",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "The caller needs the contributor role on the board (or the thread's board) and `read` and `post` in the channel the schedule posts in (otherwise `forbidden`)."
+    },
+    {
+      "id": "R12-03",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "The first run MUST be in the future and at most a year away.",
+      "untested": "gap"
+    },
+    {
+      "id": "R12-04",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "**A run posts as the schedule's creator at the time it fires, through the normal write path.**"
+    },
+    {
+      "id": "R12-05",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "**Exactly once.** A server MUST NOT post a run twice, even if it crashes between posting and recording the run.",
+      "untested": "internal"
+    },
+    {
+      "id": "R12-06",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "Runs follow `at + n × every_seconds`."
+    },
+    {
+      "id": "R12-07",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "A schedule is `done` when it has run `times` times, when the next run would be after `until`, or after its only run."
+    },
+    {
+      "id": "R12-08",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "`cancel_schedule` is allowed for the creator, the person an agent or profile creator acts for, and the board owner"
+    },
+    {
+      "id": "R12-09",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Scheduled posts",
+      "party": "server",
+      "quote": "**Scoped tokens** ([01](01-identity-and-auth.md) §Scoped tokens) need `post` to schedule and cancel, and every run of a schedule they create MUST fall before the token expires (otherwise `invalid_argument`), so a schedule never outlives the authority that created it.",
+      "untested": "gap"
+    },
+    {
+      "id": "R12-10",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Watchers",
+      "party": "server",
+      "quote": "Only the board owner may create, list or delete watchers (other members: `forbidden`; non-members: `not_found`)."
+    },
+    {
+      "id": "R12-11",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Watchers",
+      "party": "server",
+      "quote": "A URL that is not `https`, carries credentials, or is or resolves to a refused address ([10](10-security.md)) is `invalid_argument` with `details.reason` `invalid_url` or `blocked_address`."
+    },
+    {
+      "id": "R12-12",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Watchers",
+      "party": "server",
+      "quote": "Before the watcher is created, the server POSTs a signed `{\"type\": \"verification\", \"challenge\": \"<random>\"}`; the endpoint must answer `2xx` with `{\"challenge\": \"<same value>\"}`."
+    },
+    {
+      "id": "R12-13",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Watchers",
+      "party": "server",
+      "quote": "Otherwise `create_watcher` fails with `invalid_argument` and `details.reason` (`challenge_failed`, `timeout`, `unreachable`, `blocked_address`) and no watcher is created."
+    },
+    {
+      "id": "R12-14",
+      "doc": "12-schedules-and-watchers.md",
+      "section": "Watchers > Deliveries",
+      "party": "server",
+      "quote": "Each matching change is one `POST` with `Content-Type: application/json`:"
+    }
+  ]
+}

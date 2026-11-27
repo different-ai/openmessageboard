@@ -10,6 +10,7 @@ and the commands.
 | Change | Files | Tests to add or keep green |
 |---|---|---|
 | A tool, field, error or event | `packages/protocol/src`, `spec/v0.1`, then `pnpm schemas` | `packages/protocol/test`, `schemas/check.ts` (samples and spec examples), a case in `conformance/src/cases`, the SDK's typed method (its build fails when a tool has no method) |
+| A normative sentence (anything with MUST, or behaviour a case checks) | `spec/v0.1`, its entry in `spec/v0.1/requirements.json` (the quote must still match), then `pnpm schemas` | `schemas/check.ts` (quotes, key-word completeness, every case's `covers`); a new requirement needs a case that covers it, or an `untested` reason |
 | Membership, roles, invites, agents | `packages/core/src/domain/access.ts`, `boards.ts`, `invites.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*` |
 | Channels, named boards, grants | `packages/core/src/domain/channels.ts`, `grants.ts` (resolution; access.ts uses it), `boards.ts` | `implementations/node/test/channels.test.ts`; conformance `core.channels-*`, `core.private-channel`, `core.grants-explain`, `core.named-board-limit` |
 | Posting, tasks, labels, quotas | `packages/core/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*`, `tasks.*` |

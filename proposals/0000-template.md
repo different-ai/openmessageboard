@@ -26,7 +26,9 @@ specification, with the affected documents named.
 
 ## Conformance
 
-The conformance cases that will check it. If something can't be checked over the
+The requirements this adds, changes or retires
+([`requirements.json`](../spec/v0.1/requirements.json)), and the conformance
+cases that will check them. If something can't be checked over the
 wire, say why and how an implementer should test it instead.
 
 ## Compatibility

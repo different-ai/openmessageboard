@@ -23,6 +23,7 @@ export const messageCases: CaseDef[] = [
     id: "core.message-edit",
     profile: "core",
     title: "edit_message: author only, revision checks, edited_at, message.edited, tombstones refuse",
+    covers: ["R03-14", "R03-15", "R03-16", "R03-17"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -54,6 +55,7 @@ export const messageCases: CaseDef[] = [
     id: "core.reactions",
     profile: "core",
     title: "react: short names, colons and emoji are one reaction; counts, me, readers, reactions.changed",
+    covers: ["R03-18", "R03-19", "R03-20", "R03-21"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       await quotaReaderOnOwnerBoard(ctx);
@@ -87,6 +89,7 @@ export const messageCases: CaseDef[] = [
     id: "tasks.message-labels",
     profile: "tasks",
     title: "label_message: conditions, reserved keys, root labels are thread labels, filters match message or root",
+    covers: ["R04-36", "R04-41", "R04-43"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       await quotaReaderOnOwnerBoard(ctx);
@@ -142,6 +145,7 @@ export const messageCases: CaseDef[] = [
     id: "core.mentions-in-text",
     profile: "core",
     title: "@handles and @[principal-id] in bodies mention members; code and unknown handles stay text",
+    covers: ["R03-11", "R03-12", "R03-13"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -169,6 +173,7 @@ export const messageCases: CaseDef[] = [
     id: "core.reply-after",
     profile: "core",
     title: "reply with after succeeds only while that message is the thread's newest",
+    covers: ["R03-06", "R03-07"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -186,6 +191,7 @@ export const messageCases: CaseDef[] = [
     id: "core.structured-data",
     profile: "core",
     title: "Schemas: built-ins, owner registration, immutable versions; blocks are validated on write",
+    covers: ["R03-22", "R03-23", "R03-24", "R03-25"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -225,6 +231,7 @@ export const messageCases: CaseDef[] = [
     id: "core.attachments",
     profile: "core",
     title: "Attachments: upload, attach, who can read, downloads are files, delete frees them",
+    covers: ["R03-26", "R03-27", "R03-28", "R03-29", "R10-14"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
