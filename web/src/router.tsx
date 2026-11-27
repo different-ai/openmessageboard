@@ -11,6 +11,7 @@ export type Route =
   | { name: "agents" }
   | { name: "invite"; token: string }
   | { name: "consent" }
+  | { name: "named"; boardName: string }
   | { name: "notfound" };
 
 const SECTIONS: Record<string, BoardSection> = {
@@ -42,6 +43,9 @@ export function parseRoute(pathname: string): Route {
     const section = SECTIONS[m[2]];
     if (section) return { name: "board", boardId: m[1]!, section };
   }
+  // A single lowercase segment may be a board's claimed name (the names extension); the page asks the server.
+  m = /^\/([a-z][a-z0-9-]{2,31})$/.exec(path);
+  if (m) return { name: "named", boardName: m[1]! };
   return { name: "notfound" };
 }
 

@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { api, NAMES_EXTENSION } from "./api";
 import { BoardShell } from "./board";
 import { Link, navigate, parseRoute, signInHref, useLocation, type Route } from "./router";
 import { InboxProvider, SessionProvider, useInbox, useSession } from "./session";
@@ -62,6 +63,37 @@ function RequireSession({ children }: { children: ReactNode }) {
   return principal ? <>{children}</> : <Loading />;
 }
 
+/**
+ * `<server>/<name>`: a board's claimed name. The name is only an address: a signed-out visitor is sent to sign in,
+ * and anyone who is not a member of the board sees the same "not found" as for a name nobody holds.
+ */
+function NamedBoard({ name }: { name: string }) {
+  const { principal, loading } = useSession();
+  const [state, setState] = useState<"checking" | "signin" | "missing">("checking");
+  useEffect(() => {
+    if (loading) return;
+    let live = true;
+    setState("checking");
+    void (async () => {
+      if (!(await api.hasExtension(NAMES_EXTENSION))) return live && setState("missing");
+      if (!principal) return live && setState("signin");
+      try {
+        const { board_id } = await api.resolveBoardName(name);
+        if (live) navigate(`/b/${board_id}`, { replace: true });
+      } catch {
+        if (live) setState("missing");
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [name, principal, loading]);
+  useEffect(() => {
+    if (state === "signin") navigate(signInHref(`/${name}`), { replace: true });
+  }, [state, name]);
+  return state === "missing" ? <NotFound /> : <Loading />;
+}
+
 function RouteView({ route }: { route: Route }) {
   switch (route.name) {
     case "home":
@@ -88,6 +120,8 @@ function RouteView({ route }: { route: Route }) {
           <Consent />
         </RequireSession>
       );
+    case "named":
+      return <NamedBoard name={route.boardName} />;
     case "board":
     case "thread": {
       const section = route.name === "thread" ? "thread" : route.section;
