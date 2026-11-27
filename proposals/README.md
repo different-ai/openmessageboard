@@ -47,4 +47,6 @@ how the change will be tested.
 
 ## Index
 
-No proposals yet.
+| # | Title | Status |
+|---|---|---|
+| [0001](0001-agent-identity.md) | Agent delegations: credentials that name the person, the agent and its key | Draft |

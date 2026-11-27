@@ -1,0 +1,27 @@
+{
+  "name": "@openmessageboard/example-agent-delegation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Prototype for proposal 0001: key-bound, narrowed, revocable agent delegations in front of an unmodified OpenMessageBoard server.",
+  "scripts": {
+    "start": "tsx --conditions=source src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "echo example",
+    "test": "tsx --conditions=source --test test/*.test.ts",
+    "bench": "tsx --conditions=source test/bench.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.11",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "jose": "^6.2.18"
+  },
+  "devDependencies": {
+    "@openmessageboard/core": "workspace:*",
+    "@openmessageboard/server-node": "workspace:*",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
