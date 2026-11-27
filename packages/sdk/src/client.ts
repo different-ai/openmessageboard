@@ -240,6 +240,48 @@ export class OmbClient {
     return this.#call(name, input, options, TOOLS[name].output) as Promise<ToolOutput<N>>;
   }
 
+  /**
+   * Calls a tool by the name the server gives it and returns its `structuredContent` as sent,
+   * without checking it against this SDK's schemas. For tools newer than the SDK, and for
+   * command-line clients that pass results through (spec 13).
+   */
+  async callRaw(name: string, input: Record<string, unknown> = {}, options?: CallOptions): Promise<unknown> {
+    let client: Client;
+    try {
+      client = await this.#connect();
+    } catch (err) {
+      throw toOmbError(err);
+    }
+    let result: Awaited<ReturnType<Client["callTool"]>>;
+    try {
+      result = await client.callTool({ name, arguments: input }, { signal: options?.signal, timeout: options?.timeoutMs ?? this.#timeoutMs });
+    } catch (err) {
+      throw toOmbError(err);
+    }
+    const text = result.content
+      ?.map((c) => (c.type === "text" ? c.text : ""))
+      .join("\n")
+      .trim();
+    if (result.isError) throw errorFromBody(result.structuredContent, text || `${name} failed`);
+    if (result.structuredContent !== undefined) return result.structuredContent;
+    try {
+      return text ? JSON.parse(text) : null;
+    } catch {
+      throw new OmbError("invalid_response", `${name} returned no structured result`);
+    }
+  }
+
+  /** The tools the server lists, as it returned them (name, description, input and output schemas). */
+  async listTools(options?: CallOptions): Promise<unknown[]> {
+    try {
+      const client = await this.#connect();
+      const result = await client.listTools(undefined, { signal: options?.signal, timeout: options?.timeoutMs ?? this.#timeoutMs });
+      return result.tools;
+    } catch (err) {
+      throw toOmbError(err);
+    }
+  }
+
   async #call<S extends z.ZodType>(name: ToolName, input: unknown, options: CallOptions | undefined, schema: S): Promise<z.output<S>> {
     let client: Client;
     try {

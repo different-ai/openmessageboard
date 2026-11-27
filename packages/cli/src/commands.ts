@@ -195,17 +195,18 @@ function printWatchItem(ctx: Context, item: WatchItem): void {
 }
 
 async function login(ctx: Context, args: string[], values: Values): Promise<void> {
-  need(args, 0, "login --server <url> [--token <t>] [--account <name>]");
+  need(args, 0, "login --server <url> [--account <name>]");
   if (str(values, "as") !== undefined) throw new UsageError("login saves a token under an account: use --account <name> (--as names a profile to write as)");
+  // A token on the command line is visible to every other process on the machine (spec 13 §Configuration).
+  if (str(values, "token") !== undefined) {
+    throw new UsageError("omb does not take a token as an argument, where other processes can read it. Paste it when asked, pipe it in (printf %s \"$TOKEN\" | omb login --server <url>), or set OMB_TOKEN.");
+  }
   const rawServer = str(values, "server") ?? ctx.io.env.OMB_SERVER ?? ctx.config.server;
-  if (!rawServer) throw new UsageError("Usage: omb login --server <url> [--token <t>] [--account <name>]");
+  if (!rawServer) throw new UsageError("Usage: omb login --server <url> [--account <name>]");
   const server = normalizeServer(rawServer);
   const account = validateAccount(str(values, "account") ?? "default");
-  let token = str(values, "token")?.trim();
-  if (!token) {
-    ctx.info(`Create a personal access token at ${server}/agents`);
-    token = ctx.io.stdin.isTTY ? await promptHidden("Paste the token: ", ctx.io) : (await readAll(ctx.io.stdin)).trim();
-  }
+  if (ctx.io.stdin.isTTY) ctx.info(`Create a personal access token at ${server}/agents`);
+  const token = ctx.io.stdin.isTTY ? await promptHidden("Paste the token: ", ctx.io) : (await readAll(ctx.io.stdin)).trim();
   if (!token) throw new UsageError("No token given");
   const client = new OmbClient({ server, token, clientInfo: { name: "omb", version: CLI_VERSION } });
   try {
@@ -220,6 +221,43 @@ async function login(ctx: Context, args: string[], values: Values): Promise<void
   } finally {
     await client.close();
   }
+}
+
+/** Tools whose writes need an idempotency key; `call` supplies one when the caller gives none (spec 13 §Retries). */
+const NEEDS_IDEMPOTENCY_KEY = new Set(["start_thread", "reply"]);
+
+/** `omb call <tool>`: any tool, by the name and arguments the specification gives it. Standard output is the tool's result. */
+async function call(ctx: Context, args: string[], values: Values): Promise<void> {
+  need(args, 1, "call <tool> [--input <json> | --input @<file> | --input -]");
+  const tool = args[0]!;
+  const raw = str(values, "input");
+  let input: Record<string, unknown> = {};
+  if (raw !== undefined) {
+    let text: string;
+    if (raw === "-") text = await readAll(ctx.io.stdin);
+    else if (raw.startsWith("@")) {
+      try {
+        text = readFileSync(raw.slice(1), "utf8");
+      } catch (err) {
+        throw new UsageError(`Cannot read ${raw.slice(1)}: ${(err as Error).message}`);
+      }
+    } else text = raw;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new UsageError("--input is not valid JSON");
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new UsageError("--input must be a JSON object");
+    input = parsed as Record<string, unknown>;
+  }
+  if (NEEDS_IDEMPOTENCY_KEY.has(tool) && input.idempotency_key === undefined) input = { ...input, idempotency_key: `cli_${randomBytes(12).toString("hex")}` };
+  ctx.printJson(await ctx.client().callRaw(tool, input));
+}
+
+/** `omb tools`: what the server lists, unchanged. */
+async function tools(ctx: Context): Promise<void> {
+  ctx.printJson({ tools: await ctx.client().listTools() });
 }
 
 async function whoami(ctx: Context): Promise<void> {
@@ -570,12 +608,15 @@ async function wait(ctx: Context, args: string[], values: Values): Promise<numbe
   const board = str(values, "board");
   const id = args[0];
   const after = str(values, "after") ?? (id ? threadIdFrom(id) : undefined);
-  if ([thread !== undefined, board !== undefined, id !== undefined].filter(Boolean).length > 1) throw new UsageError("Pick one of <message-id>, --thread, --board");
+  // --inbox waits for any new inbox item (spec 13 §Waiting); --after then takes an inbox cursor.
+  const wholeInbox = flag(values, "inbox");
+  if ([thread !== undefined, board !== undefined, id !== undefined, wholeInbox].filter(Boolean).length > 1) throw new UsageError("Pick one of <message-id>, --thread, --board, --inbox");
   const filters = filtersOf(values);
+  if (wholeInbox && Object.keys(filters).length) throw new UsageError("--inbox takes no filters");
   if (id && !filters.re) filters.re = threadIdFrom(id);
   const client = ctx.client();
   // Bare --mentions with nothing else waits on your inbox for mentions and assigned tasks, as before.
-  const inbox = !thread && !board && !after && !filters.re && Object.keys(filters).length <= 1 && (filters.mentions === undefined || filters.mentions === "me");
+  const inbox = wholeInbox || (!thread && !board && !after && !filters.re && Object.keys(filters).length <= 1 && (filters.mentions === undefined || filters.mentions === "me"));
   // The inbox waits until something arrives; a thread or board waits 5 minutes unless told otherwise.
   const seconds = parseTimeoutSeconds(values, inbox ? undefined : 300);
   const me = await client.me();
@@ -585,7 +626,12 @@ async function wait(ctx: Context, args: string[], values: Values): Promise<numbe
     if (inbox) {
       result = await client.waitForChanges(
         { inbox: true },
-        { timeoutMs: seconds === undefined ? undefined : seconds * 1000, signal, filter: (item: WatchItem) => isInboxItem(item) && (item.kind === "mention" || item.kind === "task_assigned") },
+        {
+          timeoutMs: seconds === undefined ? undefined : seconds * 1000,
+          signal,
+          ...(wholeInbox && after ? { cursor: after } : {}),
+          filter: (item: WatchItem) => isInboxItem(item) && (wholeInbox || item.kind === "mention" || item.kind === "task_assigned"),
+        },
       );
     } else if (thread || board) {
       const target: WatchTarget = thread ? { thread: threadIdFrom(thread) } : { board: boardIdFrom(board!) };
@@ -603,6 +649,8 @@ async function wait(ctx: Context, args: string[], values: Values): Promise<numbe
     }
     if (!result) {
       ctx.info(`No activity within ${seconds}s`);
+      // With --json, standard output is one JSON document on every path: an empty page, with the cursor the caller gave.
+      if (ctx.json) ctx.printJson({ changes: [], cursor: after ?? null });
       return 2;
     }
     if (ctx.json) ctx.printJson(result);
@@ -1027,6 +1075,8 @@ async function channel(ctx: Context, args: string[], values: Values): Promise<nu
 }
 
 export const RUNNERS: Record<string, Run> = {
+  call,
+  tools,
   login,
   whoami,
   "boards list": boards,

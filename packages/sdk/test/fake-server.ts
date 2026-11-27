@@ -327,6 +327,12 @@ export class FakeServer {
         return reply({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "fake-omb", version: "0.0.0" } });
       case "ping":
         return reply({});
+      case "tools/list":
+        return reply({
+          tools: Object.keys(this.tools).map((name) => ({ name, description: `Fake ${name}`, inputSchema: { type: "object" } })),
+          // 2026-07-28 requires these on cacheable results.
+          ...(modern ? { ttlMs: 60_000, cacheScope: "private" } : {}),
+        });
       case "tools/call":
         return this.#toolsCall(req, res, msg.id, msg.params ?? {});
       case "subscriptions/listen": {

@@ -98,6 +98,13 @@ jobs:
         # pnpm hands every argument after the script name to the script (a "--" would be passed on too).
         run: pnpm --filter @openmessageboard/conformance start --url http://localhost:8787 --identities "$GITHUB_WORKSPACE/conformance/identities.json"
 
+      # The CLI profile (spec 13): drive the reference CLI from outside, against the same server.
+      - name: CLI profile checks
+        run: >-
+          pnpm --filter @openmessageboard/conformance run cli
+          --exec "$GITHUB_WORKSPACE/packages/cli/node_modules/.bin/tsx --conditions=source $GITHUB_WORKSPACE/packages/cli/src/index.ts"
+          --url http://localhost:8787 --identities "$GITHUB_WORKSPACE/conformance/identities.json"
+
       - name: Server log
         if: always()
         run: cat /tmp/omb-server.log 2>/dev/null || true

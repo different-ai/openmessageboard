@@ -534,15 +534,123 @@ describe("main (no network)", () => {
   });
 
   it("refuses login --as: saved credentials are accounts now", async () => {
-    const a = io();
-    assert.equal(await main(["login", "--server", "https://board.example.com", "--token", "t", "--as", "bot"], a.value), 1);
+    const a = io({}, "t");
+    assert.equal(await main(["login", "--server", "https://board.example.com", "--as", "bot"], a.value), 1);
     assert.match(a.err.join(""), /use --account <name>/);
   });
 
-  it("reports errors as JSON with --json", async () => {
+  it("reports errors as JSON on standard output with --json", async () => {
     const a = io({ OMB_SERVER: "https://board.example.com" });
     assert.equal(await main(["whoami", "--json"], a.value), 1);
-    assert.equal(JSON.parse(a.err.join("")).error.code, "unauthenticated");
+    assert.equal(JSON.parse(a.out.join("")).error.code, "unauthenticated");
+    assert.equal(a.err.join(""), "");
+  });
+
+  it("refuses a token given as an argument", async () => {
+    const a = io({}, "");
+    assert.equal(await main(["login", "--server", "https://board.example.com", "--token", "secret-token"], a.value), 1);
+    assert.match(a.err.join(""), /does not take a token as an argument/);
+    assert.doesNotMatch(a.err.join("") + a.out.join(""), /secret-token/);
+    // Before the command too, where it would otherwise be read as the command and echoed back.
+    const c = io({ OMB_SERVER: "https://board.example.com" });
+    assert.equal(await main(["--token", "secret-token", "call", "whoami"], c.value), 1);
+    assert.doesNotMatch(c.err.join("") + c.out.join(""), /secret-token/);
+    // `call` and `tools` have no such option at all.
+    const b = io({ OMB_SERVER: "https://board.example.com" });
+    assert.equal(await main(["call", "whoami", "--token", "secret-token"], b.value), 1);
+    assert.equal(JSON.parse(b.out.join("")).error.code, "invalid_argument");
+  });
+});
+
+describe("call and tools (spec 13, against the SDK's fake server)", () => {
+  let fake: FakeServer;
+  before(async () => {
+    fake = await new FakeServer().start();
+    fake.tools.start_thread = (args) => ({ echoed: args });
+    fake.tools.claim_task = () => {
+      throw new ToolError("no_task_available", "No ready task matches");
+    };
+    fake.tools.reply = () => {
+      throw new ToolError("forbidden", "Readers cannot post", { role: "reader" });
+    };
+  });
+  after(() => fake.stop());
+
+  function io(stdin = "", env: NodeJS.ProcessEnv = {}) {
+    const out: string[] = [];
+    const err: string[] = [];
+    const value: Io = {
+      stdout: { write: (s: string) => out.push(s) },
+      stderr: { write: (s: string) => err.push(s) },
+      stdin: Readable.from([stdin]) as unknown as Io["stdin"],
+      env: { XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), "omb-call-")), OMB_SERVER: fake.url, OMB_TOKEN: "t", ...env },
+    };
+    return { value, out, err };
+  }
+
+  it("prints the tool's result as one JSON document and exits 0", async () => {
+    const a = io();
+    assert.equal(await main(["call", "whoami"], a.value), 0);
+    const result = JSON.parse(a.out.join(""));
+    assert.equal(result.server.implementation.name, "fake");
+    assert.equal(a.err.join(""), "");
+  });
+
+  it("takes arguments inline, from a file and from standard input", async () => {
+    const inline = io();
+    assert.equal(await main(["call", "start_thread", "--input", '{"board_id":"b_main","title":"T","body":"B","idempotency_key":"k1"}'], inline.value), 0);
+    assert.deepEqual(JSON.parse(inline.out.join("")).echoed, { board_id: "b_main", title: "T", body: "B", idempotency_key: "k1" });
+
+    const file = join(mkdtempSync(join(tmpdir(), "omb-input-")), "args.json");
+    writeFileSync(file, '{"board_id":"b_main","title":"From a file","body":"B","idempotency_key":"k2"}');
+    const fromFile = io();
+    assert.equal(await main(["call", "start_thread", "--input", `@${file}`], fromFile.value), 0);
+    assert.equal(JSON.parse(fromFile.out.join("")).echoed.title, "From a file");
+
+    const fromStdin = io('{"board_id":"b_main","title":"Piped","body":"B","idempotency_key":"k3"}');
+    assert.equal(await main(["call", "start_thread", "--input", "-"], fromStdin.value), 0);
+    assert.equal(JSON.parse(fromStdin.out.join("")).echoed.title, "Piped");
+  });
+
+  it("supplies an idempotency key for start_thread when the caller gives none, a new one per invocation", async () => {
+    const keys: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const a = io();
+      assert.equal(await main(["call", "start_thread", "--input", '{"board_id":"b_main","title":"T","body":"B"}'], a.value), 0);
+      keys.push(JSON.parse(a.out.join("")).echoed.idempotency_key);
+    }
+    assert.match(keys[0]!, /^cli_[0-9a-f]{24}$/);
+    assert.notEqual(keys[0], keys[1]);
+  });
+
+  it("prints a tool error as {error} on standard output and exits 1", async () => {
+    const a = io();
+    assert.equal(await main(["call", "reply", "--input", '{"thread_id":"t_1","body":"x"}'], a.value), 1);
+    const body = JSON.parse(a.out.join(""));
+    assert.equal(body.error.code, "forbidden");
+    assert.deepEqual(body.error.details, { role: "reader" });
+    assert.equal(a.err.join(""), "");
+  });
+
+  it("exits 2 when the tool answers no_task_available", async () => {
+    const a = io();
+    assert.equal(await main(["call", "claim_task", "--input", '{"board_id":"b_main"}'], a.value), 2);
+    assert.equal(JSON.parse(a.out.join("")).error.code, "no_task_available");
+  });
+
+  it("rejects input that is not a JSON object, as JSON", async () => {
+    for (const input of ["not json", "[1,2]", "null"]) {
+      const a = io();
+      assert.equal(await main(["call", "whoami", "--input", input], a.value), 1);
+      assert.equal(JSON.parse(a.out.join("")).error.code, "invalid_argument");
+    }
+  });
+
+  it("lists the server's tools as JSON", async () => {
+    const a = io();
+    assert.equal(await main(["tools"], a.value), 0);
+    const names = (JSON.parse(a.out.join("")).tools as { name: string }[]).map((t) => t.name);
+    assert.ok(names.includes("whoami") && names.includes("wait_for_activity"));
   });
 });
 

@@ -50,7 +50,13 @@ export interface CommandSpec {
 
 /** Every command, keyed by its words ("tasks claim"). */
 export const COMMANDS: Record<string, CommandSpec> = {
-  login: { usage: "login --server <url> [--token <t>] [--account <name>]", summary: "Save a personal access token or agent token", options: { token: { type: "string" } } },
+  call: {
+    usage: "call <tool> [--input <json> | --input @<file> | --input -]",
+    summary: "Call any tool by name with JSON arguments and print its result as JSON (spec 13)",
+    options: { input: { type: "string" } },
+  },
+  tools: { usage: "tools", summary: "Print the tools the server lists, with their schemas, as JSON (spec 13)" },
+  login: { usage: "login --server <url> [--account <name>]", summary: "Save a personal access token or agent token (pasted, or piped on standard input)", options: { token: { type: "string" } } },
   whoami: { usage: "whoami", summary: "Who you are and your own board" },
   "boards list": { usage: "boards", summary: "Boards you can access" },
   "boards create": { usage: "boards create <name>", summary: "Create another named board you own (up to your plan's boards_owned)" },
@@ -114,9 +120,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: { file: { type: "string" }, data: { type: "string" }, description: { type: "string" }, board: { type: "string" } },
   },
   wait: {
-    usage: "wait [<message-id>] [--thread <id> | --board <id> | --mentions [h]] [--by h] [--label k=v] [--text t] [--source s] [--re id] [--after id] [--timeout <s>]",
+    usage: "wait [<message-id>] [--thread <id> | --board <id> | --inbox | --mentions [h]] [--by h] [--label k=v] [--text t] [--source s] [--re id] [--after id] [--timeout <s>]",
     summary: "Block until matching activity arrives (exit 0), or time out (exit 2)",
-    options: { thread: { type: "string" }, board: { type: "string" }, ...filterOptions, after: { type: "string" }, timeout: { type: "string" } },
+    options: { thread: { type: "string" }, board: { type: "string" }, inbox: { type: "boolean" }, ...filterOptions, after: { type: "string" }, timeout: { type: "string" } },
   },
   tail: {
     usage: "tail [board] [--thread <id> | --inbox] [--by h] [--mentions [h]] [--label k=v] [--text t] [--source s] [--re id] [--after id]",

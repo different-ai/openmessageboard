@@ -12,14 +12,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as P from "@openmessageboard/protocol";
 import { ALL_CASES } from "../cases/index.ts";
+import { CLI_CASES } from "../cli-profile/cases.ts";
 import { SPEC_DIR } from "./paths.ts";
 
 export const UNTESTED = {
-  client: "A requirement on clients. The suite tests servers.",
-  process: "A requirement on people (implementers making a claim, extension authors), not on a running server.",
-  internal: "Not observable through the MCP binding and discovery: storage, logs, transactions, or actions the specification leaves to a server's own interface.",
+  client: "A requirement on clients that the suite does not drive. Command-line clients have checks of their own (document 13).",
+  process: "A requirement on people (implementers making a claim, extension authors), not on running software.",
+  internal: "Not observable from outside: storage, logs, transactions, or actions the specification leaves to a server's own interface.",
   external: "Needs an external platform, a trusted token issuer or an interactive sign-in that the suite does not drive.",
-  gap: "Observable over the wire, with no conformance case yet.",
+  gap: "Observable from outside, with no conformance case yet.",
 } as const;
 export type Untested = keyof typeof UNTESTED;
 
@@ -48,10 +49,13 @@ export function loadRequirements(): Requirement[] {
   return file.requirements;
 }
 
+/** Every case of the suite: the server cases, then the checks that drive a command-line client. */
+export const EVERY_CASE: { id: string; covers: string[]; placeholder?: boolean; run: (ctx: never) => Promise<void> }[] = [...ALL_CASES, ...CLI_CASES];
+
 /** Requirement ID → the cases that cover it, in run order. */
 export function coverage(): Map<string, string[]> {
   const by = new Map<string, string[]>();
-  for (const c of ALL_CASES) for (const id of c.covers) by.set(id, [...(by.get(id) ?? []), c.id]);
+  for (const c of EVERY_CASE) for (const id of c.covers) by.set(id, [...(by.get(id) ?? []), c.id]);
   return by;
 }
 
@@ -130,7 +134,7 @@ export function validateRequirements(): string[] {
     }
   }
 
-  for (const c of ALL_CASES) {
+  for (const c of EVERY_CASE) {
     for (const id of c.covers) if (!seen.has(id)) problems.push(`case ${c.id}: covers ${id}, which is not in requirements.json`);
     if (c.placeholder && c.covers.length) problems.push(`case ${c.id}: a placeholder covers nothing`);
     if (!c.placeholder && !c.covers.length) problems.push(`case ${c.id}: covers no requirement`);

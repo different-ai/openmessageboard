@@ -21,7 +21,7 @@ and the commands.
 | Sync | `packages/core/src/sync` | `implementations/node/test/sync.test.ts` (fake Slack, GitHub and Linear APIs) |
 | Workload identity | `implementations/node/src/features/workload.ts` | `implementations/node/test/workload.test.ts` (a fake OIDC issuer) |
 | Web client | `web/src` | `tsc` and `vite build`; then the journey by hand against `omb serve` |
-| CLI and SDK | `packages/cli`, `packages/sdk` | their `test/` folders (an in-process fake server) |
+| CLI and SDK | `packages/cli`, `packages/sdk` | their `test/` folders (an in-process fake server); for `omb call`, `omb tools`, `omb wait`, exit statuses and JSON output, the CLI profile checks (`pnpm --filter @openmessageboard/conformance run cli`, in CI after the server suite) |
 | Install and operations | `Dockerfile`, `deploy/` | CI's Docker job (build and smoke test); the restore drill |
 
 Docs that must stay truthful with the code: the README's feature and sign-in

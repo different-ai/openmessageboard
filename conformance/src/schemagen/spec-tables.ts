@@ -6,6 +6,7 @@
 import { readdirSync } from "node:fs";
 import * as P from "@openmessageboard/protocol";
 import { ALL_CASES } from "../cases/index.ts";
+import { CLI_CASES } from "../cli-profile/cases.ts";
 import { generatedFiles } from "./build.ts";
 import { EXAMPLES_DIR, SPEC_DIR } from "./paths.ts";
 import { MATRIX_FILE, requirementCounts } from "./requirements.ts";
@@ -192,6 +193,7 @@ function glanceTable(): string {
     row(["Generated JSON Schemas", String(schemas), "[`schemas/v0.1`](schemas/v0.1)"]),
     row(["Numbered requirements (" + reqs.tested + " checked by a conformance case)", String(reqs.total), "[`requirements.md`](spec/v" + P.SPEC_VERSION + "/" + MATRIX_FILE + ")"]),
     row(["Conformance cases (" + perProfile + ")", String(ALL_CASES.length), "[`conformance`](conformance)"]),
+    row(["Checks for command-line clients", String(CLI_CASES.length), "[13 Command-line clients](spec/v" + P.SPEC_VERSION + "/13-command-line-clients.md)"]),
   ].join("\n");
 }
 
