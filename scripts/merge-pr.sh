@@ -4,9 +4,8 @@
 #
 #   scripts/merge-pr.sh <pr number>      (or: make merge PR=<pr number>)
 #
-# `gh pr merge` refuses these pull requests ("the base branch policy prohibits
-# the merge") even when every rule is met, so this calls the merge mutation
-# directly. It never uses administrator privileges.
+# It refuses a pull request that is not approved or has a check that is not
+# green, and it never uses administrator privileges.
 set -euo pipefail
 
 pr="${1:?usage: scripts/merge-pr.sh <pr number>}"
@@ -24,9 +23,8 @@ IFS=$'\t' read -r id head decision state base < <(
 not_green="$(gh pr checks "$pr" --json name,bucket --jq '[.[] | select(.bucket != "pass" and .bucket != "skipping") | .name + " (" + .bucket + ")"] | join(", ")')"
 [ -z "$not_green" ] || { echo "PR #$pr has checks that are not green: $not_green" >&2; exit 1; }
 
-merged="$(gh api graphql \
-  -f query='mutation($id: ID!, $oid: GitObjectID!) { mergePullRequest(input: {pullRequestId: $id, expectedHeadOid: $oid, mergeMethod: SQUASH}) { pullRequest { mergeCommit { oid } } } }' \
-  -f id="$id" -f oid="$head" --jq '.data.mergePullRequest.pullRequest.mergeCommit.oid')"
+gh pr merge "$pr" --squash --match-head-commit "$head"
+merged="$(gh pr view "$pr" --json mergeCommit --jq '.mergeCommit.oid')"
 echo "merged #$pr at $head as $merged"
 
 # The rule suite for the push appears a few seconds after the merge.
