@@ -1,6 +1,6 @@
 # 0004: One webhook delivery contract
 
-- Status: Draft
+- Status: Accepted (2026-11-27)
 - Author: Jalil (drafted with Claude Code)
 - Created: 2026-11-27
 - Spec version it targets: 0.2
