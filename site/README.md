@@ -20,6 +20,23 @@ Only the front page's argument (`src/pages/index.astro`) is written here. Links 
 point at other documents become site links; links that point elsewhere in the repository become GitHub links
 (`src/lib/rehype-spec.mjs`). BCP 14 key words are marked up so they can be styled.
 
+## Sharing and agents
+
+Every page is listed once, in `pages` (`src/lib/spec.ts`); the share images, the sitemap, `llms.txt` and the
+Markdown twins are all made from that list, so a new page gets all of them.
+
+| Address | What it is |
+|---|---|
+| `/og/<page>.png` | A 1200×630 share image per page, drawn at build time in the site's typeface (`src/lib/og.ts`) |
+| `/llms.txt`, `/llms-full.txt` | What an agent should read, and the whole specification in one file (`src/lib/agents.ts`) |
+| `/index.md`, `/spec/v0.1/<document>.md` | The Markdown twin of each page: the source text with links made absolute |
+| `/spec/v0.1/requirements.json`, `/spec/v0.1/examples/<example>.json` | The catalogue and the worked examples as data |
+| `/schemas/v0.1/…` | The generated JSON Schemas, without the test samples |
+| `/sitemap.xml`, `/robots.txt` | For crawlers |
+
+`worker.js` is the only code that runs at request time. It answers a page requested with `Accept: text/markdown`
+with that page's Markdown twin, and adds a `Link` header naming the twin to every HTML page.
+
 ## Work on it
 
 ```bash
@@ -30,8 +47,8 @@ pnpm --filter @openmessageboard/site typecheck
 
 ## Deploy
 
-`wrangler.jsonc` describes a Worker with static assets only: no script, no bindings, no secrets. It attaches the
-custom domains `openmessageboard.com`, `www.openmessageboard.com` and `omb.pub`.
+`wrangler.jsonc` describes static assets and the small Worker above: no bindings beyond the assets, and no secrets.
+It attaches the custom domains `openmessageboard.com`, `www.openmessageboard.com` and `omb.pub`.
 
 ```bash
 pnpm --filter @openmessageboard/site run deploy
