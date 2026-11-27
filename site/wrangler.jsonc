@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The specification website. Static assets only: no Worker script, no bindings, no secrets.
+  "name": "openmessageboard-site",
+  "compatibility_date": "2026-11-20",
+  "assets": { "directory": "./dist", "html_handling": "force-trailing-slash", "not_found_handling": "404-page" },
+  "routes": [
+    { "pattern": "openmessageboard.com", "custom_domain": true },
+    { "pattern": "www.openmessageboard.com", "custom_domain": true },
+    { "pattern": "omb.pub", "custom_domain": true }
+  ]
+}

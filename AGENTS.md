@@ -66,6 +66,8 @@ covers it, and say in the PR what did not run.
   identity: `implementations/node/src/features/workload.ts`.
 - Interfaces: `web/` (browser client), `packages/cli` (`omb`),
   `examples/client` (an MCP client that uses no SDK).
+- Website: `site/` (Astro, static, served by Cloudflare). It renders `spec/v0.1` at build time, so change the
+  specification there and never copy its text into the site ([README](site/README.md)).
 - Install and operations: `Dockerfile`, `deploy/` ([RUNBOOK](deploy/RUNBOOK.md)),
   `loadtest/`.
 - How to change, prove and release: [docs/maintaining.md](docs/maintaining.md).
