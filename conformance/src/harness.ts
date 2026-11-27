@@ -14,6 +14,10 @@ export interface CaseDef {
   id: string;
   profile: Profile;
   title: string;
+  /** IDs of the requirements in spec/v0.1/requirements.json that a failing server would fail this case on. */
+  covers: string[];
+  /** A case that always skips, because the public interface gives no way to test its profile. It covers nothing. */
+  placeholder?: boolean;
   /** Per-case timeout; default 120 s. */
   timeoutMs?: number;
   run(ctx: Ctx): Promise<void>;
@@ -23,6 +27,8 @@ export interface CaseResult {
   id: string;
   profile: Profile;
   title: string;
+  /** Requirement IDs this case checks (spec/v0.1/requirements.json). */
+  covers: string[];
   status: Status;
   reason?: string;
   notes: string[];
@@ -239,7 +245,7 @@ export async function runCases(ctx: Ctx, cases: CaseDef[]): Promise<CaseResult[]
         reason = describeError(e);
       }
     }
-    const r: CaseResult = { id: c.id, profile: c.profile, title: c.title, status, reason, notes: [...notes], duration_ms: Date.now() - started };
+    const r: CaseResult = { id: c.id, profile: c.profile, title: c.title, covers: c.covers, status, reason, notes: [...notes], duration_ms: Date.now() - started };
     results.push(r);
     ctx.opts.onResult?.(r);
   }

@@ -23,7 +23,20 @@ All notable changes are recorded here. The format follows
 - SDK `streamEvents()` for push subscriptions, with reconnect from the last cursor.
 - An optional `events.push` conformance case, run when a server lists `push`.
 
+### Added
+
+- Numbered requirements: `spec/v0.1/requirements.json` catalogues every MUST-level statement and every behaviour
+  the conformance suite checks, each with an ID (`R03-12`) and a verbatim quote of the specification.
+  `spec/v0.1/requirements.md` is generated from it and shows the cases that check each requirement, or why none does.
+- Every conformance case lists the requirements it checks (`covers`); the JSON report repeats them and a failed
+  case prints them. The schema check fails when a quote no longer matches the specification, when a MUST-level key
+  word is outside every requirement, or when a case covers nothing.
+
 ### Changed
+
+- Spec fixes found while numbering requirements: 02 said tasks of a member whose access ended "return to `open`"
+  (a state tasks no longer have; the claim ends, as 04 says), and two sentences that said "every MUST" now say
+  "every requirement", matching the conformance language.
 
 - The specification opens with a charter: abstract, status, scope and what is out of scope, goals, eleven design
   principles, and when a server or client may claim conformance. Present-tense statements about what a server or

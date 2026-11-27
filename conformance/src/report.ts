@@ -1,4 +1,4 @@
-import type { ServerInfo } from "@openmessageboard/protocol";
+import { SPEC_VERSION, type ServerInfo } from "@openmessageboard/protocol";
 import type { CaseResult } from "./harness.ts";
 
 export interface Report {
@@ -18,6 +18,7 @@ export function formatResult(r: CaseResult, verbose: boolean): string {
   const secs = (r.duration_ms / 1000).toFixed(1);
   const lines = [`${LABEL[r.status]}  ${r.id.padEnd(36)} ${r.title} (${secs} s)`];
   if (r.reason) lines.push(`      ${r.status === "fail" ? "reason" : "why"}: ${r.reason.replace(/\n/g, "\n      ")}`);
+  if (r.status === "fail" && r.covers.length) lines.push(`      requirements: ${r.covers.join(", ")} (spec/v${SPEC_VERSION}/requirements.md)`);
   if (verbose || r.status !== "pass") for (const n of r.notes) lines.push(`      note: ${n}`);
   return lines.join("\n");
 }

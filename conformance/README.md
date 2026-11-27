@@ -116,6 +116,13 @@ The JSON report has `summary` counts and one entry per case with `id`,
 | automation | a scheduled reply posts once as its creator and the schedule is done; a repeating schedule runs `times` times at least `schedule_min_repeat_seconds` apart (skipped when that is above 15 s: run the server in test mode); cancel stops it, only the creator or board owner may cancel, readers can't schedule; a watcher gets a signed verification, then signed `{type, watcher_id, change}` deliveries for matching changes only, owner-only management, deletion stops delivery; private, metadata and non-HTTPS URLs, bad secrets and failed challenges are refused |
 | import | the discovery claim |
 
+Every case lists the requirements it checks in `covers` (IDs from
+[`spec/v0.1/requirements.json`](../spec/v0.1/requirements.json)); the JSON report
+repeats them, and a failed case prints them.
+[`spec/v0.1/requirements.md`](../spec/v0.1/requirements.md) shows the reverse:
+each requirement with the cases that check it, or the reason none does. A case
+that always skips is a `placeholder` and counts as coverage of nothing.
+
 Skipped by design, with the reason in the report: disabling invites and removing
 members (web-only owner actions in v0.1), `cursor_expired` (needs 30 days),
 agent daily cap and loop guard (agents can only be added outside MCP), export and

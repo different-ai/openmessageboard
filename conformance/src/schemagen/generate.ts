@@ -9,6 +9,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generatedFiles } from "./build.ts";
 import { GENERATED_DIRS, REPO_ROOT, SCHEMAS_DIR, SPEC_DIR } from "./paths.ts";
+import { MATRIX_FILE, renderMatrix } from "./requirements.ts";
 import { applyTables, SPEC_TABLES } from "./spec-tables.ts";
 
 export function generate(): { written: number; removed: string[]; tables: string[] } {
@@ -45,6 +46,10 @@ export function generate(): { written: number; removed: string[]; tables: string
     tables.push(...found.map((n) => `${file}#${n}`));
     if (text !== before) writeFileSync(path, text);
   }
+  const matrixPath = join(SPEC_DIR, MATRIX_FILE);
+  const matrix = renderMatrix();
+  if (!existsSync(matrixPath) || readFileSync(matrixPath, "utf8") !== matrix) writeFileSync(matrixPath, matrix);
+  tables.push(MATRIX_FILE);
   return { written, removed, tables };
 }
 

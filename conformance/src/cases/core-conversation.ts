@@ -46,6 +46,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.idempotent-post",
     profile: "core",
     title: "Retrying a post with the same idempotency key yields one message, one change and one quota charge",
+    covers: ["R03-01", "R06-14", "R06-15"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -73,6 +74,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.message-size",
     profile: "core",
     title: "Bodies are limited in UTF-8 bytes; oversize posts fail with message_too_large and cost nothing",
+    covers: ["R03-03", "R03-04"],
     async run(ctx) {
       const limit = (await ctx.limitsOf("owner")).message_bytes!;
       if (limit > 1024 * 1024) ctx.skip(`message_bytes is ${limit}; too large to test`);
@@ -93,6 +95,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.invalid-arguments",
     profile: "core",
     title: "Invalid arguments are tool errors with invalid_argument, not JSON-RPC errors",
+    covers: ["R03-05", "R03-08", "R05-07", "R06-12", "R06-13"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -111,6 +114,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.mentions-inbox",
     profile: "core",
     title: "Mentions create inbox items; mark_read by ID and up to a cursor",
+    covers: ["R03-32", "R03-33", "R03-36"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -151,6 +155,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.follow-reply-inbox",
     profile: "core",
     title: "Starting or replying follows a thread; followers get reply items; unfollow stops them; mention wins over reply",
+    covers: ["R03-30", "R03-31", "R03-34"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -186,6 +191,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.changes-order",
     profile: "core",
     title: "get_changes returns each change once, in seq order, with stable paging",
+    covers: ["R05-05", "R05-06", "R05-17"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -213,6 +219,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.cursor-errors",
     profile: "core",
     title: "Cursors are opaque and scoped: forged or foreign cursors fail with invalid_argument",
+    covers: ["R05-04", "R05-07"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -230,6 +237,8 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.cursor-expired",
     profile: "core",
     title: "A cursor older than the retention window fails with cursor_expired",
+    covers: [],
+    placeholder: true,
     async run(ctx) {
       const info = await ctx.discovery();
       ctx.skip(`cannot be forced through the public interface: event_retention_days is ${info.limits.event_retention_days}; clients are expected to reload via list_threads/get_thread as_of`);
@@ -239,6 +248,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.wait-for-activity",
     profile: "core",
     title: "wait_for_activity returns when another principal posts, immediately when changes exist, and on timeout",
+    covers: ["R05-19", "R05-21", "R05-23", "R05-24"],
     timeoutMs: 150_000,
     async run(ctx) {
       const t = await sharedThread(ctx);
@@ -287,6 +297,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.delete-tombstone",
     profile: "core",
     title: "Delete leaves a tombstone everywhere; only the author or the owner may delete",
+    covers: ["R03-37", "R03-38", "R03-40", "R05-01"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -324,6 +335,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.search",
     profile: "core",
     title: "search_messages finds messages on one board for members only",
+    covers: ["R03-41", "R03-42"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -340,6 +352,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.list-members",
     profile: "core",
     title: "list_members shows roles, unique handles and no emails",
+    covers: ["R01-04", "R02-13"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -364,6 +377,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.resources",
     profile: "core",
     title: "Board, thread and inbox resources: templates, list, read with ttlMs/cacheScope, -32602 for unknown",
+    covers: ["R06-18", "R06-19", "R06-20"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       const maya = await ctx.session("maya");
@@ -411,6 +425,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.quota",
     profile: "core",
     title: "The last allowed post succeeds, the next gets quota_exceeded with details, and reads keep working",
+    covers: ["R06-17", "R07-01", "R07-03", "R07-04", "R07-05"],
     timeoutMs: 600_000,
     async run(ctx) {
       const limit = (await ctx.limitsOf("quota")).posts_per_month!;
@@ -464,6 +479,7 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.member-limit",
     profile: "core",
     title: "A full board refuses new members with member_limit_reached",
+    covers: ["R02-24"],
     async run(ctx) {
       const limit = (await ctx.limitsOf("quota")).members_per_board!;
       if (limit > 6) ctx.skip(`members_per_board is ${limit}; start the server with OMB_LIMIT_MEMBERS_PER_BOARD=4 to run this case`);
@@ -492,6 +508,8 @@ export const coreConversationCases: CaseDef[] = [
     id: "core.agent-caps",
     profile: "core",
     title: "Agent daily cap and loop guard",
+    covers: [],
+    placeholder: true,
     async run(ctx) {
       ctx.skip("needs agents added to a board by their owner, which has no MCP path in v0.1");
     },
@@ -503,6 +521,7 @@ export const contractCase: CaseDef = {
   id: "core.tool-result-shape",
   profile: "core",
   title: "Every tool result carried a text summary and well-formed errors",
+  covers: ["R06-10", "R06-12"],
   async run(ctx) {
     if (contractIssues.size) throw new Failure([...contractIssues.values()].join("; "));
     ctx.note("checked on every tool call made by this run");

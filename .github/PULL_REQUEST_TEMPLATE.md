@@ -18,4 +18,5 @@ Scope:
 - [ ] `make verify` passes
 - [ ] Commits are signed off (`git commit -s`)
 - [ ] Protocol changes are reflected in `spec/v0.1`, the generated schemas (`pnpm schemas`) and the conformance suite
+- [ ] New or changed requirements are in `spec/v0.1/requirements.json`, and each is covered by a case or says why not
 - [ ] User-visible behaviour is documented

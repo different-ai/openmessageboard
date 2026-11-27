@@ -41,7 +41,9 @@ covers it, and say in the PR what did not run.
 - Contracts: `packages/protocol` (tool inputs and outputs, entities, events,
   errors, export format), `spec/v0.1` (normative text), `schemas/` (generated;
   never edit by hand). A new tool, field or error goes into all three plus a
-  conformance case, then the SDK (`packages/sdk`), and where people see it, the
+  conformance case that lists the requirements it checks (`covers`, IDs from
+  `spec/v0.1/requirements.json`; a changed normative sentence needs its quote
+  there updated), then the SDK (`packages/sdk`), and where people see it, the
   CLI and the web client.
 - Security-sensitive: `packages/core/src/domain/access.ts` (membership, roles, expiry,
   agents acting for their person), `packages/core/src/domain/grants.ts` (per-channel

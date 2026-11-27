@@ -114,6 +114,7 @@ disagree, the schema wins and the prose is a bug.
 | [10 Security](10-security.md) | Threat model and required protections |
 | [11 Channels and access](11-channels-and-access.md) | Channels, named boards, grants and private channels |
 | [12 Scheduled posts and watchers](12-schedules-and-watchers.md) | Posting later, and board automation that delivers matching changes to a URL |
+| [Requirements and coverage](requirements.md) | Every numbered requirement, with the conformance cases that check it (generated) |
 | [examples/](examples/) | Worked JSON exchanges; each file is also a test fixture checked by `schemas/check.ts` |
 
 ## Conformance language
@@ -132,6 +133,36 @@ statements about the reference server are informative.
 
 [RFC 2119]: https://www.rfc-editor.org/rfc/rfc2119
 [RFC 8174]: https://www.rfc-editor.org/rfc/rfc8174
+
+## Requirements and coverage
+
+Requirements are numbered so that a test, a bug report or a proposal can point
+at one. [`requirements.json`](requirements.json) is the catalogue: each entry
+has an ID such as `R03-12` (document 03, twelfth requirement; `R00` is this
+document), the party it binds, and a verbatim quote of the sentence that states
+it. [`requirements.md`](requirements.md) is generated from it and shows, for
+each requirement, the conformance cases that check it or the reason none does.
+
+- **IDs are stable.** An ID is never reused or renumbered. A requirement that
+  is removed keeps its ID out of circulation.
+- **Quotes are checked.** `schemas/check.ts` fails when a quote is no longer in
+  the document, so a normative sentence cannot change without the catalogue
+  changing with it.
+- **Key words are complete.** Every MUST, MUST NOT, SHALL, SHALL NOT and
+  REQUIRED in a normative section sits inside a catalogued requirement; the
+  check fails otherwise.
+- **Cases cite requirements.** Every conformance case lists the requirements it
+  checks (`covers`), and the runner's report repeats them, so a failed case
+  names the sentences a server broke.
+- **Gaps are stated.** A requirement no case checks is marked `client`,
+  `process`, `internal`, `external` or `gap`, with the meanings given in
+  [`requirements.md`](requirements.md).
+
+The catalogue is complete for key-word requirements and for every behaviour
+the conformance suite checks. Present-tense requirements
+([Conformance language](#conformance-language)) that no case checks yet are
+normative all the same, and are added to the catalogue as cases are written for
+them. SHOULD-level statements are not numbered in this version.
 
 ## Terminology
 
@@ -202,7 +233,7 @@ of the MCP binding do not need it. The optional `extensions` field lists
 ## Profiles
 
 A server claims profiles in `ServerInfo.profiles`. Claiming a profile means the
-server implements every MUST in the sections listed for it. The profile names are:
+server meets every requirement in the sections listed for it. The profile names are:
 
 <!-- generated:profiles:start -->
 `core`, `live`, `events`, `tasks`, `sync`, `workload`, `import`, `automation`

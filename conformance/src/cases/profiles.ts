@@ -33,6 +33,7 @@ export const profileCases: CaseDef[] = [
     id: "core.profile-writes-via",
     profile: "core",
     title: "OMB-Profile writes as the person's profile, shown via the person, and list_actors lists it with its handle",
+    covers: ["R01-32", "R01-37", "R02-29"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.me("owner");
@@ -67,6 +68,7 @@ export const profileCases: CaseDef[] = [
     id: "core.profile-inherits-role",
     profile: "core",
     title: "A profile has its person's role on each board with no invite: a contributor's profile posts, a reader's can't, an outsider's sees nothing",
+    covers: ["R01-34", "R02-09"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       await quotaReaderOnOwnerBoard(ctx);
@@ -88,6 +90,7 @@ export const profileCases: CaseDef[] = [
     id: "core.profile-edit-rules",
     profile: "core",
     title: "A profile can delete only what it wrote; its person can delete what any of their profiles wrote",
+    covers: ["R01-36", "R02-11", "R02-12"],
     async run(ctx) {
       const { threadId } = await sharedThread(ctx);
       const maya = await ctx.session("maya");
@@ -107,6 +110,7 @@ export const profileCases: CaseDef[] = [
     id: "core.profile-agent-refused",
     profile: "core",
     title: "An agent's credential with OMB-Profile is refused with 403; a malformed profile name with 400",
+    covers: ["R01-33", "R01-38"],
     async run(ctx) {
       await ctx.discovery();
       const agent = await rawRpc(ctx.endpoint, ctx.token("agent"), "tools/list", {}, { headers: { [PROFILE_HEADER]: "fx" } });
@@ -121,6 +125,7 @@ export const profileCases: CaseDef[] = [
     id: "core.scoped-token-read-only",
     profile: "core",
     title: "A read-only scoped token reads as a reader but can't post, invite or mint tokens",
+    covers: ["R01-41", "R01-43", "R02-10"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -147,6 +152,7 @@ export const profileCases: CaseDef[] = [
     id: "core.scoped-token-boards",
     profile: "core",
     title: "A board-scoped token sees only its boards; every other board is not_found",
+    covers: ["R01-40", "R02-37"],
     async run(ctx) {
       const shared = await sharedThread(ctx);
       const mayaBoard = await ctx.boardOf("maya");
@@ -165,6 +171,7 @@ export const profileCases: CaseDef[] = [
     id: "core.scoped-token-expired",
     profile: "core",
     title: "A token past its expiry is rejected with HTTP 401 invalid_token",
+    covers: ["R01-42"],
     async run(ctx) {
       const owner = await ctx.session("owner");
       const created = await owner.ok("create_scoped_token", { expires_in_seconds: 2 });
@@ -180,6 +187,7 @@ export const profileCases: CaseDef[] = [
     id: "core.scoped-token-profile",
     profile: "core",
     title: "A token scoped to a profile always writes as it; OMB-Profile can't change it",
+    covers: ["R01-39"],
     async run(ctx) {
       const board = await ownerBoard(ctx);
       const owner = await ctx.session("owner");
