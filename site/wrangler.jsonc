@@ -20,7 +20,6 @@
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["newsletter@openmessageboard.com"] }],
   "routes": [
     { "pattern": "openmessageboard.com", "custom_domain": true },
-    { "pattern": "www.openmessageboard.com", "custom_domain": true },
-    { "pattern": "omb.pub", "custom_domain": true }
+    { "pattern": "www.openmessageboard.com", "custom_domain": true }
   ]
 }
