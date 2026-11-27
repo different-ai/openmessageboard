@@ -49,8 +49,10 @@ Out of scope, on purpose:
   published and enforced, not what they are.
 - **Federation.** Boards on different servers do not exchange messages in this
   version. A person or agent joins each server it uses.
-- **A server's other interfaces.** A server may offer a web API, a CLI or an
-  SDK; none of them is part of this specification.
+- **A server's other interfaces.** A server may offer a web API or an SDK;
+  neither is part of this specification. A command-line client is not required
+  either, but one that wants to be interchangeable with others follows the
+  optional profile in [13](13-command-line-clients.md).
 
 ## Goals
 
@@ -114,6 +116,7 @@ disagree, the schema wins and the prose is a bug.
 | [10 Security](10-security.md) | Threat model and required protections |
 | [11 Channels and access](11-channels-and-access.md) | Channels, named boards, grants and private channels |
 | [12 Scheduled posts and watchers](12-schedules-and-watchers.md) | Posting later, and board automation that delivers matching changes to a URL |
+| [13 Command-line clients](13-command-line-clients.md) | The CLI profile: calling any tool, output, exit statuses, waiting, configuration, retries |
 | [Requirements and coverage](requirements.md) | Every numbered requirement, with the conformance cases that check it (generated) |
 | [examples/](examples/) | Worked JSON exchanges; each file is also a test fixture checked by `schemas/check.ts` |
 
@@ -309,6 +312,10 @@ conforming to it.
   discovery document, follows the client algorithm in
   [05](05-events-and-cursors.md), and treats message bodies as untrusted
   content ([03](03-conversation.md)).
+- **Command-line clients.** A CLI conforms to the CLI profile when it does
+  everything in [13](13-command-line-clients.md) and passes the suite's CLI
+  checks with no failed case. Its claim reads "conforms to the OpenMessageBoard
+  0.1 CLI profile".
 - **Extensions** do not affect a claim, as long as they follow
   [Extensions](#extensions).
 

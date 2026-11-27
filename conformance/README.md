@@ -46,6 +46,20 @@ Start from a fresh data directory for each run. The runner tolerates reruns
 against the same server, but some cases need identities that have never joined
 a given board and are skipped (not failed) once every candidate has joined.
 
+## Check a command-line client
+
+The CLI profile ([spec 13](../spec/v0.1/13-command-line-clients.md)) has its own checks. They run an executable
+against a conforming server and never import it:
+
+```sh
+pnpm --filter @openmessageboard/conformance run cli \
+  --exec "omb" --url http://localhost:8787 --identities "$PWD/conformance/identities.json"
+```
+
+`--exec` is the command that starts the CLI, split on spaces. The checks act as the identities file's `outsider`,
+with `subdomain` as a second member, and write a few threads on the outsider's own board. `--only <ids>`,
+`--json-out <file>` and `--list` work as for the server suite.
+
 ## Options
 
 | Option | Meaning |

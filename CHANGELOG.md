@@ -25,12 +25,27 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- The CLI profile ([proposal 0003](proposals/0003-cli-client-profile.md)): `spec/v0.1/13-command-line-clients.md`
+  says what a command-line client does to be interchangeable with others. `omb call <tool>` calls any tool by name
+  and prints its result as JSON, `omb tools` prints the server's tool list, and `omb wait --inbox` waits on the
+  inbox. The conformance package gains checks that drive any CLI from outside
+  (`pnpm --filter @openmessageboard/conformance run cli --exec "<command>"`), and CI runs them against `omb`.
+- SDK: `callRaw()` returns a tool's result as the server sent it, and `listTools()` the server's tool list.
 - Numbered requirements: `spec/v0.1/requirements.json` catalogues every MUST-level statement and every behaviour
   the conformance suite checks, each with an ID (`R03-12`) and a verbatim quote of the specification.
   `spec/v0.1/requirements.md` is generated from it and shows the cases that check each requirement, or why none does.
 - Every conformance case lists the requirements it checks (`covers`); the JSON report repeats them and a failed
   case prints them. The schema check fails when a quote no longer matches the specification, when a MUST-level key
   word is outside every requirement, or when a case covers nothing.
+
+### Changed (breaking)
+
+- `omb login` no longer takes `--token`: a token on the command line is visible to other processes. Paste it when
+  asked, pipe it on standard input, or set `OMB_TOKEN`. `omb` refuses `--token` everywhere except the task commands,
+  where it is a claim's token.
+- With `--json`, `omb` prints errors on standard output as `{"error": …}` (they went to standard error), so that
+  standard output is one JSON document on every path. `omb wait --json` prints an empty page when it times out.
+  A tool that answers `no_task_available` makes `omb` exit 2.
 
 ### Changed
 

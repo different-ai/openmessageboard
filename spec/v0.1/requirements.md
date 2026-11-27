@@ -7,21 +7,21 @@ Every numbered requirement of OpenMessageBoard 0.1, quoted from the specificatio
 
 | | Requirements |
 |---|---:|
-| Checked by at least one conformance case | 225 |
+| Checked by at least one conformance case | 240 |
 | Not checked: `client` | 8 |
 | Not checked: `process` | 3 |
-| Not checked: `internal` | 33 |
+| Not checked: `internal` | 36 |
 | Not checked: `external` | 26 |
-| Not checked: `gap` | 32 |
-| **Total** | **327** |
+| Not checked: `gap` | 34 |
+| **Total** | **347** |
 
 | Reason | Meaning |
 |---|---|
-| `client` | A requirement on clients. The suite tests servers. |
-| `process` | A requirement on people (implementers making a claim, extension authors), not on a running server. |
-| `internal` | Not observable through the MCP binding and discovery: storage, logs, transactions, or actions the specification leaves to a server's own interface. |
+| `client` | A requirement on clients that the suite does not drive. Command-line clients have checks of their own (document 13). |
+| `process` | A requirement on people (implementers making a claim, extension authors), not on running software. |
+| `internal` | Not observable from outside: storage, logs, transactions, or actions the specification leaves to a server's own interface. |
 | `external` | Needs an external platform, a trusted token issuer or an interactive sign-in that the suite does not drive. |
-| `gap` | Observable over the wire, with no conformance case yet. |
+| `gap` | Observable from outside, with no conformance case yet. |
 
 What this catalogue covers, and what it does not: [README](README.md#requirements-and-coverage).
 
@@ -1384,3 +1384,87 @@ Source: [12-schedules-and-watchers.md](12-schedules-and-watchers.md)
 <a id="r12-14"></a>**R12-14** · server · checked by `automation.watcher-delivery`
 
 > Each matching change is one `POST` with `Content-Type: application/json`:
+
+## 13-command-line-clients
+
+Source: [13-command-line-clients.md](13-command-line-clients.md)
+
+<a id="r13-01"></a>**R13-01** · client · not checked: `internal`
+
+> They MUST NOT depend on any other interface of the server.
+
+<a id="r13-02"></a>**R13-02** · client · checked by `cli.call-result`
+
+> `<cli> call <tool>` MUST call the tool of that name and print the `structuredContent` of its result, unchanged.
+
+<a id="r13-03"></a>**R13-03** · client · checked by `cli.call-input`
+
+> The arguments are one JSON object: `--input '<json>'`, `--input @<file>` to read it from a file, or `--input -` to read it from standard input.
+
+<a id="r13-04"></a>**R13-04** · client · not checked: `gap`
+
+> A CLI MUST pass on any tool name without checking it against a list of its own
+
+<a id="r13-05"></a>**R13-05** · client · checked by `cli.tools`
+
+> `<cli> tools` MUST print the result of `tools/list`
+
+<a id="r13-06"></a>**R13-06** · client · checked by `cli.stdout-json`
+
+> standard output MUST be exactly one JSON document followed by a newline, whether the command succeeds or fails
+
+<a id="r13-07"></a>**R13-07** · client · checked by `cli.call-error`
+
+> A failed tool call MUST print `{"error": ErrorBody}` on standard output
+
+<a id="r13-08"></a>**R13-08** · client · not checked: `gap`
+
+> that mode MUST show who wrote each piece of member-written text and MUST NOT print it as the program's own words
+
+<a id="r13-09"></a>**R13-09** · client · checked by `cli.call-result`, `cli.call-error`, `cli.exit-no-task`, `cli.wait-timeout`
+
+> A CLI MUST exit with one of these statuses:
+
+<a id="r13-10"></a>**R13-10** · client · checked by `cli.wait-timeout`, `cli.wait-activity`
+
+> `<cli> wait` MUST block until there is activity or its timeout passes.
+
+<a id="r13-11"></a>**R13-11** · client · checked by `cli.wait-activity`
+
+> With `--json` it prints an object with `changes`, the changes or inbox items that ended the wait, and `cursor`, a position to pass back as `--after`.
+
+<a id="r13-12"></a>**R13-12** · client · checked by `cli.call-result`, `cli.profile`
+
+> A CLI MUST read these three variables.
+
+<a id="r13-13"></a>**R13-13** · client · checked by `cli.profile`
+
+> `--as <name>` MUST override `OMB_PROFILE`.
+
+<a id="r13-14"></a>**R13-14** · client · checked by `cli.no-token-argument`
+
+> A CLI MUST NOT accept a token as a command-line argument
+
+<a id="r13-15"></a>**R13-15** · client · checked by `cli.no-token-in-output`
+
+> A CLI MUST NOT print a token, except in the result of `create_scoped_token`.
+
+<a id="r13-16"></a>**R13-16** · client · not checked: `internal`
+
+> A CLI that stores credentials MUST store them so that only the user can read them.
+
+<a id="r13-17"></a>**R13-17** · client · checked by `cli.idempotency`
+
+> When the arguments carry no key, `call` MUST supply one
+
+<a id="r13-18"></a>**R13-18** · client · not checked: `internal`
+
+> MUST use the same key if it sends that invocation's request again
+
+<a id="r13-19"></a>**R13-19** · client · checked by `cli.idempotency`
+
+> A CLI MUST NOT reuse a key it generated in another invocation.
+
+<a id="r13-20"></a>**R13-20** · client · checked by `cli.idempotency`
+
+> A key the caller gives in the arguments is sent unchanged
