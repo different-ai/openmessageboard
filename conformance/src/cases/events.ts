@@ -189,7 +189,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook",
     profile: "events",
     title: "Webhook subscribe: verification challenge, Standard Webhooks signed delivery, refresh and unsubscribe",
-    covers: ["R06-35", "R06-36", "R06-38", "R06-39"],
+    covers: ["R06-35", "R06-36", "R06-38", "R06-39", "R14-02"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       const owner = await ctx.session("owner");
@@ -232,10 +232,55 @@ export const eventCases: CaseDef[] = [
     },
   },
   {
+    id: "events.webhook-url-credentials",
+    profile: "events",
+    title: "A callback URL that carries credentials is refused, and nothing is sent to it",
+    covers: ["R14-01"],
+    async run(ctx) {
+      const board = await mayaOnOwnerBoard(ctx);
+      const maya = await ctx.session("maya");
+      const ep = (await ctx.receiver()).endpoint("echo");
+      const withCredentials = ep.url.replace("http://", "http://user:secret@");
+      const r = await subscribe(maya, "board.message_created", { board_id: board }, withCredentials, ep.secret);
+      check(r.error, "events/subscribe accepted a callback URL with credentials in it");
+      check(r.error.code === -32602, `JSON-RPC code ${r.error.code}, expected -32602`);
+      check(ep.deliveries.length === 0, "the server called a URL it should have refused");
+    },
+  },
+  {
+    id: "events.webhook-slow-receiver",
+    profile: "events",
+    title: "A receiver that answers after 7 seconds is accepted: the delivery is not sent again",
+    covers: ["R14-07"],
+    timeoutMs: 60_000,
+    async run(ctx) {
+      const t = await sharedThread(ctx);
+      const owner = await ctx.session("owner");
+      const maya = await ctx.session("maya");
+      const args = { board_id: t.boardId, thread_id: t.threadId };
+      const ep = (await ctx.receiver()).endpoint("echo");
+      const r = await subscribe(maya, "board.message_created", args, ep.url, ep.secret);
+      check(r.result, `events/subscribe failed: ${JSON.stringify(r.error)}`);
+      try {
+        ep.delayMs = 7000;
+        const posted = await reply(owner, t.threadId, "For a slow receiver.");
+        const first = await ep.waitFor((d) => d.body?.eventId === posted.message.id, 10_000);
+        check(first, "no delivery for the new message within 10 s");
+        // The answer arrives 7 s after the request. A sender that gave up before 10 s would send it again within a few seconds.
+        await sleep(13_000);
+        const sent = ep.deliveries.filter((d) => d.body?.eventId === posted.message.id);
+        check(sent.length === 1, `the delivery was sent ${sent.length} times; a 7-second answer is within the 10-second timeout`);
+      } finally {
+        ep.delayMs = 0;
+        await maya.rpc("events/unsubscribe", { name: "board.message_created", arguments: args, delivery: { url: ep.url } });
+      }
+    },
+  },
+  {
     id: "events.webhook-challenge-failure",
     profile: "events",
     title: "A callback that fails the challenge is refused with -32027 challenge_failed",
-    covers: ["R06-37"],
+    covers: ["R06-37", "R14-04"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -252,7 +297,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook-refused-addresses",
     profile: "events",
     title: "Private, link-local, metadata and non-HTTPS callbacks and invalid secrets are refused",
-    covers: ["R06-32", "R06-33", "R06-34", "R10-09", "R10-10"],
+    covers: ["R06-32", "R06-33", "R06-34", "R10-09", "R10-10", "R14-01"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -285,7 +330,7 @@ export const eventCases: CaseDef[] = [
     id: "events.webhook-terminated",
     profile: "events",
     title: "When access ends, the webhook gets a signed terminated envelope and nothing further",
-    covers: ["R02-35", "R06-40"],
+    covers: ["R02-35", "R06-40", "R14-09"],
     timeoutMs: 150_000,
     async run(ctx) {
       const f = await expiryScenario(ctx);

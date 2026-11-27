@@ -13,7 +13,17 @@ import { presentInbox, presentMessages, presentThreads } from "../domain/present
 import { labelsMatch } from "../domain/tasks.js";
 import { boardLimits, limitsFor } from "../domain/plans.js";
 import { AccessCache, ChannelAccess, channelMatches } from "../domain/grants.js";
-import { CallbackError, newWebhookId, postSigned, validateCallbackUrl, type CallbackPolicy } from "./webhook-http.js";
+import {
+  CallbackError,
+  WEBHOOK_TIMEOUT_MS,
+  newWebhookId,
+  postSigned,
+  validateCallbackUrl,
+  webhookBackoffMs,
+  webhookBodyTooLarge,
+  webhookRetriesSpent,
+  type CallbackPolicy,
+} from "./webhook-http.js";
 
 export const EVENT_ERRORS = { NotFound: -32023, Forbidden: -32024, ResourceExhausted: -32025, Unsupported: -32026, CallbackEndpointError: -32027, HeaderMismatch: -32020 } as const;
 
@@ -21,7 +31,7 @@ export const EVENT_ERRORS = { NotFound: -32023, Forbidden: -32024, ResourceExhau
 export const COMPAT_CALLBACK_ERROR = -32015;
 
 /** Webhook requests (verification and deliveries) wait this long for the receiver. */
-export const WEBHOOK_TIMEOUT_MS = 10_000;
+export { WEBHOOK_TIMEOUT_MS };
 
 /**
  * Which Events dialect a client speaks. A client that declares the extension in its per-request capabilities gets
@@ -439,9 +449,12 @@ export class EventSubscriptions {
       const r = occurrencesAfter(ctx, actor, s.name as EventName, args, s.cursor_seq, 50);
       ctx.db.transaction(() => {
         for (const ev of r.events) {
+          const payload = JSON.stringify(ev);
+          // A body over the cap is never sent: the delivery is recorded as failed so the gap can be seen (spec 14).
+          const tooLarge = webhookBodyTooLarge(payload);
           ctx.db
-            .prepare("INSERT OR IGNORE INTO webhook_deliveries (id, subscription_id, webhook_id, event_id, payload, next_attempt_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)")
-            .run(newId("dl"), s.id, ev.eventId.replace(/[^A-Za-z0-9_-]/g, "_"), ev.eventId, JSON.stringify(ev), now, now);
+            .prepare("INSERT OR IGNORE INTO webhook_deliveries (id, subscription_id, webhook_id, event_id, payload, next_attempt_at, status, last_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .run(newId("dl"), s.id, ev.eventId.replace(/[^A-Za-z0-9_-]/g, "_"), ev.eventId, tooLarge ? "{}" : payload, now, tooLarge ? "failed" : "pending", tooLarge ? "too_large" : null, now);
         }
         if (r.lastSeq !== s.cursor_seq) ctx.db.prepare("UPDATE event_subscriptions SET cursor_seq = ? WHERE id = ?").run(r.lastSeq, s.id);
       })();
@@ -480,11 +493,10 @@ export class EventSubscriptions {
           error = e instanceof CallbackError ? e.reason : "unreachable";
         }
         const attempts = d.attempts + 1;
-        if (status === "pending" && attempts >= 10) status = "failed";
-        const backoff = Math.min(2 ** attempts * 1000, 3_600_000);
+        if (status === "pending" && webhookRetriesSpent(attempts, d.created_at, ctx.now())) status = "failed";
         ctx.db
           .prepare("UPDATE webhook_deliveries SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ? WHERE id = ?")
-          .run(status, attempts, error, new Date(ctx.now().getTime() + backoff).toISOString(), d.id);
+          .run(status, attempts, error, new Date(ctx.now().getTime() + webhookBackoffMs(attempts)).toISOString(), d.id);
       }),
     );
     ctx.db.prepare("DELETE FROM webhook_deliveries WHERE status != 'pending' AND created_at < ?").run(new Date(ctx.now().getTime() - 7 * 86_400_000).toISOString());
@@ -512,4 +524,5 @@ interface DeliveryRow {
   event_id: string;
   payload: string;
   attempts: number;
+  created_at: string;
 }
