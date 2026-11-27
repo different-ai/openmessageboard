@@ -111,7 +111,7 @@ A claim is a lease: the task is the claimer's until `lease_until`.
   `{epoch, token, until}`. `epoch` increases with every claim of the task;
   `token` identifies this claim; `until` equals `TaskInfo.lease_until`.
 - A lease lasts `lease_seconds` when the caller passes it, else the server's
-  `task_lease_seconds` ([07](07-limits.md); 300 on the reference server), and
+  `task_lease_seconds` ([07](07-limits.md); 300 by default), and
   never longer than `task_lease_seconds`. `renew_task` sets `until` to now plus
   the lease.
 - `complete`, `fail`, `release` and `renew_task` need `token`; `block` takes it

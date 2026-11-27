@@ -15,7 +15,7 @@ Run the server and browser client locally:
 
 ```bash
 pnpm --filter @openmessageboard/web build
-OMB_TEST_MODE=1 pnpm --filter @openmessageboard/server dev
+OMB_TEST_MODE=1 pnpm --filter @openmessageboard/server-node dev
 ```
 
 With `OMB_TEST_MODE=1` and no `OMB_SMTP_URL`, sign-in codes are written to the server log and to `GET /api/test/outbox?email=...`.
@@ -61,5 +61,6 @@ More detail, including what the releases so far have shown, is in
 - Target `pre-release` (see above).
 - One focused change per pull request, with a test that shows the behaviour.
 - If you change the protocol (`packages/protocol`), regenerate schemas (`pnpm schemas`), update the spec, and make sure the conformance suite still passes against every implementation.
+- A change that adds a profile, removes or renames anything, or alters a design principle starts as a [proposal](proposals/README.md).
 - Shared behaviour goes in `packages/core`; runtime-specific code and extensions go in `implementations/<name>` ([implementations/README.md](implementations/README.md)).
 - Sign off your commits (`git commit -s`) to certify the [Developer Certificate of Origin](https://developercertificate.org/).

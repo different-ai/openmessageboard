@@ -32,6 +32,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.create",
     profile: "tasks",
     title: "start_thread with task: true creates a ready task owned by its creator",
+    covers: ["R04-01", "R04-02"],
     async run(ctx) {
       const { board, thread } = await newTask(ctx, "maya", `Create task ${ctx.runId}`, { labels: { area: "ios" } });
       const mayaId = (await ctx.me("maya")).id;
@@ -63,6 +64,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.concurrent-claim",
     profile: "tasks",
     title: "Two principals claiming the same task at once: exactly one wins and gets a lease",
+    covers: ["R04-21"],
     async run(ctx) {
       const owner = await ctx.session("owner");
       const maya = await ctx.session("maya");
@@ -96,6 +98,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.claim-next",
     profile: "tasks",
     title: "Claim-next takes tasks kept for the caller first, then the oldest ready task matching every label",
+    covers: ["R04-18", "R04-19"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const mayaId = (await ctx.me("maya")).id;
@@ -142,6 +145,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.complete-with-result",
     profile: "tasks",
     title: "Completing with the claim's token posts the result as a reply; a missing or stale token changes nothing",
+    covers: ["R04-14", "R04-15", "R04-24"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const { thread, board } = await newTask(ctx, "owner", `Complete ${ctx.runId}`);
@@ -172,6 +176,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.lease",
     profile: "tasks",
     title: "A lease is capped by task_lease_seconds, renew extends it, and an expired lease returns the task to ready",
+    covers: ["R04-11", "R04-12", "R04-16"],
     timeoutMs: 120_000,
     async run(ctx) {
       const maya = await ctx.session("maya");
@@ -213,6 +218,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.release",
     profile: "tasks",
     title: "The claimer releases with its token; the owner can hold a claimed task, ending the claim",
+    covers: ["R04-05", "R04-06"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const owner = await ctx.session("owner");
@@ -234,6 +240,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.needs",
     profile: "tasks",
     title: "A task waits for its needs; completing the last one readies it, a failed or canceled one readies nothing",
+    covers: ["R04-25", "R04-26", "R04-27", "R04-28"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const owner = await ctx.session("owner");
@@ -275,6 +282,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.for-assign",
     profile: "tasks",
     title: "A task kept for one principal can only be claimed by them; the owner assigns and returns it to the pool",
+    covers: ["R04-17", "R04-29", "R04-30", "R04-31"],
     async run(ctx) {
       const owner = await ctx.session("owner");
       const maya = await ctx.session("maya");
@@ -305,6 +313,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.block-unblock",
     profile: "tasks",
     title: "The worker blocks with its token; only the task's owner (or board owner) unblocks",
+    covers: ["R04-03", "R04-13"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const owner = await ctx.session("owner");
@@ -331,6 +340,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.fail-reopen-cancel",
     profile: "tasks",
     title: "A failed task can be reopened by its owner; cancel needs a reason and ends any claim",
+    covers: ["R04-07", "R04-08", "R04-10"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const owner = await ctx.session("owner");
@@ -359,6 +369,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.plan",
     profile: "tasks",
     title: "create_tasks creates a plan in one write (all or none), with needs by key, and is idempotent",
+    covers: ["R04-33", "R04-34", "R04-35"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const maya = await ctx.session("maya");
@@ -393,6 +404,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.claim-wait",
     profile: "tasks",
     title: "Claim-next with wait_seconds waits for a matching task to become ready",
+    covers: ["R04-20"],
     timeoutMs: 60_000,
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
@@ -417,6 +429,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.permissions",
     profile: "tasks",
     title: "Readers cannot claim or label; task tools reject discussions; board.* labels are reserved",
+    covers: ["R04-04", "R04-09", "R04-40"],
     async run(ctx) {
       await quotaReaderOnOwnerBoard(ctx);
       const reader = await ctx.session("quota");
@@ -434,6 +447,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.self-claim-no-inbox-item",
     profile: "tasks",
     title: "Claiming follows the task and creates no task_assigned item for the claimer",
+    covers: ["R04-23", "R04-32"],
     async run(ctx) {
       const maya = await ctx.session("maya");
       const { thread } = await newTask(ctx, "owner", `Self claim ${ctx.runId}`);
@@ -448,6 +462,7 @@ export const taskCases: CaseDef[] = [
     id: "tasks.labels",
     profile: "tasks",
     title: "set_labels sets, removes, validates and filters labels",
+    covers: ["R04-37", "R04-38", "R04-39", "R04-42"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");

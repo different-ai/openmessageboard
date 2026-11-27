@@ -8,6 +8,7 @@ import * as P from "@openmessageboard/protocol";
 import { ALL_CASES } from "../cases/index.ts";
 import { generatedFiles } from "./build.ts";
 import { EXAMPLES_DIR, SPEC_DIR } from "./paths.ts";
+import { MATRIX_FILE, requirementCounts } from "./requirements.ts";
 
 type Access = { who: string; profile: P.Profile };
 
@@ -135,8 +136,21 @@ function errorsTable(): string {
 }
 
 function limitsTable(): string {
+  const lines = [row(["Limit key", "Default"]), row(["---", "---:"])];
+  for (const [key, value] of Object.entries(P.DEFAULT_LIMITS)) lines.push(row([`\`${key}\``, String(value)]));
+  return lines.join("\n");
+}
+
+function rateLimitsTable(): string {
+  const lines = [row(["Rate limit key", "Default"]), row(["---", "---:"])];
+  for (const [key, value] of Object.entries(P.DEFAULT_RATE_LIMITS)) lines.push(row([`\`${key}\``, String(value)]));
+  return lines.join("\n");
+}
+
+/** The reference implementations' plans and settings. They are configuration, not protocol, so they live outside the spec. */
+function referenceLimitsTable(): string {
   const lines = [
-    row(["Limit key", "`base` plan default", "`openwork` plan default", "Reference server environment variables"]),
+    row(["Limit key", "`base` plan default", "`openwork` plan default", "Environment variables"]),
     row(["---", "---:", "---:", "---"]),
   ];
   const openwork = P.OPENWORK_PLAN_LIMITS as Record<string, number>;
@@ -146,8 +160,8 @@ function limitsTable(): string {
   return lines.join("\n");
 }
 
-function rateLimitsTable(): string {
-  const lines = [row(["Rate limit key", "Default", "Environment variable (reference server)"]), row(["---", "---:", "---"])];
+function referenceRateLimitsTable(): string {
+  const lines = [row(["Rate limit key", "Default", "Environment variable"]), row(["---", "---:", "---"])];
   for (const [key, value] of Object.entries(P.DEFAULT_RATE_LIMITS)) lines.push(row([`\`${key}\``, String(value), `\`OMB_RATE_${key.toUpperCase()}\``]));
   return lines.join("\n");
 }
@@ -159,6 +173,7 @@ function profilesList(): string {
 /** The numbers the repository README advertises, counted from the sources so they cannot go stale. */
 function glanceTable(): string {
   const documents = readdirSync(SPEC_DIR).filter((f) => /^\d\d-.+\.md$/.test(f)).length;
+  const reqs = requirementCounts();
   const examples = readdirSync(EXAMPLES_DIR).filter((f) => f.endsWith(".json")).length;
   const schemas = [...generatedFiles().keys()].filter((f) => f !== "index.json").length;
   const perProfile = P.PROFILES.map((p) => [p, ALL_CASES.filter((c) => c.profile === p).length] as const)
@@ -175,6 +190,7 @@ function glanceTable(): string {
     row(["Error codes", String(P.ERROR_CODES.length), "[06 MCP binding](spec/v0.1/06-mcp-binding.md)"]),
     row(["Profiles a server can claim", String(P.PROFILES.length), "[Profiles](spec/v0.1/README.md#profiles)"]),
     row(["Generated JSON Schemas", String(schemas), "[`schemas/v0.1`](schemas/v0.1)"]),
+    row(["Numbered requirements (" + reqs.tested + " checked by a conformance case)", String(reqs.total), "[`requirements.md`](spec/v" + P.SPEC_VERSION + "/" + MATRIX_FILE + ")"]),
     row(["Conformance cases (" + perProfile + ")", String(ALL_CASES.length), "[`conformance`](conformance)"]),
   ].join("\n");
 }
@@ -187,6 +203,8 @@ export const SPEC_TABLES: Record<string, { file: string; render: () => string }>
   errors: { file: "06-mcp-binding.md", render: errorsTable },
   limits: { file: "07-limits.md", render: limitsTable },
   "rate-limits": { file: "07-limits.md", render: rateLimitsTable },
+  "reference-limits": { file: "../../implementations/README.md", render: referenceLimitsTable },
+  "reference-rate-limits": { file: "../../implementations/README.md", render: referenceRateLimitsTable },
   profiles: { file: "README.md", render: profilesList },
 };
 

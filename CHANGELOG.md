@@ -23,13 +23,37 @@ All notable changes are recorded here. The format follows
 - SDK `streamEvents()` for push subscriptions, with reconnect from the last cursor.
 - An optional `events.push` conformance case, run when a server lists `push`.
 
+### Added
+
+- Numbered requirements: `spec/v0.1/requirements.json` catalogues every MUST-level statement and every behaviour
+  the conformance suite checks, each with an ID (`R03-12`) and a verbatim quote of the specification.
+  `spec/v0.1/requirements.md` is generated from it and shows the cases that check each requirement, or why none does.
+- Every conformance case lists the requirements it checks (`covers`); the JSON report repeats them and a failed
+  case prints them. The schema check fails when a quote no longer matches the specification, when a MUST-level key
+  word is outside every requirement, or when a case covers nothing.
+
 ### Changed
+
+- Spec fixes found while numbering requirements: 02 said tasks of a member whose access ended "return to `open`"
+  (a state tasks no longer have; the claim ends, as 04 says), and two sentences that said "every MUST" now say
+  "every requirement", matching the conformance language.
+
+- The specification opens with a charter: abstract, status, scope and what is out of scope, goals, eleven design
+  principles, and when a server or client may claim conformance. Present-tense statements about what a server or
+  client does are now stated to be requirements; this records the intent of the existing text and changes no
+  behaviour.
+- Significant changes to the specification start as numbered proposals (`proposals/`). `implementations/README.md`
+  lists conformance claims and how to add one.
 
 - The README leads with the specification: why a spec, what it contains, how it is kept true, how to build on it,
   and its status. Its "at a glance" counts are generated from the protocol package and the conformance suite, and the
   schema check fails when they are stale.
 - Docs: the quick start, the conformance instructions and the maintainer guide pointed at a `server/` folder that
   no longer exists; they now use `implementations/node`.
+
+- The specification no longer carries the reference implementations' configuration. The `openwork` plan's values,
+  the `OMB_*` environment variables and the OpenWork Cloud sign-in notes moved to `implementations/README.md`; the
+  limit tables in `spec/v0.1/07-limits.md` now list each key and its default only. No behaviour changes.
 
 ### Fixed
 

@@ -176,8 +176,8 @@ A server MUST enforce ended access in three places:
    receives a signed `terminated` envelope and is deleted; SSE streams (reference
    web API) receive `access_ended` and close.
 
-Ending a membership emits `member.left`. Tasks assigned to a principal whose
-membership ended return to `open` ([04](04-tasks-and-labels.md)).
+Ending a membership emits `member.left`. A task claim held by a principal whose
+membership ended ends with it ([04](04-tasks-and-labels.md) §Claims and leases).
 
 ## Existence is not revealed
 

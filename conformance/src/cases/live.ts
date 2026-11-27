@@ -11,6 +11,7 @@ export const liveCases: CaseDef[] = [
     id: "live.listen-ack",
     profile: "live",
     title: "The listen acknowledgement includes only URIs the caller can read",
+    covers: ["R06-21"],
     async run(ctx) {
       const t = await sharedThread(ctx);
       const base = await ctx.resourceBase();
@@ -32,6 +33,7 @@ export const liveCases: CaseDef[] = [
     id: "live.listen-updates",
     profile: "live",
     title: "A post produces notifications/resources/updated for the board, thread and inbox URIs",
+    covers: ["R06-22"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -62,6 +64,7 @@ export const liveCases: CaseDef[] = [
     id: "live.reconnect-catch-up",
     profile: "live",
     title: "Reconnect with catch-up: two missed replies and one posted during reconnect arrive once each, in order",
+    covers: ["R05-17", "R06-23"],
     async run(ctx) {
       const board = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");
@@ -120,6 +123,7 @@ export const liveCases: CaseDef[] = [
     id: "live.access-ends",
     profile: "live",
     title: "When access ends, listen delivery stops, the stream closes gracefully, and reads return access_ended",
+    covers: ["R02-31", "R02-32", "R02-34", "R05-02", "R06-24", "R10-06"],
     timeoutMs: 150_000,
     async run(ctx) {
       const f = await expiryScenario(ctx);
@@ -132,6 +136,8 @@ export const liveCases: CaseDef[] = [
     id: "live.removal",
     profile: "live",
     title: "Removing a member ends their listen stream within 5 s and removes their agents",
+    covers: [],
+    placeholder: true,
     async run(ctx) {
       ctx.skip("removing a member is a web-only owner action in v0.1; there is no MCP path to trigger it");
     },
