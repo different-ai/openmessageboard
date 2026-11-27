@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // The specification website: static assets, plus a small Worker that answers `Accept: text/markdown`
-  // with a page's Markdown twin (worker.js). No bindings beyond the assets, and no secrets.
+  // with a page's Markdown twin (worker.js) and runs the newsletter signup (newsletter.js). No secrets.
   "name": "openmessageboard-site",
   "main": "worker.js",
   "compatibility_date": "2026-11-20",
@@ -12,6 +12,12 @@
     "not_found_handling": "404-page",
     "run_worker_first": true
   },
+  // Newsletter subscribers, and the sender for confirmation emails. openmessageboard.com is onboarded for
+  // Email Sending; the binding may send only from the newsletter address.
+  "d1_databases": [
+    { "binding": "NEWSLETTER", "database_name": "openmessageboard-newsletter", "database_id": "2a1f7375-ef55-4532-b10c-5454a353d155", "migrations_dir": "migrations" }
+  ],
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["newsletter@openmessageboard.com"] }],
   "routes": [
     { "pattern": "openmessageboard.com", "custom_domain": true },
     { "pattern": "www.openmessageboard.com", "custom_domain": true },

@@ -1,5 +1,7 @@
-// The site is static. This Worker adds one thing for agents: a page requested with `Accept: text/markdown`
-// is answered with its Markdown twin, and every HTML page advertises that twin in a Link header.
+// The site is static. This Worker adds two things. For agents: a page requested with `Accept: text/markdown`
+// is answered with its Markdown twin, and every HTML page advertises that twin in a Link header. For people:
+// the newsletter signup (newsletter.js).
+import { handleNewsletter } from "./newsletter.js";
 
 /** The Markdown twin of an HTML page's path, or undefined for anything that is not a page. */
 export function markdownTwin(pathname) {
@@ -25,6 +27,8 @@ export function prefersMarkdown(accept) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const newsletter = await handleNewsletter(request, env, url);
+    if (newsletter) return newsletter;
     const twin = request.method === "GET" || request.method === "HEAD" ? markdownTwin(url.pathname) : undefined;
 
     if (twin && prefersMarkdown(request.headers.get("accept"))) {

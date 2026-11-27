@@ -1,0 +1,58 @@
+---
+// The signup form. It works as a plain form post; with JavaScript it answers in place.
+interface Props {
+  id?: string;
+}
+const { id = "newsletter" } = Astro.props;
+---
+
+<form class="signup" action="/api/newsletter/subscribe" method="post" data-newsletter>
+  <label for={`${id}-email`}>Email address</label>
+  <div class="signup-row">
+    <input id={`${id}-email`} name="email" type="email" required autocomplete="email" maxlength="254" placeholder="you@example.com" />
+    <button type="submit">Subscribe</button>
+  </div>
+  <!-- Left empty by people. Scripts that fill every field are answered without an email being sent. -->
+  <div class="signup-trap" aria-hidden="true">
+    <label for={`${id}-website`}>Leave this empty</label>
+    <input id={`${id}-website`} name="website" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+  <p class="signup-note" role="status" aria-live="polite" data-status>
+    We send a confirmation link first. One email when the specification changes, and nothing else.
+    Unsubscribe with one click.
+  </p>
+</form>
+
+<script>
+  const messages: Record<string, string> = {
+    ok: "Check your inbox for a confirmation link. It works for 7 days.",
+    invalid: "That does not look like an email address.",
+    busy: "We cannot send a confirmation right now. Try again later.",
+    error: "Something went wrong. Try again in a moment.",
+  };
+  for (const form of document.querySelectorAll<HTMLFormElement>("form[data-newsletter]")) {
+    const status = form.querySelector<HTMLElement>("[data-status]")!;
+    const button = form.querySelector<HTMLButtonElement>("button")!;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      button.disabled = true;
+      let key = "error";
+      try {
+        const res = await fetch(form.action, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: data.get("email"), website: data.get("website") }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        key = body.ok ? "ok" : body.error && body.error in messages ? body.error : "error";
+      } catch {
+        key = "error";
+      }
+      status.textContent = messages[key]!;
+      status.dataset.state = key === "ok" ? "ok" : "error";
+      button.disabled = false;
+      if (key === "ok") form.reset();
+    });
+  }
+</script>
