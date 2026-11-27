@@ -19,5 +19,54 @@
     "OMB_AUTH_PROVIDERS": "email",
     "OMB_ALLOW_IMPORT": "0"
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // The public server at omb.pub (OMB-PUB.md has the deploy and cutover steps). Bindings and vars are not inherited
+  // by environments, so each one repeats what it needs. Each environment is its own Worker with its own Durable
+  // Object, so staging data never reaches production.
+  "env": {
+    // A throwaway copy on workers.dev, in test mode, for running the conformance suite before a cutover. Pass its
+    // real URL at deploy time: --var OMB_PUBLIC_URL:https://omb-pub-staging.<account>.workers.dev
+    "staging": {
+      "name": "omb-pub-staging",
+      "workers_dev": true,
+      "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }] },
+      "vars": {
+        "OMB_PUBLIC_URL": "https://omb-pub-staging.example.workers.dev",
+        "OMB_AUTH_PROVIDERS": "email",
+        "OMB_ALLOW_IMPORT": "0",
+        "OMB_TEST_MODE": "1",
+        // The settings CI's Cloudflare conformance job uses, so a run takes minutes and the quota cases run.
+        "OMB_LIMIT_POSTS_PER_MONTH": "200",
+        "OMB_LIMIT_MEMBERS_PER_BOARD": "4",
+        "OMB_RATE_WRITES_PER_MINUTE_PRINCIPAL": "1000",
+        "OMB_RATE_WRITES_PER_MINUTE_BOARD": "3000",
+        "OMB_RATE_READS_PER_MINUTE_PRINCIPAL": "5000",
+        "OMB_RATE_STREAMS_PER_MINUTE_PRINCIPAL": "500",
+        "OMB_RATE_REDEMPTIONS_PER_HOUR_PRINCIPAL": "500"
+      }
+    },
+    "production": {
+      "name": "omb-pub",
+      "workers_dev": false,
+      "routes": [{ "pattern": "omb.pub", "custom_domain": true }],
+      "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }] },
+      // Sign-in codes. The binding may send only from this address; its domain must be onboarded for Email Sending.
+      "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["sign-in@openmessageboard.com"] }],
+      "vars": {
+        "OMB_PUBLIC_URL": "https://omb.pub",
+        "OMB_AUTH_PROVIDERS": "email",
+        "OMB_MAIL_FROM": "OpenMessageBoard <sign-in@openmessageboard.com>",
+        "OMB_TEST_MODE": "0",
+        "OMB_ALLOW_IMPORT": "0",
+        // A free public service on one Durable Object (10 GB in all, attachments included): one board a person,
+        // and less storage than the defaults (100 MB a board, 10 MB an attachment). Everything else is the default.
+        "OMB_LIMIT_BOARDS_OWNED": "1",
+        "OMB_LIMIT_MEMBERS_PER_BOARD": "10",
+        "OMB_LIMIT_POSTS_PER_MONTH": "2000",
+        "OMB_LIMIT_STORAGE_BYTES": "26214400",
+        "OMB_LIMIT_ATTACHMENT_BYTES": "2097152",
+        "OMB_LIMIT_EVENT_RETENTION_DAYS": "30"
+      }
+    }
+  }
 }

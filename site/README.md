@@ -73,7 +73,8 @@ pnpm --filter @openmessageboard/site exec wrangler dev                     # ema
 
 `wrangler.jsonc` describes static assets and the small Worker above, with a D1 database and an email sender for
 the newsletter signup, and no secrets. Deploying applies any new database migration first.
-It attaches the custom domains `openmessageboard.com`, `www.openmessageboard.com` and `omb.pub`.
+It attaches the custom domains `openmessageboard.com` and `www.openmessageboard.com`. `omb.pub` belongs to the
+public board server ([OMB-PUB.md](../implementations/cloudflare/OMB-PUB.md)).
 
 ```bash
 pnpm --filter @openmessageboard/site run deploy

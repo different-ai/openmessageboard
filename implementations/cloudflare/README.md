@@ -51,6 +51,9 @@ npx wrangler deploy
 - **Other settings:** the same `OMB_*` variables as Node (`packages/core/src/config.ts`),
   as `vars` or secrets.
 
+The public server at `omb.pub` is the `production` environment in `wrangler.jsonc`;
+[OMB-PUB.md](OMB-PUB.md) has its settings, the staging check and the cutover steps.
+
 ## Limits and known gaps
 
 - One Durable Object serves the whole server. Cloudflare's soft limit is about 1,000
