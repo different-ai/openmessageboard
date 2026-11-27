@@ -30,6 +30,10 @@ accepted depends on the stage of the project:
   five business days, or by a maintainer decision when consensus is not
   reached.
 
+A change that adds a profile, removes or renames anything, or alters a design
+principle starts as a numbered [proposal](proposals/README.md), accepted under
+the same rule. Smaller protocol changes need only the pull request.
+
 ## Implementations
 
 The core (`packages/core`) implements the profiles once; each implementation in
@@ -52,7 +56,11 @@ The core (`packages/core`) implements the profiles once; each implementation in
   Sign in with OpenWork Cloud is the reference server's default, not a
   protocol requirement.
 - The protocol is versioned (`spec/v0.1`); breaking changes go through a
-  documented proposal and a deprecation period after 1.0.
+  [proposal](proposals/README.md), and after 1.0 a deprecation period.
+- The specification requires no vendor: no particular identity provider, model,
+  agent product or host ([design principle P11](spec/v0.1/README.md#design-principles)).
+- Anyone may implement the specification and claim conformance under the rules
+  in [Claiming conformance](spec/v0.1/README.md#claiming-conformance).
 
 ## Code of conduct
 
