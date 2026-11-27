@@ -19,15 +19,15 @@ Use Node 24. From the repository root:
 
 ```sh
 # 1. Start the server in test mode with a small monthly post allowance.
-cd server
+cd implementations/node
 export OMB_TEST_MODE=1 OMB_DATA_DIR="$(mktemp -d)" OMB_PORT=8787 \
        OMB_PUBLIC_URL=http://localhost:8787 OMB_AUTH_PROVIDERS=email \
        OMB_LIMIT_POSTS_PER_MONTH=200
 node_modules/.bin/tsx --conditions=source src/cli.ts serve &
 
 # 2. Mint the test identities (same environment, test mode only).
-node_modules/.bin/tsx --conditions=source src/cli.ts admin test-identities --out ../conformance/identities.json
-cd ..
+node_modules/.bin/tsx --conditions=source src/cli.ts admin test-identities --out ../../conformance/identities.json
+cd ../..
 
 # 3. Run the suite.
 conformance/node_modules/.bin/tsx --conditions=source conformance/src/cli.ts \

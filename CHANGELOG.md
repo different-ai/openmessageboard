@@ -23,6 +23,14 @@ All notable changes are recorded here. The format follows
 - SDK `streamEvents()` for push subscriptions, with reconnect from the last cursor.
 - An optional `events.push` conformance case, run when a server lists `push`.
 
+### Changed
+
+- The README leads with the specification: why a spec, what it contains, how it is kept true, how to build on it,
+  and its status. Its "at a glance" counts are generated from the protocol package and the conformance suite, and the
+  schema check fails when they are stale.
+- Docs: the quick start, the conformance instructions and the maintainer guide pointed at a `server/` folder that
+  no longer exists; they now use `implementations/node`.
+
 ### Fixed
 
 - When access expired, a webhook subscriber didn't get its signed `terminated` envelope: housekeeping ended the
