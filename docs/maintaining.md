@@ -33,7 +33,7 @@ one before; repeating a rung for reassurance adds nothing.
 
 | Rung | Command | Use it for |
 |---|---|---|
-| Package tests | `cd server && node_modules/.bin/tsx --conditions=source --test test/<file>.test.ts` (or the package you changed) | Every change, while iterating |
+| Package tests | `cd implementations/node && node_modules/.bin/tsx --conditions=source --test test/<file>.test.ts` (or the package you changed) | Every change, while iterating |
 | CI locally | `make verify` | Before every push |
 | Conformance | Start a test-mode server and run the suite ([conformance/README.md](../conformance/README.md)); CI runs it on every PR with the settings in `.github/workflows/ci.yml` | Any change to behaviour a client can observe |
 | Real browser | Run the server, sign in, post, and watch a second principal's reply arrive live | Web client changes; sign-in pages |

@@ -23,7 +23,8 @@ conformance/node_modules/.bin/tsx --conditions=source schemas/generate.ts
 conformance/node_modules/.bin/tsx --conditions=source schemas/check.ts
 ```
 
-`generate.ts` also refreshes the generated tables in `spec/v0.1/*.md`.
+`generate.ts` also refreshes the generated tables in `spec/v0.1/*.md` and the
+"at a glance" table in the repository README.
 `check.ts` fails when the schemas or tables are stale, when a valid sample is
 rejected or an invalid one accepted (by zod and by the JSON Schema), or when a
 worked example in `spec/v0.1/examples/` does not conform.
