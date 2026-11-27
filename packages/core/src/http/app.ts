@@ -15,7 +15,7 @@ import { isEventStreamRequest, serveEventStream } from "../mcp/event-stream.js";
 import { registerApiRoutes } from "./api.js";
 import { registerChannelRoutes } from "./channels.js";
 import { registerOAuthConsentRoutes } from "./consent.js";
-import { clientMetadataDocument } from "../auth/openwork.js";
+import { clientMetadataDocument } from "../auth/oidc.js";
 import type { AppEnv, RouteModule } from "./util.js";
 export { WEB_CSP, isServerPath } from "./paths.js";
 
@@ -26,7 +26,7 @@ export interface AppOptions {
   resolver: Resolver;
   events: EventSubscriptions;
   modules?: { name: Profile; register: RouteModule }[];
-  openworkAvailable?: boolean;
+  oidcAvailable?: boolean;
 }
 
 export function createApp(ctx: AppContext, opts: AppOptions) {
@@ -53,12 +53,12 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
     rate_limits: { ...ctx.config.rateLimits },
     plans: [
       { id: "base", name: "Base", description: "Accounts that sign in by email", limits: { ...ctx.config.plans.base } },
-      { id: "openwork", name: "OpenWork", description: "Accounts that sign in with OpenWork Cloud", limits: { ...ctx.config.plans.openwork } },
+      { id: "plus", name: "Plus", description: "Accounts that sign in through the host's identity provider", limits: { ...ctx.config.plans.plus } },
     ],
     auth: {
       providers: [...ctx.config.authProviders],
-      openwork: ctx.config.authProviders.includes("openwork")
-        ? { issuer: ctx.config.openwork.issuer, available: opts.openworkAvailable === true, sign_up_url: ctx.config.openwork.signUpUrl }
+      oidc: ctx.config.authProviders.includes("oidc") && ctx.config.oidc.issuer
+        ? { issuer: ctx.config.oidc.issuer, name: ctx.config.oidc.name, available: opts.oidcAvailable === true, sign_up_url: ctx.config.oidc.signUpUrl }
         : null,
     },
   });
@@ -136,7 +136,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
   });
 
   // Discovery
-  app.get("/oauth/openwork-client.json", (c) => {
+  app.get("/oauth/oidc-client.json", (c) => {
     c.header("Cache-Control", "public, max-age=300");
     return c.json(clientMetadataDocument(ctx));
   });

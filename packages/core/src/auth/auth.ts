@@ -6,7 +6,7 @@ import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import type { AppContext } from "../context.js";
 import { sha256 } from "../ids.js";
 import type { Mailer } from "./mailer.js";
-import { OPENWORK_PROVIDER_ID, OPENWORK_SCOPES, type OpenWorkClient } from "./openwork.js";
+import { OIDC_PROVIDER_ID, OIDC_SCOPES, type OidcClient } from "./oidc.js";
 
 export const OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "boards"] as const;
 export const OPAQUE_ACCESS_PREFIX = "omb_oat_";
@@ -22,10 +22,10 @@ export function consentChoiceFor(ctx: AppContext, sessionId: string): string | u
   return row?.principal_id;
 }
 
-export function createAuth(ctx: AppContext, mailer: Mailer, openworkClient: OpenWorkClient | null = null) {
+export function createAuth(ctx: AppContext, mailer: Mailer, oidcClient: OidcClient | null = null) {
   const { publicUrl, secret, testMode, authProviders } = ctx.config;
   const emailEnabled = authProviders.includes("email");
-  const openworkEnabled = authProviders.includes("openwork") && openworkClient !== null;
+  const oidcEnabled = authProviders.includes("oidc") && oidcClient !== null;
   return betterAuth({
     appName: "OpenMessageBoard",
     baseURL: publicUrl,
@@ -34,8 +34,8 @@ export function createAuth(ctx: AppContext, mailer: Mailer, openworkClient: Open
     database: (ctx.platform.authDatabase ?? ctx.db) as never,
     trustedOrigins: [publicUrl],
     emailAndPassword: { enabled: false },
-    // Someone who first signed in by email and later signs in with OpenWork Cloud keeps one account.
-    account: { accountLinking: { enabled: true, trustedProviders: [OPENWORK_PROVIDER_ID] } },
+    // Someone who first signed in by email and later signs in through the OpenID Connect provider keeps one account.
+    account: { accountLinking: { enabled: true, trustedProviders: [OIDC_PROVIDER_ID] } },
     session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
     advanced: {
       cookiePrefix: "omb",
@@ -44,19 +44,19 @@ export function createAuth(ctx: AppContext, mailer: Mailer, openworkClient: Open
     },
     rateLimit: { enabled: !testMode, window: 60, max: 100 },
     plugins: [
-      ...(openworkEnabled
+      ...(oidcEnabled
         ? [
             genericOAuth({
               config: [
                 {
-                  providerId: OPENWORK_PROVIDER_ID,
-                  name: "OpenWork",
-                  discoveryUrl: `${ctx.config.openwork.issuer}/.well-known/openid-configuration`,
-                  clientId: openworkClient!.clientId,
-                  ...(openworkClient!.clientSecret ? { clientSecret: openworkClient!.clientSecret } : { tokenEndpointAuth: { method: "none" as const } }),
-                  scopes: OPENWORK_SCOPES,
+                  providerId: OIDC_PROVIDER_ID,
+                  name: ctx.config.oidc.name,
+                  discoveryUrl: `${ctx.config.oidc.issuer}/.well-known/openid-configuration`,
+                  clientId: oidcClient!.clientId,
+                  ...(oidcClient!.clientSecret ? { clientSecret: oidcClient!.clientSecret } : { tokenEndpointAuth: { method: "none" as const } }),
+                  scopes: OIDC_SCOPES,
                   pkce: true,
-                  // Stable OpenWork account identity: the verified ID token's subject, else the userinfo subject.
+                  // Stable account identity: the verified ID token's subject, else the userinfo subject.
                   accountSubject: ({ tokens, profile }) => {
                     const p = profile as { sub?: unknown; id?: unknown };
                     if (tokens.idToken) {
@@ -69,7 +69,7 @@ export function createAuth(ctx: AppContext, mailer: Mailer, openworkClient: Open
                     }
                     return String(p.sub ?? p.id ?? "");
                   },
-                  redirectURI: `${publicUrl}/api/auth/callback/${OPENWORK_PROVIDER_ID}`,
+                  redirectURI: `${publicUrl}/api/auth/callback/${OIDC_PROVIDER_ID}`,
                 },
               ],
             }),

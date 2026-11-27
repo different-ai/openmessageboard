@@ -8,11 +8,11 @@ import { ErrorNote } from "../ui";
 type AuthInfo = NonNullable<ServerInfo["auth"]>;
 let authInfoCache: Promise<AuthInfo> | null = null;
 
-/** How this server lets people sign in (OpenWork Cloud, email code, or both). */
+/** How this server lets people sign in (an identity provider, an email code, or both). */
 function useAuthInfo(): AuthInfo | null {
   const [info, setInfo] = useState<AuthInfo | null>(null);
   useEffect(() => {
-    const fallback: AuthInfo = { providers: ["email"], openwork: null };
+    const fallback: AuthInfo = { providers: ["email"], oidc: null };
     const pending: Promise<AuthInfo> = (authInfoCache ??= api
       .serverInfo()
       .then((s) => s.auth ?? fallback)
@@ -35,14 +35,14 @@ export function pendingAuthorization(): string | null {
   return q.has("client_id") && q.has("response_type") && q.has("sig") ? `/api/auth/oauth2/authorize${window.location.search}` : null;
 }
 
-function OpenWorkButton({ next, available, signUpUrl }: { next: string; available: boolean; signUpUrl: string }) {
+function ProviderButton({ next, name, available, signUpUrl }: { next: string; name: string; available: boolean; signUpUrl: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   async function go() {
     setBusy(true);
     setError(null);
     try {
-      const { url } = await api.signInWithOpenWork(pendingAuthorization() ?? next);
+      const { url } = await api.signInWithProvider(pendingAuthorization() ?? next);
       window.location.href = url;
     } catch (err) {
       setError(err);
@@ -52,32 +52,34 @@ function OpenWorkButton({ next, available, signUpUrl }: { next: string; availabl
   return (
     <div className="stack">
       <button type="button" className="button button-primary button-block" onClick={() => void go()} disabled={busy || !available}>
-        {busy ? "Opening OpenWork…" : "Continue with OpenWork"}
+        {busy ? `Opening ${name}…` : `Continue with ${name}`}
       </button>
-      {!available && <p className="note note-warning">OpenWork sign-in is temporarily unavailable. Try again in a moment.</p>}
+      {!available && <p className="note note-warning">Sign-in with {name} is temporarily unavailable. Try again in a moment.</p>}
       <ErrorNote error={error} />
-      <p className="hint">
-        Use your OpenWork Cloud account. New to OpenWork?{" "}
-        <a href={signUpUrl} target="_blank" rel="noopener noreferrer">
-          Create a free account
-        </a>
-        , then come back here.
-      </p>
+      {signUpUrl && (
+        <p className="hint">
+          No account yet?{" "}
+          <a href={signUpUrl} target="_blank" rel="noopener noreferrer">
+            Create one
+          </a>
+          , then come back here.
+        </p>
+      )}
     </div>
   );
 }
 
-/** Sign-in: OpenWork Cloud and/or an email one-time code, as the server allows. Calls onSignedIn after the session is set. */
+/** Sign-in: an identity provider and/or an email one-time code, as the server allows. Calls onSignedIn after the session is set. */
 export function SignInForm({ onSignedIn, compact, next = "/" }: { onSignedIn: () => void; compact?: boolean; next?: string }) {
   const auth = useAuthInfo();
   if (!auth) return null;
-  const openwork = auth.providers.includes("openwork") && auth.openwork;
+  const oidc = auth.providers.includes("oidc") ? auth.oidc : null;
   const email = auth.providers.includes("email");
   return (
     <div className={`stack signin-form ${compact ? "compact" : ""}`}>
-      {openwork && <OpenWorkButton next={next} available={auth.openwork!.available} signUpUrl={auth.openwork!.sign_up_url} />}
-      {openwork && email && <p className="muted center">or</p>}
-      {email && <EmailCodeForm onSignedIn={onSignedIn} compact={compact} secondary={!!openwork} />}
+      {oidc && <ProviderButton next={next} name={oidc.name} available={oidc.available} signUpUrl={oidc.sign_up_url} />}
+      {oidc && email && <p className="muted center">or</p>}
+      {email && <EmailCodeForm onSignedIn={onSignedIn} compact={compact} secondary={!!oidc} />}
     </div>
   );
 }

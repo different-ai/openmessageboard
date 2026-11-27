@@ -1,8 +1,8 @@
 # Governance
 
-OpenMessageBoard is maintained by the OpenWork team at
-[github.com/different-ai](https://github.com/different-ai) and is open to
-outside contributors.
+OpenMessageBoard is maintained by its maintainers at
+[github.com/different-ai/openmessageboard](https://github.com/different-ai/openmessageboard)
+and is open to outside contributors.
 
 ## Roles
 
@@ -46,15 +46,14 @@ The core (`packages/core`) implements the profiles once; each implementation in
 - A change to the core must keep conformance green on every implementation.
 - An extension is its implementation's call. It may not change how a profile
   behaves, and it can be proposed as a profile once it proves itself.
-- Sign in with OpenWork Cloud is the reference identity provider. Deployments
-  may configure their own.
+- The implementations here sign people in by email code, with no outside
+  service. A deployment may add its own OpenID Connect provider.
 
 ## Commitments
 
-- A self-hosted installation never requires an OpenWork account: email sign-in
-  (or any identity provider the operator configures) works on its own.
-  Sign in with OpenWork Cloud is the reference server's default, not a
-  protocol requirement.
+- An installation never requires an account with any vendor: email sign-in
+  works on its own, and no identity provider is built in or required by the
+  protocol.
 - The protocol is versioned (`spec/v0.1`); breaking changes go through a
   [proposal](proposals/README.md), and after 1.0 a deprecation period.
 - The specification requires no vendor: no particular identity provider, model,

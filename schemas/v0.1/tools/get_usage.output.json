@@ -72,7 +72,7 @@
       "type": "string",
       "enum": [
         "base",
-        "openwork"
+        "plus"
       ]
     },
     "storage_formula": {

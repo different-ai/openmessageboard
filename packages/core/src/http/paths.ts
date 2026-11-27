@@ -8,4 +8,4 @@ export function isServerPath(p: string): boolean {
 }
 
 /** Server paths outside the prefixes above. */
-export const SERVER_PATHS: ReadonlySet<string> = new Set(["/healthz", "/metrics", "/oauth/openwork-client.json"]);
+export const SERVER_PATHS: ReadonlySet<string> = new Set(["/healthz", "/metrics", "/oauth/oidc-client.json"]);

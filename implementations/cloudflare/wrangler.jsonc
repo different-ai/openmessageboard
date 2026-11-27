@@ -11,9 +11,12 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardServer"] }],
   // Optional: attachments in R2 instead of the Durable Object's SQLite.
   // "r2_buckets": [{ "binding": "ATTACHMENTS", "bucket_name": "openmessageboard-attachments" }],
+  // Optional: send sign-in codes with Cloudflare Email Service. Onboard the sender's domain for Email Sending first,
+  // and set OMB_MAIL_FROM to an address on it. Without this binding, codes are written to the Worker log.
+  // "send_email": [{ "name": "EMAIL" }],
   "vars": {
     "OMB_PUBLIC_URL": "http://localhost:8787",
-    "OMB_AUTH_PROVIDERS": "openwork,email",
+    "OMB_AUTH_PROVIDERS": "email",
     "OMB_ALLOW_IMPORT": "0"
   },
   "observability": { "enabled": true }

@@ -365,7 +365,7 @@ export const ServerInfo = z.object({
   auth: z
     .object({
       providers: z.array(z.enum(AUTH_PROVIDERS)),
-      openwork: z.object({ issuer: z.string(), available: z.boolean(), sign_up_url: z.string() }).nullable(),
+      oidc: z.object({ issuer: z.string(), name: z.string(), available: z.boolean(), sign_up_url: z.string().nullable() }).nullable(),
     })
     .optional()
     .describe("Reference server: how people sign in"),

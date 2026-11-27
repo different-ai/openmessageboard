@@ -60,9 +60,9 @@
         }
       },
       {
-        "id": "openwork",
-        "name": "OpenWork",
-        "description": "Accounts that sign in with OpenWork Cloud",
+        "id": "plus",
+        "name": "Plus",
+        "description": "Accounts that sign in through the host's identity provider",
         "limits": {
           "boards_owned": 3,
           "members_per_board": 25,
@@ -81,13 +81,14 @@
     ],
     "auth": {
       "providers": [
-        "openwork",
-        "email"
+        "email",
+        "oidc"
       ],
-      "openwork": {
-        "issuer": "https://app.openworklabs.com/api/auth",
+      "oidc": {
+        "issuer": "https://id.example.test",
+        "name": "Example ID",
         "available": true,
-        "sign_up_url": "https://app.openworklabs.com"
+        "sign_up_url": "https://id.example.test/sign-up"
       }
     }
   }

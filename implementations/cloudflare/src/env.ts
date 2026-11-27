@@ -6,6 +6,8 @@ export interface Env {
   ASSETS?: Fetcher;
   /** Attachment bytes. Without it, attachments are kept in the Durable Object's SQLite. */
   ATTACHMENTS?: R2Bucket;
+  /** Cloudflare Email Service, for sign-in codes. Without it, codes are written to the Worker log. */
+  EMAIL?: SendEmail;
   /** Test mode only: a shared secret for POST /x/test/identities. */
   OMB_TEST_ADMIN_TOKEN?: string;
   [name: string]: unknown;

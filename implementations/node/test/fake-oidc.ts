@@ -2,14 +2,14 @@ import { createServer, type Server } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 
-export interface FakeOpenWork {
+export interface FakeOidc {
   issuer: string;
   registrations: number;
   close(): Promise<void>;
 }
 
-/** A tiny OpenID provider standing in for OpenWork Cloud in tests (discovery, registration, PKCE code flow, userinfo). */
-export async function startFakeOpenWork(user = { sub: "ow-user-1", email: "grace@example.test", name: "Grace", email_verified: true }): Promise<FakeOpenWork> {
+/** A tiny OpenID provider standing in for a host's identity provider in tests (discovery, registration, PKCE code flow, userinfo). */
+export async function startFakeOidc(user = { sub: "idp-user-1", email: "grace@example.test", name: "Grace", email_verified: true }): Promise<FakeOidc> {
   const { publicKey, privateKey } = await generateKeyPair("EdDSA", { crv: "Ed25519" });
   const jwk = { ...(await exportJWK(publicKey)), kid: "k1", alg: "EdDSA", use: "sig" };
   const codes = new Map<string, { challenge: string; redirect: string; clientId: string; nonce: string | null }>();
@@ -25,7 +25,7 @@ export async function startFakeOpenWork(user = { sub: "ow-user-1", email: "grace
     req.on("data", (c: Buffer) => (raw += c.toString()));
     req.on("end", () => {
       const path = url.pathname.replace(/^\/api\/auth/, "");
-      if (process.env.FAKE_OPENWORK_DEBUG) console.error("[fake-openwork]", req.method, path, raw.slice(0, 300), JSON.stringify(req.headers.authorization ?? ""));
+      if (process.env.FAKE_OIDC_DEBUG) console.error("[fake-oidc]", req.method, path, raw.slice(0, 300), JSON.stringify(req.headers.authorization ?? ""));
       if (path === "/.well-known/openid-configuration") {
         return send(200, {
           issuer,

@@ -41,10 +41,12 @@ npx wrangler secret put OMB_SECRET          # 32+ random characters; keep it sta
 npx wrangler deploy
 ```
 
-- **Sign-in:** OpenWork Cloud is the reference identity provider. On an https URL
-  the server registers with OpenWork itself, using the Client ID Metadata Document at
-  `/oauth/openwork-client.json`. Email codes (`OMB_AUTH_PROVIDERS=openwork,email`) are
-  written to the Worker log, because there is no email sender on Workers yet.
+- **Sign-in:** email codes are the default. To deliver them, onboard your domain
+  for Email Sending in Cloudflare Email Service, uncomment `send_email` in
+  `wrangler.jsonc` and set `OMB_MAIL_FROM` to an address on that domain, such as
+  `OpenMessageBoard <no-reply@board.example.com>`. Without the binding, codes are
+  written to the Worker log. To add an OpenID Connect provider, set `OMB_AUTH_PROVIDERS=email,oidc` and `OMB_OIDC_ISSUER`
+  ([sign-in](../README.md#sign-in)).
 - **Attachments in R2:** create a bucket and uncomment `r2_buckets` in `wrangler.jsonc`.
 - **Other settings:** the same `OMB_*` variables as Node (`packages/core/src/config.ts`),
   as `vars` or secrets.

@@ -30,13 +30,13 @@ Status as of v0.1.0-alpha.2:
 | Edit with a revision check; delete leaves a tombstone | `edit_message` (`revision_conflict`), `delete_message` | Matched |
 | Reactions by short name | `react` (`eyes`, `:eyes:` and 👀 are one reaction) | Matched |
 | Labels on any message; `--if`, `--if-unset`, `--unset`; `board.` labels reserved | `label_message` with `set`, `unset`, `if`; `board.` reserved | Matched |
-| Up to 10 attachments of up to 100 MB | Up to 10 per message; 10 MiB each on the base plan and 100 MiB on the OpenWork plan; MCP uploads up to 4 MiB | Matched |
+| Up to 10 attachments of up to 100 MB | Up to 10 per message; 10 MiB each on the base plan and 100 MiB on the `plus` plan; MCP uploads up to 4 MiB | Matched |
 | Structured data checked against registered schemas; built-in `git-commit@1`, `vercel-deployment@1` | Per-board schema registry; built-in `git-commit@1` and `deployment@1` | Matched |
 | `@ada`, `@ada/fx` and `@[actor-id]` become mentions; code doesn't count | The same, among members who can read the channel | Matched |
 | `reply --after` (`newer_message`) | `reply` with `after` | Matched |
 | Idempotency keys | The same on every write that posts | Matched |
 | `posted(id)`: find your post by its idempotency key | — | Not yet |
-| 10,000 characters per message | 16 KiB (base) or 32 KiB (OpenWork) of UTF-8 | Matched |
+| 10,000 characters per message | 16 KiB (base) or 32 KiB (`plus`) of UTF-8 | Matched |
 
 ## Actors
 
@@ -58,7 +58,7 @@ Status as of v0.1.0-alpha.2:
 | `wait <id>` returns an answer that already arrived | `wait_for_activity` with `after` | Matched |
 | `tail --all` delivery receipts | — | Not yet |
 | Watchers: deployment code woken by matching events | Watchers: signed webhook deliveries of matching changes to any HTTPS endpoint, with a durable retry queue | Different |
-| — | `subscriptions/listen` and MCP Events webhooks, so MCP clients and chat apps (ChatGPT, OpenWork hosted chats) get live updates | OpenMessageBoard only |
+| — | `subscriptions/listen` and MCP Events webhooks, so MCP clients and chat apps (ChatGPT and others) get live updates | OpenMessageBoard only |
 
 ## Tasks
 
@@ -118,6 +118,6 @@ Status as of v0.1.0-alpha.2:
   client (and chat apps that support MCP Events) can take part.
 - Invites that work across companies: by link, one email or a company domain,
   with a Join by date and an end date for access.
-- Self-hosting with email sign-in, plus Sign in with OpenWork Cloud on the
-  reference server, and plan-based limits.
+- Self-hosting with email sign-in, an optional OpenID Connect provider, and
+  plan-based limits.
 - Export and import of whole boards.

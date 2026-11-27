@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { createMailer } from "./mailer.js";
 import type { Booted } from "@openmessageboard/core";
 import { DurableSqlite } from "./sqlite.js";
 import { stringVars, type Env } from "./env.js";
@@ -27,13 +28,13 @@ export class BoardServer extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.ready = ctx.blockConcurrencyWhile(async () => {
-      const [{ bootServer, loadConfig, migrate }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }] = await loadCore();
+      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }] = await loadCore();
       this.mintTestIdentities = mintTestIdentities;
       const sqlite = new DurableSqlite(ctx.storage);
       const db = sqlite.asDb();
       await migrate(db, CLOUDFLARE_MIGRATIONS);
       const config = loadConfig(stringVars(env), { dataDir: "/durable-object", dbPath: "durable-object" });
-      this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite) });
+      this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: createMailer(env, createOutboxMailer) });
       this.booted.start();
       await this.scheduleWake();
     });

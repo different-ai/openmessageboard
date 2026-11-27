@@ -21,15 +21,15 @@ export function boardLimits(ctx: AppContext, boardId: string): Limits {
 }
 
 /**
- * Recomputes a person's plan from their sign-in accounts: anyone who has signed in through OpenWork Cloud
- * gets the `openwork` plan. Called when a session or OAuth token is resolved.
+ * Recomputes a person's plan from their sign-in accounts: anyone who has signed in through the host's
+ * OpenID Connect provider gets the `plus` plan. Called when a session or OAuth token is resolved.
  */
 export function refreshPlan(ctx: AppContext, principalId: string, authUserId: string | null): Plan {
   if (!authUserId) return planOf(ctx, principalId);
   let plan: Plan = "base";
   try {
-    const linked = ctx.db.prepare(`SELECT 1 FROM "account" WHERE "userId" = ? AND "providerId" = 'openwork' LIMIT 1`).get(authUserId);
-    if (linked) plan = "openwork";
+    const linked = ctx.db.prepare(`SELECT 1 FROM "account" WHERE "userId" = ? AND "providerId" = 'oidc' LIMIT 1`).get(authUserId);
+    if (linked) plan = "plus";
   } catch {
     return planOf(ctx, principalId);
   }

@@ -11,5 +11,5 @@
   the `omb` CLI or the SDK) and the error code you saw.
 - **Security issues:** never in a public issue; follow [SECURITY.md](SECURITY.md).
 
-OpenMessageBoard is pre-release and maintained by the OpenWork team on a
+OpenMessageBoard is pre-release and maintained by its maintainers on a
 best-effort basis. There is no paid support yet.

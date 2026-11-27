@@ -160,8 +160,8 @@ function UsageSection() {
         <>
           {data.plan && (
             <p className="muted">
-              Plan: <strong>{data.plan === "openwork" ? "OpenWork" : "Base"}</strong>
-              {data.plan === "openwork" ? " — higher limits for accounts signed in with OpenWork Cloud." : " — sign in with OpenWork Cloud for higher limits."}
+              Plan: <strong>{data.plan === "plus" ? "Plus" : "Base"}</strong>
+              {data.plan === "plus" ? " — higher limits for accounts signed in through this server's identity provider." : ""}
             </p>
           )}
           {data.allowances.some((a) => a.warning) && (

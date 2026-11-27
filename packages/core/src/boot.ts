@@ -4,7 +4,7 @@ import type { Config } from "./config.js";
 import { createContext, type AppContext } from "./context.js";
 import type { DB } from "./db/index.js";
 import { createAuth, type Auth } from "./auth/auth.js";
-import { resolveOpenWorkClient, type OpenWorkClient } from "./auth/openwork.js";
+import { resolveOidcClient, type OidcClient } from "./auth/oidc.js";
 import { createOutboxMailer, type Mailer } from "./auth/mailer.js";
 import { createResolver, type WorkloadVerifier } from "./auth/resolve.js";
 import { createApp, type AppOptions } from "./http/app.js";
@@ -56,9 +56,9 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
   const { config } = opts;
   const ctx = createContext(config, opts.db, opts.now, opts.platform);
   const mailer = opts.mailer ? await opts.mailer(ctx) : createOutboxMailer(ctx);
-  const openworkClient: OpenWorkClient | null = config.authProviders.includes("openwork") ? await resolveOpenWorkClient(ctx) : null;
-  if (config.authProviders.includes("openwork") && !openworkClient) console.warn("Sign in with OpenWork is unavailable; check OMB_OPENWORK_ISSUER and network access.");
-  const auth = createAuth(ctx, mailer, openworkClient);
+  const oidcClient: OidcClient | null = config.authProviders.includes("oidc") ? await resolveOidcClient(ctx) : null;
+  if (config.authProviders.includes("oidc") && !oidcClient) console.warn("OIDC sign-in is unavailable; check OMB_OIDC_ISSUER and network access.");
+  const auth = createAuth(ctx, mailer, oidcClient);
   const { runMigrations } = await getMigrations(auth.options);
   await runMigrations();
   const features = opts.features ?? {};
@@ -68,7 +68,7 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
   const modules: { name: Profile; register: RouteModule }[] = [];
   if (features.workload) modules.push({ name: "workload", register: features.workload.register });
   if (sync) modules.push({ name: "sync", register: sync.register });
-  const { app } = createApp(ctx, { auth, resolver, events, modules, openworkAvailable: openworkClient !== null, ...(opts.web ? { web: opts.web } : {}) });
+  const { app } = createApp(ctx, { auth, resolver, events, modules, oidcAvailable: oidcClient !== null, ...(opts.web ? { web: opts.web } : {}) });
 
   const maintain = () => {
     try {

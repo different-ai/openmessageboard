@@ -41,7 +41,7 @@ async function clockCtx(start = Date.parse("2026-11-20T09:00:00.000Z")): Promise
   const dir = mkdtempSync(join(tmpdir(), "omb-auto-"));
   const config = loadConfig({ OMB_DATA_DIR: dir, OMB_PUBLIC_URL: "http://omb.test", OMB_TEST_MODE: "1", OMB_AUTH_PROVIDERS: "email" }, { dbPath: ":memory:" });
   config.limits.schedule_min_repeat_seconds = 60;
-  config.plans = { base: config.limits, openwork: config.plans.openwork };
+  config.plans = { base: config.limits, plus: config.plans.plus };
   const db = openDatabase(":memory:");
   await migrate(db);
   return { ctx: createContext(config, db, () => new Date(now), nodePlatform(config.dataDir)), advance: (ms) => (now += ms) };
