@@ -13,6 +13,8 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
+- The specification states that `/.well-known/openmessageboard` is an RFC 8615 well-known URI and that its path
+  stays the same in every spec version; a later version changes `spec_version` only. No server behaviour changes.
 - **Sign-in is vendor-neutral, and this is a breaking change for deployments.** The implementations no longer
   build in an identity provider. Email one-time codes are the default (`OMB_AUTH_PROVIDERS=email`). An OpenID
   Connect provider is optional and has no default issuer: `OMB_AUTH_PROVIDERS=email,oidc` with `OMB_OIDC_ISSUER`,

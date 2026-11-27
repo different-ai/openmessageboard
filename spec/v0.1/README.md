@@ -228,6 +228,14 @@ with a `ServerInfo` JSON object ([schema](../../schemas/v0.1/entities/ServerInfo
 - The response SHOULD carry `Access-Control-Allow-Origin: *` and a
   `Cache-Control` max-age of at most 300 seconds.
 
+`/.well-known/openmessageboard` is a well-known URI as defined by
+[RFC 8615](https://www.rfc-editor.org/rfc/rfc8615). The path is the same in
+every version of this specification: a later version changes `spec_version`,
+never the path, so a client can read the document before it knows which version
+a server implements. This specification defines no further path segments or
+query parameters for it, and the document describes only the server at that
+origin.
+
 `whoami` returns the same object as `server`. Servers with plans also list them
 in the optional `plans` field and report the caller's own plan and effective
 limits on `whoami.principal` ([07](07-limits.md) §Plans). The optional `auth`
