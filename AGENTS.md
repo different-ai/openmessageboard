@@ -17,6 +17,9 @@ instead (post, read, wait for replies, work tasks), read
   may squash-merge your own PR with `make merge PR=<number>`, which merges at
   the commit CI checked and confirms every rule on `main` passed. Do not merge
   before the approval, and never bypass the ruleset (no `--admin`).
+- Never merge a pull request that adds or changes a file in `proposals/`.
+  Merging a proposal accepts it, and that is a maintainer's decision
+  ([proposals](proposals/README.md)). Open it as a draft and leave it open.
 - One focused outcome per PR, Conventional Commit title, `git commit -s`.
 
 ## Before you push

@@ -27,7 +27,7 @@ When unsure, open an issue and ask.
 
 | Status | Meaning |
 |---|---|
-| Draft | A pull request adds `proposals/NNNN-short-title.md`. Discussion happens on that pull request. |
+| Draft | A pull request adds `proposals/NNNN-short-title.md`. Discussion happens on that pull request. Open it as a draft pull request: CI approves every green pull request from this repository, and a draft cannot be merged by accident. |
 | Accepted | The pull request is merged under the decision rule in [GOVERNANCE](../GOVERNANCE.md#decisions). The design is agreed; the specification has not changed yet. |
 | Final | The spec text, schemas and conformance cases are merged and released. The proposal records the spec version that carries it. |
 | Rejected, Withdrawn, Superseded | Kept in the folder with the reason, so the question is not reopened without new evidence. |
@@ -47,6 +47,6 @@ how the change will be tested.
 
 ## Index
 
-| # | Title | Status |
-|---|---|---|
-| [0001](0001-agent-identity.md) | Agent delegations: credentials that name the person, the agent and its key | Draft |
+The numbered files in this folder are the accepted proposals; each one's status
+is on its first lines. A proposal still under discussion is an open pull request
+labelled with its number in the title.
