@@ -119,3 +119,132 @@ export const nav = [
   { href: `${SPEC_BASE}requirements/`, number: "", title: "Requirements and coverage", slug: "requirements" },
   { href: `${SPEC_BASE}examples/`, number: "", title: "Worked examples", slug: "examples" },
 ];
+
+export const SITE = "https://openmessageboard.com";
+export const SITE_NAME = "OpenMessageBoard";
+export const TAGLINE = "An open specification for message boards where people and agents work together";
+export const SUMMARY =
+  "OpenMessageBoard is an open, testable specification for message boards shared by people and AI agents, served over the Model Context Protocol (MCP). It defines who is speaking, what each caller may see, exactly-once ordered delivery, safe handoff of tasks, and that message content is data and not instructions.";
+
+export interface SitePage {
+  /** Stable key, also the name of the page's share image under /og/. */
+  key: string;
+  /** Canonical path of the HTML page. */
+  path: string;
+  /** Path of the Markdown twin served for agents. */
+  markdown: string;
+  title: string;
+  description: string;
+  /** Short lines drawn on the share image. */
+  card: { kicker: string; title: string; detail: string };
+}
+
+const docPages: SitePage[] = documents.map((d) => ({
+  key: d.slug,
+  path: d.href,
+  markdown: `${SPEC_BASE}${d.slug}.md`,
+  title: `${d.number} ${d.title}`,
+  description: `${d.title}: ${stripInline(d.covers)}. Document ${d.number} of the OpenMessageBoard specification, version ${SPEC_VERSION}.`,
+  card: { kicker: `Specification ${SPEC_VERSION} · Document ${d.number}`, title: d.title, detail: stripInline(d.covers) },
+}));
+
+function stripInline(md: string): string {
+  return md.replace(/`([^`]+)`/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+}
+
+/** Every page of the site, in reading order. The sitemap, llms.txt, share images and Markdown twins all come from it. */
+export const pages: SitePage[] = [
+  {
+    key: "home",
+    path: "/",
+    markdown: "/index.md",
+    title: `${SITE_NAME}: ${TAGLINE.charAt(0).toLowerCase()}${TAGLINE.slice(1)}`,
+    description: SUMMARY,
+    card: { kicker: `Open specification · Version ${SPEC_VERSION} · Draft`, title: SITE_NAME, detail: TAGLINE },
+  },
+  {
+    key: "overview",
+    path: SPEC_BASE,
+    markdown: `${SPEC_BASE}index.md`,
+    title: `OpenMessageBoard specification, version ${SPEC_VERSION}`,
+    description:
+      "Scope, goals, design principles, conformance language, profiles, extensions and versioning of the OpenMessageBoard specification.",
+    card: {
+      kicker: `Specification ${SPEC_VERSION} · Overview`,
+      title: "The OpenMessageBoard specification",
+      detail: "Scope, goals, design principles, profiles, extensions and versioning",
+    },
+  },
+  ...docPages,
+  {
+    key: "requirements",
+    path: `${SPEC_BASE}requirements/`,
+    markdown: `${SPEC_BASE}requirements.md`,
+    title: "Requirements and conformance coverage",
+    description: `Every numbered requirement of OpenMessageBoard ${SPEC_VERSION}, quoted from the specification, with the conformance cases that check it: ${coverage().checked} of ${coverage().total} are checked.`,
+    card: {
+      kicker: `Specification ${SPEC_VERSION} · Catalogue`,
+      title: "Requirements and conformance coverage",
+      detail: `${coverage().total} numbered requirements, ${coverage().checked} checked by a conformance case`,
+    },
+  },
+  {
+    key: "examples",
+    path: `${SPEC_BASE}examples/`,
+    markdown: `${SPEC_BASE}examples/index.md`,
+    title: "Worked examples",
+    description: `Worked JSON-RPC exchanges for OpenMessageBoard ${SPEC_VERSION}. Each one is also a test fixture checked against the schemas.`,
+    card: {
+      kicker: `Specification ${SPEC_VERSION} · Examples`,
+      title: "Worked examples",
+      detail: `${examples.length} wire exchanges, each one a test fixture`,
+    },
+  },
+];
+
+export const page = (key: string): SitePage => {
+  const found = pages.find((p) => p.key === key);
+  if (!found) throw new Error(`no page ${key}`);
+  return found;
+};
+
+const SPEC_DIR = "spec/v0.1";
+
+/**
+ * A specification document as Markdown an agent can follow: repository-relative links become absolute, and links to
+ * other specification documents point at their Markdown twins.
+ */
+export function agentMarkdown(md: string, fromDir = SPEC_DIR): string {
+  return md
+    .replace(/(\]\()([^)\s]+)(\))/g, (_m, a, href, c) => `${a}${agentHref(href, fromDir)}${c}`)
+    .replace(/^(\[[^\]]+\]:\s*)(\S+)/gm, (_m, a, href) => `${a}${agentHref(href, fromDir)}`);
+}
+
+/** Where a link written in a specification document leads for an agent: an absolute URL, Markdown where there is one. */
+export function agentHref(href: string, fromDir = SPEC_DIR): string {
+  if (!href || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("#")) return href;
+  const [rawPath, hash = ""] = href.split("#");
+  const frag = hash ? `#${hash}` : "";
+  const target = path.posix.normalize(path.posix.join(fromDir, rawPath)).replace(/\/$/, "");
+  if (target === SPEC_DIR || target === `${SPEC_DIR}/README.md`) return `${SITE}${SPEC_BASE}index.md${frag}`;
+  if (target === `${SPEC_DIR}/examples` || target === `${SPEC_DIR}/examples/README.md`) return `${SITE}${SPEC_BASE}examples/index.md${frag}`;
+  if (target.startsWith(`${SPEC_DIR}/`)) {
+    const rel = target.slice(SPEC_DIR.length + 1);
+    if (/^[\w-]+\.md$/.test(rel) || rel === "requirements.json" || /^examples\/[\w-]+\.json$/.test(rel)) return `${SITE}${SPEC_BASE}${rel}${frag}`;
+  }
+  if (/^schemas\/v0\.1\/(?!samples\/).+\.json$/.test(target) && fs.existsSync(path.join(root, target))) return `${SITE}/${target}${frag}`;
+  const isFile = /\.[a-z0-9]+$/i.test(target);
+  return `${REPO}/${isFile ? "blob" : "tree"}/main/${target}${frag}`;
+}
+
+export const specSource = (file: string) => read(`${SPEC_DIR}/${file}`);
+
+/** The published JSON Schemas (everything but the test samples), as paths relative to schemas/v0.1. */
+export const schemaFiles: string[] = (function walk(dir: string): string[] {
+  return fs.readdirSync(path.join(root, "schemas/v0.1", dir), { withFileTypes: true }).flatMap((e) => {
+    const rel = path.posix.join(dir, e.name);
+    if (e.isDirectory()) return e.name === "samples" ? [] : walk(rel);
+    return e.name.endsWith(".json") ? [rel] : [];
+  });
+})("");
+export const schemaSource = (rel: string) => read(`schemas/v0.1/${rel}`);

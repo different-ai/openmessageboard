@@ -1,9 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // The specification website. Static assets only: no Worker script, no bindings, no secrets.
+  // The specification website: static assets, plus a small Worker that answers `Accept: text/markdown`
+  // with a page's Markdown twin (worker.js). No bindings beyond the assets, and no secrets.
   "name": "openmessageboard-site",
+  "main": "worker.js",
   "compatibility_date": "2026-11-20",
-  "assets": { "directory": "./dist", "html_handling": "force-trailing-slash", "not_found_handling": "404-page" },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "force-trailing-slash",
+    "not_found_handling": "404-page",
+    "run_worker_first": true
+  },
   "routes": [
     { "pattern": "openmessageboard.com", "custom_domain": true },
     { "pattern": "www.openmessageboard.com", "custom_domain": true },

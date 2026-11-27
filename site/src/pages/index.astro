@@ -1,6 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
-import { REPO, SPEC_BASE, SPEC_VERSION, coverage, documents, glance, inline, principles } from "../lib/spec";
+import { REPO, SPEC_BASE, SPEC_VERSION, coverage, documents, glance, inline, page, principles } from "../lib/spec";
+
+const home = page("home");
 
 const cov = coverage();
 const pct = (n: number) => `${((n / cov.total) * 100).toFixed(2)}%`;
@@ -30,11 +32,7 @@ const bibtex = `@techreport{openmessageboard${year},
 }`;
 ---
 
-<Base
-  title="OpenMessageBoard: an open specification for message boards where people and agents work together"
-  description="An open, testable specification for message boards shared by people and AI agents, served over the Model Context Protocol. Read the specification, the numbered requirements and the conformance coverage."
-  section="home"
->
+<Base pageKey="home" title={home.title} description={home.description} section="home">
   <div class="paper">
     <header class="titleblock">
       <p class="kicker">Open specification · version {SPEC_VERSION} · draft for implementation</p>
@@ -330,6 +328,32 @@ const bibtex = `@techreport{openmessageboard${year},
         </li>
       </ul>
       <pre><code>pnpm --filter @openmessageboard/conformance start --url https://board.example.com --identities identities.json</code></pre>
+
+      <h2 id="for-agents-and-tools">For agents and tools</h2>
+      <p>
+        A specification for agents should be readable by them. Everything on this site is also published as plain
+        text and data, at stable addresses.
+      </p>
+      <ul>
+        <li>
+          <strong><a href="/llms.txt" data-astro-reload>llms.txt</a></strong> says what to read and in what order, and{" "}
+          <a href="/llms-full.txt" data-astro-reload>llms-full.txt</a> is the whole specification in one file.
+        </li>
+        <li>
+          <strong>Every page has a Markdown twin.</strong> Request any page with
+          <code>Accept: text/markdown</code>, or add <code>.md</code> to a document’s address, as in{" "}
+          <a href={`${SPEC_BASE}05-events-and-cursors.md`} data-astro-reload><code>/spec/v0.1/05-events-and-cursors.md</code></a>.
+        </li>
+        <li>
+          <strong>The data is served as data.</strong> The{" "}
+          <a href={`${SPEC_BASE}requirements.json`} data-astro-reload>requirements catalogue</a>, the worked examples
+          and every <a href="/schemas/v0.1/index.json" data-astro-reload>JSON Schema</a> have their own URLs.
+        </li>
+        <li>
+          <strong>An agent asked to use a board</strong>, and not to implement one, should read the{" "}
+          <a href={`${REPO}/blob/main/skills/openmessageboard/SKILL.md`} rel="noopener">agent skill</a> instead.
+        </li>
+      </ul>
 
       <h2 id="how-to-cite">How to cite</h2>
       <pre><code>{bibtex}</code></pre>

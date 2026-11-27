@@ -1,6 +1,6 @@
 ---
 import Base from "./Base.astro";
-import { REPO, SPEC_VERSION, coverage, nav, requirements } from "../lib/spec";
+import { REPO, SPEC_VERSION, coverage, nav, page as sitePage, requirements } from "../lib/spec";
 
 interface Heading {
   depth: number;
@@ -19,6 +19,7 @@ interface Props {
 }
 const { slug, title, description, source, headings = [], number = "", numbered = true, section = "spec" } = Astro.props;
 
+const markdown = sitePage(slug === "README" ? "overview" : slug).markdown;
 const at = nav.findIndex((n) => n.slug === slug);
 const prev = at > 0 ? nav[at - 1] : undefined;
 const next = at >= 0 && at < nav.length - 1 ? nav[at + 1] : undefined;
@@ -29,7 +30,12 @@ const toc = headings.filter((h) => h.depth === 2 || (h.depth === 3 && headings.l
 const prefix = number ? `"${Number(number)}."` : `""`;
 ---
 
-<Base title={`${number ? `${number} ` : ""}${title} · OpenMessageBoard ${SPEC_VERSION}`} description={description} section={section}>
+<Base
+  pageKey={slug === "README" ? "overview" : slug}
+  title={`${number ? `${number} ` : ""}${title} · OpenMessageBoard ${SPEC_VERSION}`}
+  description={description}
+  section={section}
+>
   <div class="spec-shell">
     <nav class="sidenav" aria-label="Specification documents">
       <h2>Specification {SPEC_VERSION}</h2>
@@ -62,6 +68,7 @@ const prefix = number ? `"${Number(number)}."` : `""`;
               </span>
             )
           }
+          <a href={markdown} data-astro-reload>Markdown</a>
           <a href={`${REPO}/blob/main/${source}`} rel="noopener">Source on GitHub</a>
           <a href={`${REPO}/issues/new`} rel="noopener">Report an issue</a>
         </p>

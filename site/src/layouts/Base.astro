@@ -4,16 +4,63 @@ import "@fontsource-variable/source-serif-4/wght-italic.css";
 import "../styles/global.css";
 import { ClientRouter } from "astro:transitions";
 import serif from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
-import { REPO, SPEC_BASE, SPEC_VERSION } from "../lib/spec";
+import { REPO, SITE, SITE_NAME, SPEC_BASE, SPEC_VERSION, TAGLINE, page as sitePage } from "../lib/spec";
 
 interface Props {
+  /** A key of the page registry in lib/spec.ts. Pages outside it (the 404 page) are not indexed or shared. */
+  pageKey?: string;
   title: string;
   description: string;
   section?: "home" | "spec" | "requirements" | "examples";
 }
-const { title, description, section } = Astro.props;
-const canonical = new URL(Astro.url.pathname, Astro.site);
+const { pageKey, title, description, section } = Astro.props;
+const entry = pageKey ? sitePage(pageKey) : undefined;
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const current = (s: string) => (section === s ? "page" : undefined);
+const shareTitle = entry ? (entry.key === "home" ? `${SITE_NAME}: ${TAGLINE.charAt(0).toLowerCase()}${TAGLINE.slice(1)}` : `${entry.title} · ${SITE_NAME} ${SPEC_VERSION}`) : title;
+const image = entry ? `${SITE}/og/${entry.key}.png` : undefined;
+const imageAlt = entry ? `${entry.card.title}. ${entry.card.detail}. ${SITE_NAME}.` : undefined;
+const org = { "@type": "Organization", name: "The OpenMessageBoard contributors", url: REPO };
+const specWork = {
+  "@type": "CreativeWork",
+  "@id": `${SITE}${SPEC_BASE}`,
+  name: `OpenMessageBoard specification, version ${SPEC_VERSION}`,
+  version: SPEC_VERSION,
+  url: `${SITE}${SPEC_BASE}`,
+};
+const jsonLd = entry && {
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "WebSite", "@id": `${SITE}/#site`, name: SITE_NAME, url: `${SITE}/`, description: TAGLINE, inLanguage: "en", publisher: org },
+    {
+      "@type": "TechArticle",
+      "@id": `${canonical}#article`,
+      headline: entry.key === "home" ? `${SITE_NAME}: ${TAGLINE}` : entry.title,
+      description,
+      url: canonical,
+      image,
+      inLanguage: "en",
+      isAccessibleForFree: true,
+      license: "https://www.apache.org/licenses/LICENSE-2.0",
+      author: org,
+      publisher: org,
+      isPartOf: entry.key === "home" ? { "@id": `${SITE}/#site` } : specWork,
+      encoding: { "@type": "MediaObject", encodingFormat: "text/markdown", contentUrl: `${SITE}${entry.markdown}` },
+    },
+    ...(entry.key === "home"
+      ? []
+      : [
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: SITE_NAME, item: `${SITE}/` },
+              { "@type": "ListItem", position: 2, name: `Specification ${SPEC_VERSION}`, item: `${SITE}${SPEC_BASE}` },
+              ...(entry.key === "overview" ? [] : [{ "@type": "ListItem", position: 3, name: entry.title, item: canonical }]),
+            ],
+          },
+        ]),
+  ],
+};
 ---
 
 <!doctype html>
@@ -25,16 +72,45 @@ const current = (s: string) => (section === s ? "page" : undefined);
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)" />
+    <meta name="author" content="The OpenMessageBoard contributors" />
     <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />
     <!-- Pages swap in place, with no cross-fade, so moving between documents does not flash. -->
     <ClientRouter />
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
-    <meta name="citation_title" content="OpenMessageBoard specification, version 0.1" />
-    <meta name="citation_author" content="The OpenMessageBoard contributors" />
+    {
+      entry ? (
+        <>
+          <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+          <link rel="alternate" type="text/markdown" href={`${SITE}${entry.markdown}`} title="This page as Markdown" />
+          <link rel="alternate" type="text/plain" href={`${SITE}/llms.txt`} title="llms.txt: what an agent should read" />
+          <meta property="og:type" content={entry.key === "home" ? "website" : "article"} />
+          <meta property="og:site_name" content={SITE_NAME} />
+          <meta property="og:locale" content="en_US" />
+          <meta property="og:title" content={shareTitle} />
+          <meta property="og:description" content={description} />
+          <meta property="og:url" content={canonical} />
+          <meta property="og:image" content={image} />
+          <meta property="og:image:type" content="image/png" />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:image:alt" content={imageAlt} />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={shareTitle} />
+          <meta name="twitter:description" content={description} />
+          <meta name="twitter:image" content={image} />
+          <meta name="twitter:image:alt" content={imageAlt} />
+          <meta name="citation_title" content={`OpenMessageBoard specification, version ${SPEC_VERSION}`} />
+          <meta name="citation_author" content="The OpenMessageBoard contributors" />
+          <meta name="citation_publication_date" content="2026" />
+          <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+        </>
+      ) : (
+        <meta name="robots" content="noindex" />
+      )
+    }
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -62,6 +138,7 @@ const current = (s: string) => (section === s ? "page" : undefined);
           · <a href={`${REPO}/blob/main/GOVERNANCE.md`} rel="noopener">Governance</a>
           · <a href={`${REPO}/blob/main/CONTRIBUTING.md`} rel="noopener">Contributing</a>
           · <a href={`${REPO}/blob/main/SECURITY.md`} rel="noopener">Security</a>
+          · <a href="/llms.txt" data-astro-reload>llms.txt</a>
         </p>
       </div>
     </footer>
