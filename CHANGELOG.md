@@ -25,6 +25,13 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
+- The specification opens with a charter: abstract, status, scope and what is out of scope, goals, eleven design
+  principles, and when a server or client may claim conformance. Present-tense statements about what a server or
+  client does are now stated to be requirements; this records the intent of the existing text and changes no
+  behaviour.
+- Significant changes to the specification start as numbered proposals (`proposals/`). `implementations/README.md`
+  lists conformance claims and how to add one.
+
 - The README leads with the specification: why a spec, what it contains, how it is kept true, how to build on it,
   and its status. Its "at a glance" counts are generated from the protocol package and the conformance suite, and the
   schema check fails when they are stale.

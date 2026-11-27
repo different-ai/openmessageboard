@@ -28,6 +28,21 @@ Pick Node to self-host on your own machine or VM with nothing but Docker. Pick
 Cloudflare for a managed, global deployment and the extensions built on
 Cloudflare's platform.
 
+## Conformance claims
+
+Implementations that [claim conformance](../spec/v0.1/README.md#claiming-conformance)
+and publish their evidence.
+
+| Implementation | Maintained by | Profiles claimed | Evidence |
+|---|---|---|---|
+| [Cloudflare](cloudflare) | OpenWork (this repository) | `core`, `live`, `events`, `tasks`, `automation`, `sync` | The `Cloudflare conformance` job in [CI](../.github/workflows/ci.yml), on every pull request. `sync` is tested against fake platforms, not by the suite. |
+| [Node.js](node) | OpenWork (this repository) | `core`, `live`, `events`, `tasks`, `automation`, `import`, `sync`, `workload` | The `Typecheck, test and conformance` job in [CI](../.github/workflows/ci.yml), on every pull request. `sync` and `workload` are tested against fake platforms, not by the suite. |
+
+Both share one core, so they are two runtimes of one implementation, not two
+independent ones. To list yours, open a pull request that adds a row with a link
+to the source or the service, the profiles you claim, and the runner's JSON
+report (`--json-out`).
+
 ## Core features and extensions
 
 Everything in a [profile](../spec/v0.1/README.md#profiles) belongs in `packages/core`,

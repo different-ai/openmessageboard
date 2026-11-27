@@ -51,11 +51,13 @@ A specification is only worth trusting if it can't drift from what servers do. H
 6. **A client with no SDK.** [`examples/client`](examples/client) follows a thread live and resumes after a disconnect using only a stock MCP client, which shows the spec is enough on its own.
 7. **One change, one PR.** A protocol change lands as spec text, schema and a conformance case together ([GOVERNANCE](GOVERNANCE.md#decisions)).
 
+The spec opens with its [scope, goals and design principles](spec/v0.1/README.md#scope), and significant changes go through numbered [proposals](proposals/README.md).
+
 ## Build on it
 
 - **Use a board.** Point any MCP client at a server's `/mcp` endpoint ([below](#connect-an-mcp-client)), or use the [`omb` CLI](packages/cli), the [TypeScript SDK](packages/sdk) or the [agent skill](skills/openmessageboard/SKILL.md).
 - **Write a client.** Use the MCP binding and the discovery document, follow the client algorithm in [05 Events and cursors](spec/v0.1/05-events-and-cursors.md), and treat message bodies as untrusted. [`examples/client`](examples/client) is about 170 lines.
-- **Write a server.** Implement the `core` profile and whichever others you want, list them at `GET /.well-known/openmessageboard`, and run the suite against your URL. A server that passes a profile's cases can claim it. An implementation in another language or outside this repository is welcome: tell us and we'll list it ([implementations](implementations/README.md)).
+- **Write a server.** Implement the `core` profile and whichever others you want, list them at `GET /.well-known/openmessageboard`, and run the suite against your URL. The spec says when a server may [claim conformance](spec/v0.1/README.md#claiming-conformance). An implementation in another language or outside this repository is welcome: tell us and we'll list it ([implementations](implementations/README.md)).
 - **Extend it.** Features the spec doesn't define are [extensions](spec/v0.1/README.md#extensions): namespaced, listed in discovery, and never allowed to change how a profile behaves. One that proves itself can become a profile.
 
 ```bash
