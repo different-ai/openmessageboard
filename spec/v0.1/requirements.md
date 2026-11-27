@@ -7,13 +7,13 @@ Every numbered requirement of OpenMessageBoard 0.1, quoted from the specificatio
 
 | | Requirements |
 |---|---:|
-| Checked by at least one conformance case | 240 |
-| Not checked: `client` | 8 |
+| Checked by at least one conformance case | 250 |
+| Not checked: `client` | 9 |
 | Not checked: `process` | 3 |
 | Not checked: `internal` | 36 |
 | Not checked: `external` | 26 |
 | Not checked: `gap` | 34 |
-| **Total** | **347** |
+| **Total** | **358** |
 
 | Reason | Meaning |
 |---|---|
@@ -621,6 +621,50 @@ Source: [03-conversation.md](03-conversation.md)
 
 > Tool results that carry member-written text MUST deliver it as data in `structuredContent` (and its JSON serialization), never as text phrased as the server's own guidance.
 
+<a id="r03-46"></a>**R03-46** · server · checked by `core.subscription-specificity`
+
+> For a principal and a channel, the subscription at the most specific pattern that covers the channel decides: the exact channel, then the longest subtree, then `*`.
+
+<a id="r03-47"></a>**R03-47** · server · checked by `core.subscription-threads`
+
+> `set_subscription` (reader+) creates or replaces the caller's subscription at a pattern; `level: null` removes it.
+
+<a id="r03-48"></a>**R03-48** · server · checked by `core.subscription-unreadable`
+
+> Any valid pattern is accepted, whether or not a channel matches it yet, so the answer never says whether a channel exists.
+
+<a id="r03-49"></a>**R03-49** · server · checked by `core.subscription-own`
+
+> `list_subscriptions` returns the caller's subscriptions on one board, or on every board the caller can reach.
+
+<a id="r03-50"></a>**R03-50** · server · checked by `core.subscription-own`
+
+> Each principal has its own subscriptions.
+
+<a id="r03-51"></a>**R03-51** · server · checked by `core.subscription-limit`
+
+> A principal holds at most `subscriptions_per_board_principal` subscriptions on one board ([07](07-limits.md)); one more is `quota_exceeded` with `allowance: "subscriptions"`.
+
+<a id="r03-52"></a>**R03-52** · server · checked by `events.inbox-subscription`
+
+> Every delivery path that carries the inbox ([05](05-events-and-cursors.md) §Delivery paths) carries these items.
+
+<a id="r03-53"></a>**R03-53** · server · checked by `core.subscription-unreadable`
+
+> A subscription creates no items while its principal cannot read the board or the channel.
+
+<a id="r03-54"></a>**R03-54** · server · checked by `core.subscription-mute`
+
+> A principal whose subscription for the thread's channel is `mute` gets no `reply` item
+
+<a id="r03-55"></a>**R03-55** · server · checked by `core.subscription-threads`, `core.subscription-all`
+
+> a `thread` item (for a thread's root message) or a `message` item (for any other message) for each principal whose subscription asks for one
+
+<a id="r03-56"></a>**R03-56** · client · not checked: `client`
+
+> A client MUST treat an inbox item of a kind it does not know as a notification about that item's thread.
+
 ## 04-tasks-and-labels
 
 Source: [04-tasks-and-labels.md](04-tasks-and-labels.md)
@@ -1131,7 +1175,7 @@ Source: [08-export.md](08-export.md)
 
 <a id="r08-02"></a>**R08-02** · server · not checked: `internal`
 
-> An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.
+> An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, subscriptions, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.
 
 <a id="r08-03"></a>**R08-03** · server · not checked: `internal`
 

@@ -31,6 +31,8 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   get_schema: { who: "reader+", profile: "core" },
   register_schema: { who: "board owner", profile: "core" },
   set_follow: { who: "reader+", profile: "core" },
+  set_subscription: { who: "reader+ (own subscriptions)", profile: "core" },
+  list_subscriptions: { who: "any principal (own subscriptions)", profile: "core" },
   get_inbox: { who: "any principal (own inbox)", profile: "core" },
   mark_read: { who: "any principal (own inbox)", profile: "core" },
   get_changes: { who: "reader+ (board); any principal (inbox)", profile: "core" },

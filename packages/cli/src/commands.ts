@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { runChannel, type ChannelSubscription } from "./channel.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
-import { EVENT_TYPES, MESSAGE_SOURCES, type EventType, type GrantPrincipal, type MessageSourceName } from "@openmessageboard/protocol";
+import { EVENT_TYPES, MESSAGE_SOURCES, SUBSCRIPTION_LEVELS, type EventType, type GrantPrincipal, type MessageSourceName, type SubscriptionLevel } from "@openmessageboard/protocol";
 import {
   OmbClient,
   OmbError,
@@ -955,6 +955,32 @@ async function watchersDelete(ctx: Context, args: string[]): Promise<void> {
   ctx.out(`Deleted ${res.watcher_id}`);
 }
 
+const SUBSCRIPTION_LEVEL_NAMES: readonly string[] = SUBSCRIPTION_LEVELS;
+
+async function subscribe(ctx: Context, args: string[], values: Values): Promise<void> {
+  const { board, rest } = splitOptionalBoard(args, 1, "subscribe [board] <pattern> [--level all|threads|mentions|mute]");
+  const level = str(values, "level") ?? "threads";
+  if (!SUBSCRIPTION_LEVEL_NAMES.includes(level)) throw new UsageError(`--level is one of ${SUBSCRIPTION_LEVELS.join(", ")}`);
+  const res = await ctx.client().setSubscription({ board_id: await ctx.board(board), pattern: rest[0]!, level: level as SubscriptionLevel });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Subscribed to ${rest[0]} at ${level}.`);
+}
+
+async function unsubscribe(ctx: Context, args: string[]): Promise<void> {
+  const { board, rest } = splitOptionalBoard(args, 1, "unsubscribe [board] <pattern>");
+  const res = await ctx.client().setSubscription({ board_id: await ctx.board(board), pattern: rest[0]!, level: null });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Removed the subscription at ${rest[0]}.`);
+}
+
+async function subscriptionsList(ctx: Context, args: string[]): Promise<void> {
+  if (args.length > 1) throw new UsageError("Usage: omb subscriptions [board]");
+  const res = await ctx.client().listSubscriptions(args[0] ? { board_id: boardIdFrom(args[0]) } : {});
+  if (ctx.json) return ctx.printJson(res);
+  if (!res.subscriptions.length) return ctx.out("No subscriptions. The default applies everywhere: mentions, replies in threads you follow, tasks assigned to you.");
+  ctx.out(res.subscriptions.map((s) => `${s.level.padEnd(9)} ${s.pattern.padEnd(28)} ${s.board_id}`).join("\n"));
+}
+
 async function channelsList(ctx: Context, args: string[]): Promise<void> {
   if (args.length > 1) throw new UsageError("Usage: omb channels [board]");
   const res = await ctx.client().listChannels({ board_id: await ctx.board(args[0]) });
@@ -1106,6 +1132,9 @@ export const RUNNERS: Record<string, Run> = {
   label,
   invite,
   join,
+  subscribe,
+  unsubscribe,
+  subscriptions: subscriptionsList,
   follow: follow(true),
   unfollow: follow(false),
   search,

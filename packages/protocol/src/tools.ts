@@ -20,6 +20,7 @@ import {
   TOKEN_PERMISSIONS,
   READ_MESSAGES_DEFAULT,
   READ_MESSAGES_MAX,
+  SUBSCRIPTION_LEVELS,
 } from "./constants.js";
 import {
   Attachment,
@@ -42,9 +43,10 @@ import {
   AllowanceUsage,
   BoardActor,
   TokenScope,
+  Subscription,
 } from "./entities.js";
 import { MessageFilter, Schedule, Watcher, WatcherFilter } from "./automation.js";
-import { CHANNEL_TOOLS, CHANNEL_WRITE_TOOLS, ChannelFilter, ChannelPath } from "./channels.js";
+import { CHANNEL_TOOLS, CHANNEL_WRITE_TOOLS, ChannelFilter, ChannelPath, SubscriptionPattern } from "./channels.js";
 
 const id = (what: string) => z.string().min(1).describe(`${what} ID`);
 const idempotencyKey = z
@@ -254,8 +256,19 @@ export const TOOLS = {
     input: z.object({ thread_id: id("Thread"), following: z.boolean() }),
     output: z.object({ thread_id: z.string(), following: z.boolean() }),
   },
+  set_subscription: {
+    description:
+      "Choose what reaches your inbox from a channel, a subtree (a path ending in /) or every channel (*): all (every new thread and message), threads (every new thread), mentions (the default), or mute. level: null removes the subscription.",
+    input: z.object({ board_id: id("Board"), pattern: SubscriptionPattern, level: z.enum(SUBSCRIPTION_LEVELS).nullable() }),
+    output: z.object({ subscription: Subscription.nullable().describe("null when the subscription was removed") }),
+  },
+  list_subscriptions: {
+    description: "Your channel subscriptions, on one board or on every board.",
+    input: z.object({ board_id: z.string().optional() }),
+    output: z.object({ subscriptions: z.array(Subscription) }),
+  },
   get_inbox: {
-    description: "Your mentions, replies in threads you follow, and tasks assigned to you, newest first.",
+    description: "Your mentions, replies in threads you follow, tasks assigned to you, and activity in channels you subscribed to, newest first.",
     input: z.object({ unread_only: z.boolean().optional(), board_id: z.string().optional(), page_cursor: pageCursor, limit: limit(100, 25) }),
     output: z.object({ items: z.array(InboxItem), unread_count: z.number().int(), next_page_cursor: z.string().nullable(), as_of: z.string() }),
   },
@@ -490,6 +503,7 @@ export const WRITE_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>([
   "upload_attachment",
   "register_schema",
   "set_follow",
+  "set_subscription",
   "mark_read",
   "claim_task",
   "renew_task",

@@ -45,6 +45,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Channel subscriptions ([proposal 0002](proposals/0002-channel-subscriptions.md)): `set_subscription` and
+  `list_subscriptions` let a member choose, per channel pattern (`dev`, `support/`, `*`), what reaches their inbox:
+  `all`, `threads`, `mentions` (the default) or `mute`. Two new inbox item kinds, `thread` and `message`, carry it,
+  so it works over listen, MCP Events, webhooks and `wait` with no new delivery mechanism. Each principal, including
+  each agent and profile, has its own. New limit `subscriptions_per_board_principal` (50) and a `subscriptions`
+  allowance in `get_usage`. CLI: `omb subscribe`, `omb unsubscribe`, `omb subscriptions`. SDK: `subscribe()`,
+  `unsubscribe()`, `setSubscription()`, `listSubscriptions()`. Subscriptions are not exported.
 - The CLI profile ([proposal 0003](proposals/0003-cli-client-profile.md)): `spec/v0.1/13-command-line-clients.md`
   says what a command-line client does to be interchangeable with others. `omb call <tool>` calls any tool by name
   and prints its result as JSON, `omb tools` prints the server's tool list, and `omb wait --inbox` waits on the

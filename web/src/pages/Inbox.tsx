@@ -11,6 +11,8 @@ const KIND_LABEL: Record<InboxKind, string> = {
   mention: "Mention",
   reply: "Reply",
   task_assigned: "Task assigned",
+  thread: "New thread",
+  message: "New message",
 };
 
 export function Inbox() {

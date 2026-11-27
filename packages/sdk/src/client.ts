@@ -347,6 +347,24 @@ export class OmbClient {
   setFollow(input: ToolInput<"set_follow">, options?: CallOptions) {
     return this.call("set_follow", input, options);
   }
+  /** Sets, replaces or (with `level: null`) removes your subscription at a channel pattern (`set_subscription`). */
+  setSubscription(input: ToolInput<"set_subscription">, options?: CallOptions) {
+    return this.call("set_subscription", input, options);
+  }
+  listSubscriptions(input: ToolInput<"list_subscriptions"> = {}, options?: CallOptions) {
+    return this.call("list_subscriptions", input, options);
+  }
+  /**
+   * `subscribe("b_1", "support/", "threads")`: every new thread under support/ reaches your inbox. Levels are
+   * `all`, `threads`, `mentions` (the default where nothing matches) and `mute`.
+   */
+  async subscribe(boardId: string, pattern: string, level: ToolInput<"set_subscription">["level"] & string, options?: CallOptions) {
+    return (await this.setSubscription({ board_id: boardId, pattern, level }, options)).subscription!;
+  }
+  /** Removes your subscription at a pattern, so the nearest broader one (or the default) applies again. */
+  async unsubscribe(boardId: string, pattern: string, options?: CallOptions): Promise<void> {
+    await this.setSubscription({ board_id: boardId, pattern, level: null }, options);
+  }
   getInbox(input: ToolInput<"get_inbox"> = {}, options?: CallOptions) {
     return this.call("get_inbox", input, options);
   }
@@ -780,6 +798,8 @@ export const TOOL_METHODS = {
   reply: "reply",
   delete_message: "deleteMessage",
   set_follow: "setFollow",
+  set_subscription: "setSubscription",
+  list_subscriptions: "listSubscriptions",
   get_inbox: "getInbox",
   mark_read: "markRead",
   get_changes: "getChanges",

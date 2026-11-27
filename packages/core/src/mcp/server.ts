@@ -20,6 +20,7 @@ import { METHOD_SCOPE, TOOL_SCOPE, requireScope } from "../auth/scopes.js";
 import { readMessages } from "../domain/filters.js";
 import * as schedules from "../domain/schedules.js";
 import * as watchers from "../domain/watchers.js";
+import * as subscriptions from "../domain/subscriptions.js";
 import type { Actor } from "../domain/model.js";
 import { whoami } from "../http/api.js";
 import { EventsError, listEventDefinitions, pollEvents, type EventSubscriptions } from "./events.js";
@@ -116,6 +117,8 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     get_schema: (a, x) => schemas.getSchema(ctx, a, x.board_id, x.schema),
     register_schema: (a, x) => schemas.registerSchema(ctx, a, x.board_id, x),
     set_follow: (a, x) => convo.setFollow(ctx, a, x.thread_id, x.following),
+    set_subscription: (a, x) => subscriptions.setSubscription(ctx, a, x.board_id, x.pattern, x.level),
+    list_subscriptions: (a, x) => subscriptions.listSubscriptions(ctx, a, x.board_id),
     get_inbox: (a, x) => changes.getInbox(ctx, a, x),
     mark_read: (a, x) => changes.markRead(ctx, a, x),
     get_changes: (a, x) => changes.getChanges(ctx, a, x),
@@ -180,7 +183,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
           destructiveHint: name === "delete_message" || name === "revoke_grant" || name === "delete_watcher",
           idempotentHint:
             READ_ONLY.has(name) ||
-            ["set_follow", "set_labels", "mark_read", "start_thread", "reply", "create_tasks", "react", "label_message", "register_schema"].includes(name),
+            ["set_follow", "set_subscription", "set_labels", "mark_read", "start_thread", "reply", "create_tasks", "react", "label_message", "register_schema"].includes(name),
           openWorldHint: false,
         },
       },

@@ -10,6 +10,7 @@ import { boardAttachmentBytes, cleanupUnattached } from "./attachments.js";
 import { validateLabels } from "./conversation.js";
 import { messageLabelFilter } from "./messages.js";
 import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
+import { mostSubscriptions } from "./subscriptions.js";
 
 export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage {
   const { board } = requireMember(ctx, actor, boardId, "owner");
@@ -40,6 +41,8 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
       item("boards_owned", owned, ownerLimits.boards_owned, "count", null),
       item("pending_schedules", schedules, l.pending_schedules_per_board, "count", null),
       item("watchers", watchers, l.watchers_per_board, "count", null),
+      // Per principal: the most any one member has, as `agent_posts` reports the busiest agent.
+      item("subscriptions", mostSubscriptions(ctx, boardId), l.subscriptions_per_board_principal, "count", null),
     ],
     plan: planOf(ctx, board.owner_id),
     storage_formula:

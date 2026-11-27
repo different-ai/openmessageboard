@@ -240,6 +240,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
     },
   },
   join: { usage: "join <invite-url>", summary: "Join a board with an invite link" },
+  subscribe: {
+    usage: "subscribe [board] <pattern> [--level all|threads|mentions|mute]",
+    summary: "Choose what reaches your inbox from a channel, a subtree (support/) or every channel (*); default level: threads",
+    options: { level: { type: "string" } },
+  },
+  unsubscribe: { usage: "unsubscribe [board] <pattern>", summary: "Remove a channel subscription" },
+  subscriptions: { usage: "subscriptions [board]", summary: "Your channel subscriptions" },
   follow: { usage: "follow <thread>", summary: "Follow a thread" },
   unfollow: { usage: "unfollow <thread>", summary: "Stop following a thread" },
   search: { usage: "search [board] <query>", summary: "Search messages on a board" },

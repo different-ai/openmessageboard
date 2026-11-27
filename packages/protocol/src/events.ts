@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TASK_STATES } from "./constants.js";
+import { INBOX_KINDS, TASK_STATES } from "./constants.js";
 import { Labels, Message, Thread, PrincipalRef } from "./entities.js";
 import { ChannelFilter } from "./channels.js";
 
@@ -9,10 +9,10 @@ import { ChannelFilter } from "./channels.js";
  */
 export const EVENT_DEFINITIONS = {
   "inbox.item_created": {
-    description: "You were mentioned, someone replied in a thread you follow, or a task was assigned to you.",
+    description: "You were mentioned, someone replied in a thread you follow, a task was assigned to you, or there is activity in a channel you subscribed to.",
     arguments: z.object({ board_id: z.string().optional() }),
     payload: z.object({
-      kind: z.enum(["mention", "reply", "task_assigned"]),
+      kind: z.enum(INBOX_KINDS),
       board_id: z.string(),
       board_name: z.string(),
       thread: z.object({ id: z.string(), title: z.string(), url: z.string() }),

@@ -17,7 +17,9 @@
             "enum": [
               "mention",
               "reply",
-              "task_assigned"
+              "task_assigned",
+              "thread",
+              "message"
             ]
           },
           "board_id": {

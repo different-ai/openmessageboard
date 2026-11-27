@@ -1075,6 +1075,84 @@
       "untested": "gap"
     },
     {
+      "id": "R03-46",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "For a principal and a channel, the subscription at the most specific pattern that covers the channel decides: the exact channel, then the longest subtree, then `*`."
+    },
+    {
+      "id": "R03-47",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "`set_subscription` (reader+) creates or replaces the caller's subscription at a pattern; `level: null` removes it."
+    },
+    {
+      "id": "R03-48",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "Any valid pattern is accepted, whether or not a channel matches it yet, so the answer never says whether a channel exists."
+    },
+    {
+      "id": "R03-49",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "`list_subscriptions` returns the caller's subscriptions on one board, or on every board the caller can reach."
+    },
+    {
+      "id": "R03-50",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "Each principal has its own subscriptions."
+    },
+    {
+      "id": "R03-51",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "A principal holds at most `subscriptions_per_board_principal` subscriptions on one board ([07](07-limits.md)); one more is `quota_exceeded` with `allowance: \"subscriptions\"`."
+    },
+    {
+      "id": "R03-52",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "Every delivery path that carries the inbox ([05](05-events-and-cursors.md) §Delivery paths) carries these items."
+    },
+    {
+      "id": "R03-53",
+      "doc": "03-conversation.md",
+      "section": "Subscriptions",
+      "party": "server",
+      "quote": "A subscription creates no items while its principal cannot read the board or the channel."
+    },
+    {
+      "id": "R03-54",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "server",
+      "quote": "A principal whose subscription for the thread's channel is `mute` gets no `reply` item"
+    },
+    {
+      "id": "R03-55",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "server",
+      "quote": "a `thread` item (for a thread's root message) or a `message` item (for any other message) for each principal whose subscription asks for one"
+    },
+    {
+      "id": "R03-56",
+      "doc": "03-conversation.md",
+      "section": "Inbox",
+      "party": "client",
+      "quote": "A client MUST treat an inbox item of a kind it does not know as a notification about that item's thread.",
+      "untested": "client"
+    },
+    {
       "id": "R04-01",
       "doc": "04-tasks-and-labels.md",
       "section": "Task threads > States",
@@ -1956,7 +2034,7 @@
       "doc": "08-export.md",
       "section": "Format",
       "party": "server",
-      "quote": "An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.",
+      "quote": "An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, subscriptions, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.",
       "untested": "internal"
     },
     {

@@ -8,6 +8,7 @@ import {
   MAX_IDEMPOTENCY_KEY,
   RESERVED_LABEL_PREFIX,
   type AllowanceUsage,
+  type InboxKind,
   type MentionResolution,
   type Message,
   type TaskClaim,
@@ -38,6 +39,7 @@ import { finishTaskCreation, prepareTask, taskStateClause, type NewTask } from "
 export { claimTask, createTasks, renewTask, updateTask } from "./tasks.js";
 import { ensureChannel, normalizeChannel } from "./channels.js";
 import { ChannelAccess, channelFilterSql, readableSql } from "./grants.js";
+import { subscriptionLevels } from "./subscriptions.js";
 
 type Emit = (e: HubEvent) => void;
 
@@ -222,7 +224,7 @@ export function checkWriteRate(ctx: AppContext, actor: Actor, boardId: string, o
 export function addInboxItem(
   ctx: AppContext,
   emit: Emit,
-  item: { principalId: string; kind: "mention" | "reply" | "task_assigned"; boardId: string; threadId: string; messageId: string | null },
+  item: { principalId: string; kind: InboxKind; boardId: string; threadId: string; messageId: string | null },
 ): void {
   const p = ctx.db.prepare("SELECT id, kind, owner_id, profile_name FROM principals WHERE id = ?").get(item.principalId) as MentionRow | undefined;
   if (!p) return;
@@ -304,14 +306,24 @@ function insertMessage(ctx: AppContext, emit: Emit, m: InsertMessageInput): Mess
   ctx.db
     .prepare("INSERT INTO read_markers (principal_id, thread_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT(principal_id, thread_id) DO UPDATE SET last_read_at = excluded.last_read_at")
     .run(m.author.id, m.thread.id, now);
-  const mentioned = new Set(m.mentions);
-  for (const pid of mentioned) {
-    if (pid !== m.author.id) addInboxItem(ctx, emit, { principalId: pid, kind: "mention", boardId: m.board.id, threadId: m.thread.id, messageId: row.id });
-  }
+  // At most one item per message per principal: a mention, else a reply in a followed thread, else what the
+  // principal's channel subscription asks for (03 §Subscriptions). Nobody gets an item for their own message, and
+  // addInboxItem drops anyone who is not an active member or cannot read the channel.
+  const levels = subscriptionLevels(ctx, m.board.id, m.thread.channel);
+  const notified = new Set<string>([m.author.id]);
+  const notify = (pid: string, kind: InboxKind): void => {
+    if (notified.has(pid)) return;
+    notified.add(pid);
+    addInboxItem(ctx, emit, { principalId: pid, kind, boardId: m.board.id, threadId: m.thread.id, messageId: row.id });
+  };
+  for (const pid of new Set(m.mentions)) notify(pid, "mention");
   if (!m.isRoot) {
-    for (const pid of followers) {
-      if (pid !== m.author.id && !mentioned.has(pid)) addInboxItem(ctx, emit, { principalId: pid, kind: "reply", boardId: m.board.id, threadId: m.thread.id, messageId: row.id });
-    }
+    // `mute` silences replies in followed threads; a mention still gets through above.
+    for (const pid of followers) if (levels.get(pid) !== "mute") notify(pid, "reply");
+  }
+  for (const [pid, level] of levels) {
+    if (m.isRoot && (level === "all" || level === "threads")) notify(pid, "thread");
+    else if (!m.isRoot && level === "all") notify(pid, "message");
   }
   return row;
 }
