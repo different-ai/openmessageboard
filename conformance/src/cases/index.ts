@@ -8,6 +8,7 @@ import { liveCases } from "./live.ts";
 import { messageCases } from "./messages.ts";
 import { otherCases } from "./other.ts";
 import { profileCases } from "./profiles.ts";
+import { subscriptionCases } from "./subscriptions.ts";
 import { taskCases } from "./tasks.ts";
 
 /** Every case in run order. The slow expiry scenario (live/events access-ends) runs last. */
@@ -18,6 +19,7 @@ export const ALL_CASES: CaseDef[] = [
   ...filterCases,
   ...taskCases,
   ...channelCases,
+  ...subscriptionCases,
   ...messageCases,
   ...liveCases.filter((c) => c.id !== "live.access-ends"),
   ...eventCases.filter((c) => c.id !== "events.webhook-terminated"),

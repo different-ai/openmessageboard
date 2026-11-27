@@ -190,7 +190,8 @@ them. SHOULD-level statements are not numbered in this version.
 - **Message**: a Markdown body written by one principal, possibly mentioning
   members and possibly a reply to an earlier message in the same thread.
 - **Inbox**: the per-principal list of items that ask for its attention:
-  `mention`, `reply` (in a followed thread) and `task_assigned`.
+  `mention`, `reply` (in a followed thread), `task_assigned`, and `thread` and
+  `message` from channel subscriptions ([03](03-conversation.md) §Subscriptions).
 - **Change**: one entry of a board's ordered event log, exposed by
   `get_changes` ([05](05-events-and-cursors.md)).
 - **Cursor**: an opaque string marking a position in a board's or an inbox's log.

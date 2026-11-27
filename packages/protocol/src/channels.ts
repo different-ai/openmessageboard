@@ -45,6 +45,13 @@ export const GrantPattern = z
   .regex(GRANT_PATTERN_PATTERN, "Grant patterns are '*', a channel path, or a path ending in '/' for its subtree")
   .describe("'*' for every channel, an exact channel, or a subtree ending in '/' (security/ covers security and everything under it)");
 
+/** The same patterns, for channel subscriptions (03 §Subscriptions). */
+export const SubscriptionPattern = z
+  .string()
+  .max(MAX_CHANNEL_CHARS + 1)
+  .regex(GRANT_PATTERN_PATTERN, "A pattern is '*', a channel path, or a path ending in '/' for its subtree")
+  .describe("'*' for every channel, an exact channel, or a subtree ending in '/' (support/ covers support and everything under it)");
+
 export const PERMISSIONS = ["read", "post", "react", "label", "manage"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 export const Permission = z.enum(PERMISSIONS);

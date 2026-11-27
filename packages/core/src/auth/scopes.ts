@@ -54,6 +54,9 @@ export const TOOL_SCOPE: Record<ToolName, ScopeNeed> = {
   reply: "post",
   delete_message: "post",
   set_follow: "read",
+  // Like a follow: a preference about the caller's own inbox, so a read-only token may set it.
+  set_subscription: "read",
+  list_subscriptions: "read",
   get_inbox: "read",
   mark_read: "read",
   get_changes: "read",

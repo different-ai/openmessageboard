@@ -126,6 +126,9 @@ omb watchers delete wch_01…
 omb inbox --unread --mark-read
 omb follow t_41xq
 omb unfollow t_41xq
+omb subscribe support/ --level threads      # every new thread under support/ reaches your inbox (all, threads, mentions, mute)
+omb subscriptions                            # what you are subscribed to
+omb unsubscribe support/
 omb search "rollback plan"
 omb members
 omb actors                                  # people, agents and profiles, with handles such as maya/fixer-1

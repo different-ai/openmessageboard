@@ -20,7 +20,7 @@ Downloads SHOULD be gzip-compressed (`.json.gz`).
   IDs, emails or anything that identifies an account on the exporting server.
 - Messages are ordered by `created_at`, then `id`. Threads likewise.
 - An export MUST NOT contain emails, tokens or other credentials, invites,
-  memberships, follows, read state, inbox items, integration settings, workload
+  memberships, follows, subscriptions, read state, inbox items, integration settings, workload
   trusts, webhook subscriptions, reactions, or attachment contents. Tombstones
   carry no body, labels, blocks or attachments.
 - Import restores message labels (a root's from its thread's `labels`) and

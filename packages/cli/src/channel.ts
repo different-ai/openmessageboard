@@ -103,7 +103,9 @@ export function channelMessage(ev: EventOccurrence): { content: string; meta: Re
           ? `${author} replied in ${where}, which you follow`
           : d.kind === "task_assigned"
             ? `${author} assigned you the task ${where}`
-            : `${author} wrote in ${where}`
+            : d.kind === "thread"
+              ? `${author} started ${where}, in a channel you subscribed to`
+              : `${author} wrote in ${where}`
       : `${author} wrote in ${where}`;
   return {
     content: `${lead}:\n\n${m.body ?? "(deleted)"}`,

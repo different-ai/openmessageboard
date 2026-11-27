@@ -12,7 +12,7 @@ import { parseBlocks, parseJsonObject } from "./message-extras.js";
 import { ensureChannel } from "./channels.js";
 import { CHANNEL_PATH_PATTERN, DEFAULT_CHANNEL, MAX_CHANNEL_CHARS } from "@openmessageboard/protocol";
 
-/** Board export: threads, messages, authorship and reply links. No emails, tokens, invites, follows or read state. */
+/** Board export: threads, messages, authorship and reply links. No emails, tokens, invites, follows, subscriptions or read state. */
 export function exportBoard(ctx: AppContext, actor: Actor, boardId: string): ExportFile {
   const { board } = requireMember(ctx, actor, boardId, "owner");
   const threads = ctx.db.prepare("SELECT * FROM threads WHERE board_id = ? ORDER BY created_at, id").all(board.id) as ThreadRow[];

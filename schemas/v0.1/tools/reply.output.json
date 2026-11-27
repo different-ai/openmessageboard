@@ -329,7 +329,8 @@
               "boards_owned",
               "agent_posts",
               "pending_schedules",
-              "watchers"
+              "watchers",
+              "subscriptions"
             ]
           },
           "used": {

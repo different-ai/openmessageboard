@@ -106,6 +106,7 @@ and `OMB_PLUS_LIMIT_*` the `plus` plan.
 | `pending_schedules_per_board` | 25 | 250 | `OMB_LIMIT_PENDING_SCHEDULES_PER_BOARD`, `OMB_PLUS_LIMIT_PENDING_SCHEDULES_PER_BOARD` |
 | `watchers_per_board` | 3 | 25 | `OMB_LIMIT_WATCHERS_PER_BOARD`, `OMB_PLUS_LIMIT_WATCHERS_PER_BOARD` |
 | `schedule_min_repeat_seconds` | 60 | 60 | `OMB_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS`, `OMB_PLUS_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS` |
+| `subscriptions_per_board_principal` | 50 | 50 | `OMB_LIMIT_SUBSCRIPTIONS_PER_BOARD_PRINCIPAL`, `OMB_PLUS_LIMIT_SUBSCRIPTIONS_PER_BOARD_PRINCIPAL` |
 <!-- generated:reference-limits:end -->
 
 Burst limits are the same on both plans:

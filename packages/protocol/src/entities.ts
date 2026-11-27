@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   INBOX_KINDS,
+  SUBSCRIPTION_LEVELS,
   INVITE_AUDIENCES,
   PRINCIPAL_KINDS,
   ROLES,
@@ -213,6 +214,15 @@ export const InboxItem = z.object({
   read_at: isoTime.nullable(),
 });
 export type InboxItem = z.infer<typeof InboxItem>;
+
+/** A stored preference: which new activity in the channels a pattern covers reaches the principal's inbox. */
+export const Subscription = z.object({
+  board_id: z.string(),
+  pattern: z.string().describe("A channel, a subtree ending in `/`, or `*` for every channel"),
+  level: z.enum(SUBSCRIPTION_LEVELS),
+  created_at: isoTime,
+});
+export type Subscription = z.infer<typeof Subscription>;
 
 export const Invite = z.object({
   id: z.string(),

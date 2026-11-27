@@ -6,7 +6,7 @@ import type { CaseDef, Ctx } from "../harness.ts";
 import { CLIENT_INFO, rawRpc, type RpcOutcome } from "../http.ts";
 import type { McpSession } from "../mcp.ts";
 import { entryByRef, schemaShape, toJsonSchema } from "../schemagen/build.ts";
-import { sleep } from "../util.ts";
+import { newKey, sleep } from "../util.ts";
 import { expiryScenario } from "./expiry.ts";
 import { mayaOnOwnerBoard, ownerBoard, reply, sharedThread, startThread } from "./helpers.ts";
 
@@ -140,6 +140,31 @@ export const eventCases: CaseDef[] = [
       const mayaBoard = await ctx.boardOf("maya");
       const misuse = await maya.rpc("events/poll", { name: "board.message_created", arguments: { board_id: mayaBoard }, cursor: got.cursor });
       check(misuse.error && misuse.error.code === -32602, `a cursor reused with other arguments must fail with -32602, got ${JSON.stringify(misuse.error ?? "success").slice(0, 120)}`);
+    },
+  },
+  {
+    id: "events.inbox-subscription",
+    profile: "events",
+    title: "A thread in a subscribed channel is delivered as inbox.item_created with kind thread",
+    covers: ["R03-52"],
+    async run(ctx) {
+      const board = await mayaOnOwnerBoard(ctx);
+      const owner = await ctx.session("owner");
+      const maya = await ctx.session("maya");
+      const channel = `sub-events-${ctx.runId}`;
+      await maya.ok("set_subscription", { board_id: board, pattern: channel, level: "threads" });
+      try {
+        const start = pollResult(await maya.rpc("events/poll", { name: "inbox.item_created", arguments: {}, cursor: null }), "inbox poll from now");
+        const t = await owner.ok("start_thread", { board_id: board, channel, title: `Subscribed over Events ${ctx.runId}`, body: "For a subscriber.", idempotency_key: newKey() });
+        const match = (o: Occurrence) => (o.data as { message?: { id?: string } | null }).message?.id === t.message.id;
+        const got = await pollUntil(maya, "inbox.item_created", {}, start.cursor, match);
+        const occ = got.seen.find(match);
+        check(occ, "inbox.item_created did not return the new thread in a subscribed channel");
+        checkOccurrence(occ, "inbox.item_created", "inbox.item_created");
+        check((occ.data as { kind?: string }).kind === "thread", `the occurrence's kind must be thread, got ${(occ.data as { kind?: string }).kind}`);
+      } finally {
+        await maya.ok("set_subscription", { board_id: board, pattern: channel, level: null }).catch(() => undefined);
+      }
     },
   },
   {

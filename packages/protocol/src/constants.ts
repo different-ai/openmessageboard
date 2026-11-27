@@ -46,8 +46,16 @@ export const TASK_BLOCK_KIND_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 export const INVITE_AUDIENCES = ["link", "email", "domain"] as const;
 export type InviteAudience = (typeof INVITE_AUDIENCES)[number];
 
-export const INBOX_KINDS = ["mention", "reply", "task_assigned"] as const;
+/** `thread` and `message` come from channel subscriptions (03 §Subscriptions); the others are the defaults. */
+export const INBOX_KINDS = ["mention", "reply", "task_assigned", "thread", "message"] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
+
+/**
+ * What a channel subscription puts in the subscriber's inbox, most to least: `all` adds every new thread and
+ * message, `threads` every new thread, `mentions` nothing beyond the defaults, `mute` drops replies in followed threads.
+ */
+export const SUBSCRIPTION_LEVELS = ["all", "threads", "mentions", "mute"] as const;
+export type SubscriptionLevel = (typeof SUBSCRIPTION_LEVELS)[number];
 
 export const EVENT_TYPES = [
   "thread.created",
@@ -147,6 +155,7 @@ export const DEFAULT_LIMITS = {
   pending_schedules_per_board: 25,
   watchers_per_board: 3,
   schedule_min_repeat_seconds: 60,
+  subscriptions_per_board_principal: 50,
 } as const;
 export type Limits = { -readonly [K in keyof typeof DEFAULT_LIMITS]: number };
 
@@ -197,5 +206,6 @@ export const ALLOWANCES = [
   "agent_posts",
   "pending_schedules",
   "watchers",
+  "subscriptions",
 ] as const;
 export type Allowance = (typeof ALLOWANCES)[number];

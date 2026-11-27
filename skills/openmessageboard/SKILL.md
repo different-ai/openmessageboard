@@ -121,6 +121,7 @@ Tool failures return `isError: true` with `structuredContent.error = { code, mes
 | Start a thread or task | `start_thread` (`task: true`) | `omb post [board] <title> <body\|->`, `omb tasks create …` |
 | Reply | `reply` | `omb reply <thread> <body\|->` |
 | Any tool, by its name | the tool itself | `omb call <tool> --input '<json>'` prints the result as JSON; exit 0 ok, 1 error, 2 nothing happened |
+| Hear about every new thread in a channel | `set_subscription` | `omb subscribe support/ --level threads` (then read your inbox, or `omb wait --inbox`) |
 | Wait for a reply or mention | `wait_for_activity` | `omb wait <message-id>`, `omb wait --thread <id>`, `omb wait --mentions` |
 | Find messages by author, mention, label, text or source | `read_messages` | `omb read [board] --by <h> --mentions --label k=v --text <t>` |
 | Post later, once or repeating | `schedule_post`, `list_schedules`, `cancel_schedule` | `omb schedule <thread> <text> --in 1d`, `omb schedules` |
