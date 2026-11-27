@@ -284,7 +284,8 @@ interface Received {
   body: Record<string, unknown>;
 }
 
-async function receiver(mode: { status?: number; echo?: boolean } = {}): Promise<{ url: string; got: Received[]; server: Server; secret: string }> {
+/** `mode` is read on every request, so a test can change how the endpoint answers while it runs. */
+async function receiver(mode: { status?: number; echo?: boolean; verifyStatus?: number } = {}): Promise<{ url: string; got: Received[]; server: Server; secret: string }> {
   const got: Received[] = [];
   const secret = "whsec_" + randomBytes(32).toString("base64");
   const server = createServer((req, res) => {
@@ -294,7 +295,7 @@ async function receiver(mode: { status?: number; echo?: boolean } = {}): Promise
       const body = JSON.parse(raw) as Record<string, unknown>;
       got.push({ headers: req.headers as Record<string, string>, raw, body });
       if (body.type === "verification") {
-        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ challenge: mode.echo === false ? "nope" : body.challenge }));
+        res.writeHead(mode.verifyStatus ?? 200, { "content-type": "application/json" }).end(JSON.stringify({ challenge: mode.echo === false ? "nope" : body.challenge }));
         return;
       }
       res.writeHead(mode.status ?? 204).end();
@@ -401,6 +402,103 @@ test("watchers: failed deliveries are retried with backoff from the durable queu
   ctx.db.prepare("UPDATE watcher_deliveries SET next_attempt_at = ?").run(new Date(0).toISOString());
   await new WatcherWorker(ctx).tick();
   assert.equal(row().attempts, 2);
+});
+
+test("watchers: verified again after a day, wait while the endpoint is down, and stop when it no longer echoes", async (t) => {
+  const { ctx, advance } = await clockCtx();
+  const { owner, board } = setup(ctx);
+  const mode: { echo?: boolean; verifyStatus?: number } = {};
+  const hook = await receiver(mode);
+  t.after(() => hook.server.close());
+  const { watcher } = await createWatcher(ctx, owner, board.id, { url: hook.url, secret: hook.secret });
+  const worker = new WatcherWorker(ctx);
+  const challenges = () => hook.got.filter((g) => g.body.type === "verification").length;
+  const changes = () => hook.got.filter((g) => g.body.type === "change").length;
+  const delivery = (seq: number) =>
+    ctx.db.prepare("SELECT status, attempts, last_error FROM watcher_deliveries WHERE watcher_id = ? AND change_seq = ?").get(watcher.id, seq) as { status: string; attempts: number; last_error: string | null };
+  const watcherRow = () => ctx.db.prepare("SELECT status, stopped_reason FROM watchers WHERE id = ?").get(watcher.id) as { status: string; stopped_reason: string | null };
+  const dueNow = () => ctx.db.prepare("UPDATE watcher_deliveries SET next_attempt_at = ? WHERE status = 'pending'").run(new Date(0).toISOString());
+  const seqOf = (title: string) => (ctx.db.prepare("SELECT MAX(seq) AS s FROM events").get() as { s: number }).s + (startThread(ctx, owner, board.id, { title, body: "x", idempotency_key: key() }), 1);
+
+  // Within a day of the last success nothing is asked again.
+  seqOf("First");
+  await worker.tick();
+  assert.equal(challenges(), 1, "only the challenge from creation");
+  assert.equal(changes(), 1);
+
+  // More than a day later the endpoint is challenged before anything is sent.
+  advance(25 * 3_600_000);
+  seqOf("Second");
+  await worker.tick();
+  assert.equal(challenges(), 2, "a second challenge after 24 hours without a success");
+  assert.equal(changes(), 2);
+  const order = hook.got.map((g) => g.body.type);
+  assert.ok(order.lastIndexOf("verification") < order.lastIndexOf("change"), "the challenge came before the delivery");
+
+  // An endpoint that cannot be reached is tried again; nothing is sent meanwhile and the watcher keeps running.
+  advance(25 * 3_600_000);
+  mode.verifyStatus = 503;
+  const third = seqOf("Third");
+  await worker.tick();
+  assert.equal(changes(), 2, "no content goes to an endpoint that has not answered its challenge");
+  assert.deepEqual(delivery(third), { status: "pending", attempts: 1, last_error: "unverified" });
+  assert.equal(watcherRow().status, "active");
+  mode.verifyStatus = 200;
+  dueNow();
+  await worker.tick();
+  assert.equal(changes(), 3);
+  assert.equal(delivery(third).status, "delivered");
+
+  // An endpoint that answers without the challenge is no longer the endpoint that was verified: the watcher stops,
+  // its queue is dropped, and it is told nothing more.
+  advance(25 * 3_600_000);
+  mode.echo = false;
+  const fourth = seqOf("Fourth");
+  await worker.tick();
+  assert.deepEqual(watcherRow(), { status: "stopped", stopped_reason: "verification_failed" });
+  assert.equal(delivery(fourth).status, "failed");
+  await worker.tick();
+  assert.equal(changes(), 3);
+  assert.ok(!hook.got.some((g) => g.body.type === "terminated"), "no last envelope after a failed verification");
+});
+
+test("watchers: a stopped watcher sends one signed terminated envelope, except after a 410", async (t) => {
+  const ctx = await makeCtx();
+  const { owner, maya, board } = setup(ctx);
+  const hook = await receiver();
+  const gone = await receiver({ status: 410 });
+  t.after(() => {
+    hook.server.close();
+    gone.server.close();
+  });
+  const { watcher } = await createWatcher(ctx, owner, board.id, { url: hook.url, secret: hook.secret });
+  const second = await createWatcher(ctx, owner, board.id, { url: gone.url, secret: gone.secret });
+  const worker = new WatcherWorker(ctx);
+  startThread(ctx, owner, board.id, { title: "Before", body: "x", idempotency_key: key() });
+  await worker.tick();
+  // The receiver that answered 410 asked for the stop itself: no envelope for it.
+  assert.equal((ctx.db.prepare("SELECT stopped_reason FROM watchers WHERE id = ?").get(second.watcher.id) as { stopped_reason: string }).stopped_reason, "gone");
+
+  const other = human(ctx, "new-owner@example.test");
+  ctx.db.prepare("UPDATE boards SET owner_id = ? WHERE id = ?").run(other.id, board.id);
+  startThread(ctx, maya, board.id, { title: "After the handover", body: "not for the old owner's watcher", idempotency_key: key() });
+  await worker.tick();
+  await worker.tick();
+  const last = hook.got.filter((g) => g.body.type === "terminated");
+  assert.equal(last.length, 1, "exactly one terminated envelope");
+  assert.deepEqual(last[0]!.body, { type: "terminated", watcher_id: watcher.id, reason: "ownership_ended" });
+  assert.ok(verify(hook.secret, last[0]!), "the last envelope is signed");
+  assert.equal(last[0]!.headers["x-omb-watcher-id"], watcher.id);
+  assert.match(last[0]!.headers["webhook-id"]!, /^msg_terminated_[A-Za-z0-9_-]+$/);
+  assert.ok(!hook.got.some((g) => g.body.type === "change" && (g.body.change as { thread?: { title?: string } }).thread?.title === "After the handover"), "nothing after the handover is delivered");
+  assert.equal(hook.got.at(-1)!.body.type, "terminated", "nothing follows the last envelope");
+  await worker.tick();
+  assert.equal(gone.got.filter((g) => g.body.type === "terminated").length, 0);
+  // The envelope is not one of the watcher's change deliveries.
+  ctx.db.prepare("UPDATE boards SET owner_id = ? WHERE id = ?").run(owner.id, board.id);
+  const listed = listWatchers(ctx, owner, board.id).watchers.find((w) => w.id === watcher.id)!;
+  assert.equal(listed.stopped_reason, "ownership_ended");
+  assert.ok(listed.recent_deliveries.every((d) => d.change_seq > 0));
 });
 
 test("channels: filters, waits, schedules and watchers follow channel access and take a channel filter", async (t) => {

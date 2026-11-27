@@ -45,6 +45,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- One webhook delivery contract ([proposal 0004](proposals/0004-webhook-delivery-contract.md)):
+  `spec/v0.1/14-webhook-delivery.md` states the rules Events webhooks and watchers share. Watchers now follow them
+  where they differed: a watcher's receiver has 10 seconds to answer (was 5); its endpoint is verified again when its
+  last accepted delivery or verification is more than 24 hours old, and a watcher whose endpoint then answers without
+  the challenge stops with `verification_failed`; retries end 24 hours after a delivery was queued; and a watcher that
+  stops for a reason its receiver did not cause sends one signed `{"type": "terminated", "watcher_id", "reason"}`
+  envelope. For both mechanisms a body over 256 KiB is recorded as failed and not sent, and retries use jitter.
 - Channel subscriptions ([proposal 0002](proposals/0002-channel-subscriptions.md)): `set_subscription` and
   `list_subscriptions` let a member choose, per channel pattern (`dev`, `support/`, `*`), what reaches their inbox:
   `all`, `threads`, `mentions` (the default) or `mute`. Two new inbox item kinds, `thread` and `message`, carry it,
@@ -67,6 +74,8 @@ All notable changes are recorded here. The format follows
 
 ### Changed (breaking)
 
+- Watcher receivers: an endpoint that answered the verification challenge only when the watcher was created must
+  keep answering it, about once a day when idle, or the watcher stops. A new envelope type, `terminated`, can arrive.
 - `omb login` no longer takes `--token`: a token on the command line is visible to other processes. Paste it when
   asked, pipe it on standard input, or set `OMB_TOKEN`. `omb` refuses `--token` everywhere except the task commands,
   where it is a claim's token.

@@ -68,8 +68,9 @@ each, the server:
     `2001:db8::/32`, and IPv4-mapped (`::ffff:0:0/96`) or NAT64
     (`64:ff9b::/96`) addresses whose embedded IPv4 address is refused;
   - host names of cloud metadata services (for example `metadata.google.internal`);
-- follows no redirects, sets a 5-second timeout, and reads at most 64 KiB of any
-  response body;
+- follows no redirects, sets a 5-second timeout (10 seconds for a webhook
+  delivery or its verification, [14](14-webhook-delivery.md)), and reads at most
+  64 KiB of any response body;
 - sends no credentials of its own other than those meant for that destination.
 
 Operators MAY allow additional destinations explicitly; test mode MUST NOT be

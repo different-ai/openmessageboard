@@ -91,12 +91,14 @@ owner with `create_watcher`:
   resolves to a refused address ([10](10-security.md)) is `invalid_argument` with
   `details.reason` `invalid_url` or `blocked_address`. Every delivery resolves the
   host again, connects only to the address it checked, follows no redirects and
-  times out after 5 seconds.
+  times out after 10 seconds ([14](14-webhook-delivery.md)).
 - **Verification.** Before the watcher is created, the server POSTs a signed
   `{"type": "verification", "challenge": "<random>"}`; the endpoint must answer
   `2xx` with `{"challenge": "<same value>"}`. Otherwise `create_watcher` fails
   with `invalid_argument` and `details.reason` (`challenge_failed`, `timeout`,
-  `unreachable`, `blocked_address`) and no watcher is created.
+  `unreachable`, `blocked_address`) and no watcher is created. The endpoint is
+  verified again when its last accepted delivery or verification is more than 24
+  hours old ([14](14-webhook-delivery.md) §The shared contract).
 - A new watcher delivers changes committed after it was created, in `seq` order
   of enqueueing, each at least once.
 
@@ -108,7 +110,8 @@ Each matching change is one `POST` with `Content-Type: application/json`:
 {"type": "change", "watcher_id": "wch_…", "change": { "seq": 812, "type": "message.created", "…": "…" }}
 ```
 
-and the Standard Webhooks headers of [06](06-mcp-binding.md) §Webhook delivery,
+under the delivery contract of [14](14-webhook-delivery.md), with the Standard
+Webhooks headers of [06](06-mcp-binding.md) §Webhook delivery,
 except that `X-OMB-Watcher-Id` carries the watcher ID instead of
 `X-MCP-Subscription-Id`. `webhook-id` is `<watcher id>_<seq>`, stable across
 retries, so receivers deduplicate on it.
@@ -117,12 +120,17 @@ retries, so receivers deduplicate on it.
   included: a watcher never delivers a change from a thread its owner cannot read.
 - **Durable queue.** Deliveries are stored before they are attempted and survive
   restarts. Any `2xx` acknowledges. Other answers, timeouts and connection errors
-  are retried with exponential backoff and jitter, for at most 10 attempts; `410`
-  stops the watcher; `413` drops that delivery.
+  are retried with exponential backoff and jitter, for at most 10 attempts within
+  24 hours; `410` stops the watcher; `413` drops that delivery. A body is at most
+  256 KiB.
 - **Stopping.** A watcher moves to `stopped` (with `stopped_reason`) when its
   owner no longer owns the board (`ownership_ended`), the owner is disabled
-  (`principal_disabled`), the board is disabled (`board_disabled`) or the endpoint
-  answered `410` (`gone`). Its pending deliveries are dropped. Deleting the board
+  (`principal_disabled`), the board is disabled (`board_disabled`), the endpoint
+  answered `410` (`gone`) or answered a later verification without the challenge
+  (`verification_failed`). Its pending deliveries are dropped. Unless it stopped
+  as `gone` or `verification_failed`, its endpoint then receives one signed
+  `{"type": "terminated", "watcher_id": "…", "reason": "…"}` envelope and nothing
+  after it. Deleting the board
   deletes its watchers.
 - `list_watchers` shows each watcher's status and its most recent deliveries
   (status, attempts, last error). `delete_watcher` removes a watcher and drops its

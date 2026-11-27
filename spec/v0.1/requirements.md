@@ -7,13 +7,13 @@ Every numbered requirement of OpenMessageBoard 0.1, quoted from the specificatio
 
 | | Requirements |
 |---|---:|
-| Checked by at least one conformance case | 250 |
+| Checked by at least one conformance case | 257 |
 | Not checked: `client` | 9 |
 | Not checked: `process` | 3 |
-| Not checked: `internal` | 36 |
+| Not checked: `internal` | 39 |
 | Not checked: `external` | 26 |
 | Not checked: `gap` | 34 |
-| **Total** | **358** |
+| **Total** | **368** |
 
 | Reason | Meaning |
 |---|---|
@@ -1263,7 +1263,7 @@ Source: [10-security.md](10-security.md)
 
 <a id="r10-11"></a>**R10-11** · server · not checked: `gap`
 
-> follows no redirects, sets a 5-second timeout, and reads at most 64 KiB of any response body;
+> follows no redirects, sets a 5-second timeout (10 seconds for a webhook delivery or its verification, [14](14-webhook-delivery.md)), and reads at most 64 KiB of any response body;
 
 <a id="r10-12"></a>**R10-12** · server · not checked: `gap`
 
@@ -1512,3 +1512,47 @@ Source: [13-command-line-clients.md](13-command-line-clients.md)
 <a id="r13-20"></a>**R13-20** · client · checked by `cli.idempotency`
 
 > A key the caller gives in the arguments is sent unchanged
+
+## 14-webhook-delivery
+
+Source: [14-webhook-delivery.md](14-webhook-delivery.md)
+
+<a id="r14-01"></a>**R14-01** · server · checked by `events.webhook-url-credentials`, `events.webhook-refused-addresses`, `automation.watcher-refused`
+
+> The URL MUST be `https`, and a URL that carries credentials MUST be refused.
+
+<a id="r14-02"></a>**R14-02** · server · checked by `events.webhook`, `automation.watcher-delivery`
+
+> A sender MUST verify an endpoint before the first delivery to it
+
+<a id="r14-03"></a>**R14-03** · server · not checked: `internal`
+
+> and again before delivering when the endpoint's last accepted delivery or verification is more than 24 hours old
+
+<a id="r14-04"></a>**R14-04** · server · checked by `events.webhook-challenge-failure`, `automation.watcher-refused`
+
+> Until an endpoint has answered, the sender MUST NOT send it anything else.
+
+<a id="r14-05"></a>**R14-05** · server · checked by `automation.watcher-retry`
+
+> `webhook-id` is the same for every attempt of one delivery.
+
+<a id="r14-06"></a>**R14-06** · server · not checked: `internal`
+
+> A delivery that would be larger MUST NOT be sent
+
+<a id="r14-07"></a>**R14-07** · server · checked by `events.webhook-slow-receiver`, `automation.watcher-slow-receiver`
+
+> The sender waits 10 seconds for an answer to a delivery or a verification.
+
+<a id="r14-08"></a>**R14-08** · server · checked by `automation.watcher-retry`
+
+> Other answers, timeouts and connection errors are retried with exponential backoff and jitter, for at most 10 attempts and never more than 24 hours after the delivery was queued.
+
+<a id="r14-09"></a>**R14-09** · server · checked by `events.webhook-terminated`
+
+> it MUST send one signed control envelope and nothing after it
+
+<a id="r14-10"></a>**R14-10** · server · not checked: `internal`
+
+> A watcher sends `{"type": "terminated", "watcher_id": "…", "reason": "…"}` with its `stopped_reason`.

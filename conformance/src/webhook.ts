@@ -21,6 +21,10 @@ export type EndpointMode = "echo" | "wrong-challenge";
 
 export class Endpoint {
   readonly deliveries: Delivery[] = [];
+  /** Wait this long before answering a delivery (not a verification), to test the sender's timeout. */
+  delayMs = 0;
+  /** Answer this many deliveries with 500 before accepting, to test retries. */
+  failNext = 0;
   private waiters: (() => void)[] = [];
   constructor(
     readonly path: string,
@@ -125,6 +129,12 @@ export class WebhookReceiver {
           res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ challenge }));
           return;
         }
+        if (ep.failNext > 0) {
+          ep.failNext--;
+          res.writeHead(500).end();
+          return;
+        }
+        if (ep.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, ep.delayMs));
         res.writeHead(204).end();
       })();
     });

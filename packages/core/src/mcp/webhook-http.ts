@@ -27,6 +27,31 @@ export function isPrivateAddress(ip: string): boolean {
 
 export const isLoopbackAddress = (ip: string) => ip === "::1" || ip.startsWith("127.") || ip === "::ffff:127.0.0.1";
 
+// ---------- the delivery contract Events webhooks and watchers share (spec 14) ----------
+
+/** How long a receiver has to answer a delivery or a verification. */
+export const WEBHOOK_TIMEOUT_MS = 10_000;
+/** The largest body a delivery carries; a larger one is dropped and recorded. */
+export const WEBHOOK_MAX_BODY_BYTES = 256 * 1024;
+/** A delivery is attempted at most this many times, */
+export const WEBHOOK_MAX_ATTEMPTS = 10;
+/** and never after this long. */
+export const WEBHOOK_RETRY_WINDOW_MS = 24 * 3_600_000;
+/** An endpoint is verified again when its last successful delivery or verification is older than this. */
+export const WEBHOOK_REVERIFY_MS = 24 * 3_600_000;
+
+export const webhookBodyTooLarge = (body: string): boolean => Buffer.byteLength(body, "utf8") > WEBHOOK_MAX_BODY_BYTES;
+
+/** Exponential backoff with jitter after `attempts` failed attempts, capped at an hour. */
+export function webhookBackoffMs(attempts: number): number {
+  return Math.min(2 ** attempts * 1000, 3_600_000) * (0.5 + Math.random() / 2);
+}
+
+/** Whether a delivery that just failed its `attempts`-th attempt has used up its attempts or its 24 hours. */
+export function webhookRetriesSpent(attempts: number, createdAt: string, now: Date): boolean {
+  return attempts >= WEBHOOK_MAX_ATTEMPTS || now.getTime() - Date.parse(createdAt) >= WEBHOOK_RETRY_WINDOW_MS;
+}
+
 
 export class CallbackError extends Error {
   constructor(public readonly reason: string, message: string) {
@@ -73,7 +98,7 @@ export function postSigned(
   body: string,
   headers: { webhookId: string; secret: string; subscriptionId?: string; watcherId?: string },
   policy: CallbackPolicy,
-  timeoutMs = 5000,
+  timeoutMs = WEBHOOK_TIMEOUT_MS,
 ): Promise<SignedPost> {
   const ts = Math.floor(Date.now() / 1000);
   const host = url.hostname.replace(/^\[|\]$/g, "");
@@ -100,13 +125,20 @@ export function postSigned(
   );
 }
 
+export type ChallengeOutcome = { ok: true } | { ok: false; reason: string; /** The endpoint answered and did not echo the challenge; trying again will not help. */ definitive: boolean };
+
 /**
- * Sends a signed `{"type": "verification", "challenge"}` and requires a 2xx echo of the challenge
- * (compared in constant time). Throws CallbackError with the failure reason.
+ * Sends a signed `{"type": "verification", "challenge"}` and looks for a 2xx echo of the challenge (compared in
+ * constant time). A transport failure or a 5xx may pass; any other answer without the echo is definitive.
  */
-export async function verifyChallenge(ctx: AppContext, url: URL, secret: string, ids: { watcherId?: string; subscriptionId?: string }, policy: CallbackPolicy): Promise<void> {
+export async function challengeEndpoint(ctx: AppContext, url: URL, secret: string, ids: { watcherId?: string; subscriptionId?: string }, policy: CallbackPolicy): Promise<ChallengeOutcome> {
   const challenge = randomBytes(24).toString("base64url");
-  const res = await postSigned(ctx, url, JSON.stringify({ type: "verification", challenge }), { webhookId: newWebhookId(), secret, ...ids }, policy);
+  let res: SignedPost;
+  try {
+    res = await postSigned(ctx, url, JSON.stringify({ type: "verification", challenge }), { webhookId: newWebhookId(), secret, ...ids }, policy);
+  } catch (e) {
+    return { ok: false, reason: e instanceof CallbackError ? e.reason : "unreachable", definitive: false };
+  }
   let echoed = "";
   try {
     echoed = String((JSON.parse(res.body) as { challenge?: unknown }).challenge ?? "");
@@ -115,9 +147,14 @@ export async function verifyChallenge(ctx: AppContext, url: URL, secret: string,
   }
   const a = Buffer.from(echoed);
   const b = Buffer.from(challenge);
-  if (res.status < 200 || res.status >= 300 || a.length !== b.length || !timingSafeEqual(a, b)) {
-    throw new CallbackError("challenge_failed", "The endpoint did not echo the verification challenge");
-  }
+  if (res.status >= 200 && res.status < 300 && a.length === b.length && timingSafeEqual(a, b)) return { ok: true };
+  return { ok: false, reason: "challenge_failed", definitive: res.status < 500 };
+}
+
+/** `challengeEndpoint` for callers that refuse on any failure. Throws CallbackError with the failure reason. */
+export async function verifyChallenge(ctx: AppContext, url: URL, secret: string, ids: { watcherId?: string; subscriptionId?: string }, policy: CallbackPolicy): Promise<void> {
+  const outcome = await challengeEndpoint(ctx, url, secret, ids, policy);
+  if (!outcome.ok) throw new CallbackError(outcome.reason, outcome.reason === "challenge_failed" ? "The endpoint did not echo the verification challenge" : "The endpoint could not be reached");
 }
 
 /** `whsec_` followed by base64 of 24 to 64 bytes. */

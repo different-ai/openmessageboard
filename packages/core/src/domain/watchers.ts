@@ -8,12 +8,29 @@
  * delivers a change its owner could not read. Deliveries are queued in the database, retried with backoff and
  * survive restarts. A watcher stops when its owner no longer owns the board or is disabled.
  */
+import { randomBytes } from "node:crypto";
 import type { Change, Watcher, WatcherFilter } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { read, tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { decrypt, encrypt, newId } from "../ids.js";
-import { CallbackError, isIP, isLoopbackAddress, isPrivateAddress, isWebhookSecret, postSigned, validateCallbackUrl, verifyChallenge, type CallbackPolicy } from "../mcp/webhook-http.js";
+import {
+  CallbackError,
+  WEBHOOK_MAX_ATTEMPTS,
+  WEBHOOK_REVERIFY_MS,
+  challengeEndpoint,
+  isIP,
+  isLoopbackAddress,
+  isPrivateAddress,
+  isWebhookSecret,
+  postSigned,
+  validateCallbackUrl,
+  verifyChallenge,
+  webhookBackoffMs,
+  webhookBodyTooLarge,
+  webhookRetriesSpent,
+  type CallbackPolicy,
+} from "../mcp/webhook-http.js";
 import { actorFromPrincipal, getPrincipal, nowIso, requireMember } from "./access.js";
 import { boardChanges } from "./changes.js";
 import { decodeCursor, encodeCursor } from "./cursors.js";
@@ -32,6 +49,8 @@ interface WatcherRow {
   cursor_seq: number;
   status: "active" | "stopped";
   stopped_reason: string | null;
+  /** When the endpoint last answered a challenge or accepted a delivery. */
+  verified_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,7 +69,11 @@ interface DeliveryRow {
   delivered_at: string | null;
 }
 
-export const WATCHER_MAX_ATTEMPTS = 10;
+export const WATCHER_MAX_ATTEMPTS = WEBHOOK_MAX_ATTEMPTS;
+/** The `change_type` of the one control envelope a watcher sends when it stops (spec 14 §The last word). */
+const TERMINATED = "terminated";
+/** Stops that send no last envelope: the receiver asked for it (`410`), or failed to prove it is still the endpoint. */
+const SILENT_STOPS: ReadonlySet<string> = new Set(["gone", "verification_failed"]);
 const RECENT_DELIVERIES = 5;
 const KEEP_DELIVERIES_MS = 7 * 86_400_000;
 
@@ -85,8 +108,8 @@ function requireBoardOwner(ctx: AppContext, actor: Actor, boardId: string, what 
 function presentWatchers(ctx: AppContext, rows: WatcherRow[]): Watcher[] {
   return rows.map((w) => {
     const recent = ctx.db
-      .prepare("SELECT * FROM watcher_deliveries WHERE watcher_id = ? ORDER BY created_at DESC, change_seq DESC LIMIT ?")
-      .all(w.id, RECENT_DELIVERIES) as DeliveryRow[];
+      .prepare("SELECT * FROM watcher_deliveries WHERE watcher_id = ? AND change_type != ? ORDER BY created_at DESC, change_seq DESC LIMIT ?")
+      .all(w.id, TERMINATED, RECENT_DELIVERIES) as DeliveryRow[];
     return {
       id: w.id,
       board_id: w.board_id,
@@ -159,10 +182,10 @@ export async function createWatcher(
     const seq = (ctx.db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM events").get() as { s: number }).s;
     ctx.db
       .prepare(
-        `INSERT INTO watchers (id, board_id, owner_id, url, secret_enc, filter, cursor_seq, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+        `INSERT INTO watchers (id, board_id, owner_id, url, secret_enc, filter, cursor_seq, status, verified_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
       )
-      .run(id, boardId, actor.id, url.href, encrypt(ctx.config.secret, input.secret), JSON.stringify(filter), seq, now, now);
+      .run(id, boardId, actor.id, url.href, encrypt(ctx.config.secret, input.secret), JSON.stringify(filter), seq, now, now, now);
     return { watcher: presentWatchers(ctx, [ctx.db.prepare("SELECT * FROM watchers WHERE id = ?").get(id) as WatcherRow])[0]! };
   });
 }
@@ -228,8 +251,41 @@ export class WatcherWorker {
     }
   }
 
+  /**
+   * Stops a watcher. What it still had queued is dropped, and unless the receiver brought the stop about itself it
+   * is told once, with a signed `terminated` envelope that carries the reason and no board content.
+   */
   private stopWatcher(id: string, reason: string): void {
-    this.ctx.db.prepare("UPDATE watchers SET status = 'stopped', stopped_reason = ?, updated_at = ? WHERE id = ? AND status = 'active'").run(reason, nowIso(this.ctx), id);
+    const ctx = this.ctx;
+    const now = nowIso(ctx);
+    ctx.db.transaction(() => {
+      const stopped = ctx.db.prepare("UPDATE watchers SET status = 'stopped', stopped_reason = ?, updated_at = ? WHERE id = ? AND status = 'active'").run(reason, now, id).changes;
+      if (!stopped) return;
+      ctx.db.prepare("UPDATE watcher_deliveries SET status = 'failed', last_error = 'watcher_stopped' WHERE watcher_id = ? AND status = 'pending'").run(id);
+      if (SILENT_STOPS.has(reason)) return;
+      ctx.db
+        .prepare(
+          `INSERT OR IGNORE INTO watcher_deliveries (id, watcher_id, change_seq, change_type, webhook_id, payload, next_attempt_at, status, created_at)
+           VALUES (?, ?, -1, ?, ?, ?, ?, 'pending', ?)`,
+        )
+        .run(newId("wdl"), id, TERMINATED, `msg_terminated_${randomBytes(12).toString("hex")}`, JSON.stringify({ type: "terminated", watcher_id: id, reason }), now, now);
+    })();
+    this.kick = true;
+  }
+
+  /**
+   * Challenges an endpoint whose last success is more than a day old. `true`: it answered, deliver. `false`: nothing
+   * may be sent now; the watcher was stopped if the endpoint answered without the echo, and waits otherwise.
+   */
+  private async reverify(w: { watcher_id: string; url: string; secret_enc: string }, policy: CallbackPolicy): Promise<boolean> {
+    const ctx = this.ctx;
+    const outcome = await challengeEndpoint(ctx, new URL(w.url), decrypt(ctx.config.secret, w.secret_enc), { watcherId: w.watcher_id }, policy);
+    if (outcome.ok) {
+      ctx.db.prepare("UPDATE watchers SET verified_at = ? WHERE id = ?").run(nowIso(ctx), w.watcher_id);
+      return true;
+    }
+    if (outcome.definitive) this.stopWatcher(w.watcher_id, "verification_failed");
+    return false;
   }
 
   /** Queues every new matching change for each active watcher and advances its cursor, in one transaction each. */
@@ -280,12 +336,15 @@ export class WatcherWorker {
       const now = nowIso(ctx);
       ctx.db.transaction(() => {
         for (const change of changes) {
+          const payload = JSON.stringify({ type: "change", watcher_id: w.id, change });
+          // A body over the cap is never sent: the delivery is recorded as failed so the owner can see the gap (spec 14).
+          const tooLarge = webhookBodyTooLarge(payload);
           ctx.db
             .prepare(
-              `INSERT OR IGNORE INTO watcher_deliveries (id, watcher_id, change_seq, change_type, webhook_id, payload, next_attempt_at, status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+              `INSERT OR IGNORE INTO watcher_deliveries (id, watcher_id, change_seq, change_type, webhook_id, payload, next_attempt_at, status, last_error, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
-            .run(newId("wdl"), w.id, change.seq, change.type, `${w.id}_${change.seq}`, JSON.stringify({ type: "change", watcher_id: w.id, change }), now, now);
+            .run(newId("wdl"), w.id, change.seq, change.type, `${w.id}_${change.seq}`, tooLarge ? "{}" : payload, now, tooLarge ? "failed" : "pending", tooLarge ? "too_large" : null, now);
         }
         if (next !== w.cursor_seq) ctx.db.prepare("UPDATE watchers SET cursor_seq = ? WHERE id = ? AND status = 'active'").run(next, w.id);
       })();
@@ -298,37 +357,54 @@ export class WatcherWorker {
     const policy = policyOf(ctx);
     const due = ctx.db
       .prepare(
-        `SELECT d.*, w.url, w.secret_enc, w.status AS watcher_status FROM watcher_deliveries d JOIN watchers w ON w.id = d.watcher_id
+        `SELECT d.*, w.url, w.secret_enc, w.status AS watcher_status, w.verified_at FROM watcher_deliveries d JOIN watchers w ON w.id = d.watcher_id
          WHERE d.status = 'pending' AND d.next_attempt_at <= ? ORDER BY d.created_at, d.change_seq LIMIT 50`,
       )
-      .all(nowIso(ctx)) as (DeliveryRow & { url: string; secret_enc: string; watcher_status: string })[];
+      .all(nowIso(ctx)) as (DeliveryRow & { url: string; secret_enc: string; watcher_status: string; verified_at: string | null })[];
+    // One challenge per watcher per pass, shared by its due deliveries.
+    const challenges = new Map<string, Promise<boolean>>();
+    const verified = (d: (typeof due)[number]): Promise<boolean> => {
+      // The last envelope carries no board content, so it does not wait for a challenge.
+      if (d.change_type === TERMINATED) return Promise.resolve(true);
+      if (ctx.now().getTime() - Date.parse(d.verified_at ?? d.created_at) < WEBHOOK_REVERIFY_MS) return Promise.resolve(true);
+      let p = challenges.get(d.watcher_id);
+      if (!p) challenges.set(d.watcher_id, (p = this.reverify(d, policy)));
+      return p;
+    };
     await Promise.all(
       due.map(async (d) => {
-        if (d.watcher_status !== "active") {
+        const stopped = () => (ctx.db.prepare("SELECT status FROM watchers WHERE id = ?").get(d.watcher_id) as { status: string } | undefined)?.status !== "active";
+        if (d.change_type !== TERMINATED && d.watcher_status !== "active") {
           ctx.db.prepare("UPDATE watcher_deliveries SET status = 'failed', last_error = 'watcher_stopped' WHERE id = ?").run(d.id);
           return;
         }
         let status: "delivered" | "failed" | "pending" = "pending";
         let error: string | null = null;
-        try {
-          const res = await postSigned(ctx, new URL(d.url), d.payload, { webhookId: d.webhook_id, secret: decrypt(ctx.config.secret, d.secret_enc), watcherId: d.watcher_id }, policy);
-          if (res.status >= 200 && res.status < 300) status = "delivered";
-          else if (res.status === 410 || res.status === 413) {
-            status = "failed";
-            error = `HTTP ${res.status}`;
-            if (res.status === 410) this.stopWatcher(d.watcher_id, "gone");
-          } else error = `HTTP ${res.status}`;
-        } catch (e) {
-          error = e instanceof CallbackError ? e.reason : "unreachable";
+        if (!(await verified(d))) {
+          // Nothing is sent to an endpoint that has not answered its challenge. A stopped watcher's queue was dropped.
+          if (stopped()) return;
+          error = "unverified";
+        } else {
+          try {
+            const res = await postSigned(ctx, new URL(d.url), d.payload, { webhookId: d.webhook_id, secret: decrypt(ctx.config.secret, d.secret_enc), watcherId: d.watcher_id }, policy);
+            if (res.status >= 200 && res.status < 300) status = "delivered";
+            else if (res.status === 410 || res.status === 413) {
+              status = "failed";
+              error = `HTTP ${res.status}`;
+              if (res.status === 410 && d.change_type !== TERMINATED) this.stopWatcher(d.watcher_id, "gone");
+            } else error = `HTTP ${res.status}`;
+          } catch (e) {
+            error = e instanceof CallbackError ? e.reason : "unreachable";
+          }
         }
         const attempts = d.attempts + 1;
-        if (status === "pending" && attempts >= WATCHER_MAX_ATTEMPTS) status = "failed";
-        // Exponential backoff with jitter, capped at an hour.
-        const backoff = Math.min(2 ** attempts * 1000, 3_600_000) * (0.5 + Math.random() / 2);
         const now = ctx.now();
+        if (status === "pending" && webhookRetriesSpent(attempts, d.created_at, now)) status = "failed";
         ctx.db
           .prepare("UPDATE watcher_deliveries SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ?, delivered_at = ? WHERE id = ?")
-          .run(status, attempts, error, new Date(now.getTime() + backoff).toISOString(), status === "delivered" ? now.toISOString() : null, d.id);
+          .run(status, attempts, error, new Date(now.getTime() + webhookBackoffMs(attempts)).toISOString(), status === "delivered" ? now.toISOString() : null, d.id);
+        // An accepted delivery shows the endpoint is still there, as an answered challenge does.
+        if (status === "delivered" && d.change_type !== TERMINATED) ctx.db.prepare("UPDATE watchers SET verified_at = ? WHERE id = ?").run(now.toISOString(), d.watcher_id);
       }),
     );
     ctx.db.prepare("DELETE FROM watcher_deliveries WHERE status != 'pending' AND created_at < ?").run(new Date(ctx.now().getTime() - KEEP_DELIVERIES_MS).toISOString());

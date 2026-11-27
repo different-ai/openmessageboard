@@ -2191,7 +2191,7 @@
       "doc": "10-security.md",
       "section": "Outbound requests",
       "party": "server",
-      "quote": "follows no redirects, sets a 5-second timeout, and reads at most 64 KiB of any response body;",
+      "quote": "follows no redirects, sets a 5-second timeout (10 seconds for a webhook delivery or its verification, [14](14-webhook-delivery.md)), and reads at most 64 KiB of any response body;",
       "untested": "gap"
     },
     {
@@ -2622,6 +2622,79 @@
       "section": "Retries",
       "party": "client",
       "quote": "A key the caller gives in the arguments is sent unchanged"
+    },
+    {
+      "id": "R14-01",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "The URL MUST be `https`, and a URL that carries credentials MUST be refused."
+    },
+    {
+      "id": "R14-02",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "A sender MUST verify an endpoint before the first delivery to it"
+    },
+    {
+      "id": "R14-03",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "and again before delivering when the endpoint's last accepted delivery or verification is more than 24 hours old",
+      "untested": "internal"
+    },
+    {
+      "id": "R14-04",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "Until an endpoint has answered, the sender MUST NOT send it anything else."
+    },
+    {
+      "id": "R14-05",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "`webhook-id` is the same for every attempt of one delivery."
+    },
+    {
+      "id": "R14-06",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "A delivery that would be larger MUST NOT be sent",
+      "untested": "internal"
+    },
+    {
+      "id": "R14-07",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "The sender waits 10 seconds for an answer to a delivery or a verification."
+    },
+    {
+      "id": "R14-08",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "Other answers, timeouts and connection errors are retried with exponential backoff and jitter, for at most 10 attempts and never more than 24 hours after the delivery was queued."
+    },
+    {
+      "id": "R14-09",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "it MUST send one signed control envelope and nothing after it"
+    },
+    {
+      "id": "R14-10",
+      "doc": "14-webhook-delivery.md",
+      "section": "The shared contract",
+      "party": "server",
+      "quote": "A watcher sends `{\"type\": \"terminated\", \"watcher_id\": \"…\", \"reason\": \"…\"}` with its `stopped_reason`.",
+      "untested": "internal"
     }
   ]
 }

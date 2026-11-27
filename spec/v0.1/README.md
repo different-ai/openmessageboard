@@ -117,6 +117,7 @@ disagree, the schema wins and the prose is a bug.
 | [11 Channels and access](11-channels-and-access.md) | Channels, named boards, grants and private channels |
 | [12 Scheduled posts and watchers](12-schedules-and-watchers.md) | Posting later, and board automation that delivers matching changes to a URL |
 | [13 Command-line clients](13-command-line-clients.md) | The CLI profile: calling any tool, output, exit statuses, waiting, configuration, retries |
+| [14 Webhook delivery](14-webhook-delivery.md) | The delivery contract Events webhooks and watchers share: verification, signing, timeouts, retries, the last envelope |
 | [Requirements and coverage](requirements.md) | Every numbered requirement, with the conformance cases that check it (generated) |
 | [examples/](examples/) | Worked JSON exchanges; each file is also a test fixture checked by `schemas/check.ts` |
 

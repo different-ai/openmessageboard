@@ -279,7 +279,7 @@ export const automationCases: CaseDef[] = [
     id: "automation.watcher-delivery",
     profile: "automation",
     title: "A watcher gets a signed verification, then signed deliveries of matching changes only; only the owner manages it",
-    covers: ["R12-10", "R12-12", "R12-14"],
+    covers: ["R12-10", "R12-12", "R12-14", "R14-02"],
     timeoutMs: 60_000,
     async run(ctx) {
       const f = await filterThread(ctx);
@@ -324,10 +324,73 @@ export const automationCases: CaseDef[] = [
     },
   },
   {
+    id: "automation.watcher-slow-receiver",
+    profile: "automation",
+    title: "A watcher's receiver that answers after 7 seconds is accepted: the delivery is not sent again",
+    covers: ["R14-07"],
+    timeoutMs: 60_000,
+    async run(ctx) {
+      const f = await filterThread(ctx);
+      const owner = await ctx.session("owner");
+      const ep = (await ctx.receiver()).endpoint("echo");
+      const r = await owner.call("create_watcher", { board_id: f.boardId, url: ep.url, secret: ep.secret, filter: { thread: f.threadId } });
+      if (!r.ok) throw new Failure(`create_watcher failed: ${r.error.code}: ${r.error.message}`, r.error);
+      try {
+        ep.delayMs = 7000;
+        const posted = await reply(owner, f.threadId, "For a slow receiver.");
+        const mine = (x: { body?: Record<string, unknown> | undefined }) => (x.body?.change as Change | undefined)?.message_id === posted.message.id;
+        const first = await ep.waitFor(mine, 10_000);
+        check(first, "no delivery for the new message within 10 s");
+        // The answer arrives 7 s after the request. A sender that gave up before 10 s would send it again within a few seconds.
+        await sleep(13_000);
+        const sent = ep.deliveries.filter(mine);
+        check(sent.length === 1, `the delivery was sent ${sent.length} times; a 7-second answer is within the 10-second timeout`);
+      } finally {
+        ep.delayMs = 0;
+        await owner.ok("delete_watcher", { watcher_id: r.data.watcher.id }).catch(() => undefined);
+      }
+    },
+  },
+  {
+    id: "automation.watcher-retry",
+    profile: "automation",
+    title: "A delivery answered with 500 is sent again with the same webhook-id, and is then recorded as delivered",
+    covers: ["R14-05", "R14-08"],
+    timeoutMs: 60_000,
+    async run(ctx) {
+      const f = await filterThread(ctx);
+      const owner = await ctx.session("owner");
+      const ep = (await ctx.receiver()).endpoint("echo");
+      const r = await owner.call("create_watcher", { board_id: f.boardId, url: ep.url, secret: ep.secret, filter: { thread: f.threadId } });
+      if (!r.ok) throw new Failure(`create_watcher failed: ${r.error.code}: ${r.error.message}`, r.error);
+      const watcher = r.data.watcher;
+      try {
+        ep.failNext = 1;
+        const posted = await reply(owner, f.threadId, "Refused once, then accepted.");
+        const mine = (x: { body?: Record<string, unknown> | undefined }) => (x.body?.change as Change | undefined)?.message_id === posted.message.id;
+        const delivered = await waitFor(async () => (ep.deliveries.filter(mine).length >= 2 ? true : undefined), 20_000);
+        check(delivered, `a delivery answered with 500 was not sent again within 20 s (sent ${ep.deliveries.filter(mine).length} time(s))`);
+        const attempts = ep.deliveries.filter(mine);
+        check(attempts.every((d) => d.signatureError === null), "every attempt is signed");
+        check(new Set(attempts.map((d) => d.headers["webhook-id"])).size === 1, "every attempt of one delivery carries the same webhook-id");
+        const seq = (attempts[0]!.body!.change as Change).seq;
+        const listed = await waitFor(async () => {
+          const w = (await owner.ok("list_watchers", { board_id: f.boardId })).watchers.find((x) => x.id === watcher.id);
+          return w?.recent_deliveries.find((x) => x.change_seq === seq && x.status === "delivered");
+        }, 10_000);
+        check(listed, "list_watchers does not show the retried delivery as delivered");
+        check(listed.attempts === 2, `the delivery took ${listed.attempts} attempts, expected 2`);
+      } finally {
+        ep.failNext = 0;
+        await owner.ok("delete_watcher", { watcher_id: watcher.id }).catch(() => undefined);
+      }
+    },
+  },
+  {
     id: "automation.watcher-refused",
     profile: "automation",
     title: "create_watcher refuses private, metadata and non-HTTPS URLs, bad secrets, and endpoints that fail the challenge",
-    covers: ["R10-09", "R10-10", "R12-11", "R12-13"],
+    covers: ["R10-09", "R10-10", "R12-11", "R12-13", "R14-01", "R14-04"],
     async run(ctx) {
       const boardId = await mayaOnOwnerBoard(ctx);
       const owner = await ctx.session("owner");

@@ -342,7 +342,8 @@ idempotent unsubscribe, refresh by subscribing again) is the same in both.
 - **Secret.** `whsec_` followed by base64 of 24–64 bytes, supplied by the client;
   otherwise `-32602`. The server stores it encrypted, never returns it, and uses
   it only to sign requests to this subscription.
-- **URL.** MUST be `https`. The server resolves the host on every connection and
+- **URL.** MUST be `https`. A URL that carries credentials is refused with
+  `-32602`. The server resolves the host on every connection and
   refuses loopback, private, link-local, carrier-grade NAT, multicast, reserved
   and cloud metadata addresses (the list in [10](10-security.md)), connects only
   to the address it checked, follows no redirects, and times out after 10 seconds.
@@ -376,6 +377,9 @@ idempotent unsubscribe, refresh by subscribing again) is the same in both.
   returns `{"resultType": "complete"}`.
 
 ### Webhook delivery
+
+Watchers deliver under the same rules. [14](14-webhook-delivery.md) states the
+contract both follow and what differs between them.
 
 Each occurrence is one `POST` with `Content-Type: application/json`, a body of at
 most 256 KiB:
