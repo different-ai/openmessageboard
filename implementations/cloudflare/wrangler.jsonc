@@ -14,6 +14,9 @@
   // Optional: send sign-in codes with Cloudflare Email Service. Onboard the sender's domain for Email Sending first,
   // and set OMB_MAIL_FROM to an address on it. Without this binding, codes are written to the Worker log.
   // "send_email": [{ "name": "EMAIL" }],
+  // Optional: the newsletter extension (README §Extensions). Bind a D1 database with the site's `subscribers` table
+  // (site/migrations) and sign-in offers the newsletter. Without this binding nothing about it is shown.
+  // "d1_databases": [{ "binding": "NEWSLETTER", "database_name": "openmessageboard-newsletter", "database_id": "<id>" }],
   "vars": {
     "OMB_PUBLIC_URL": "http://localhost:8787",
     "OMB_AUTH_PROVIDERS": "email",
@@ -52,6 +55,8 @@
       "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }] },
       // Sign-in codes. The binding may send only from this address; its domain must be onboarded for Email Sending.
       "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["sign-in@openmessageboard.com"] }],
+      // The newsletter extension: the site's subscriber database. The site owns its schema and migrations.
+      "d1_databases": [{ "binding": "NEWSLETTER", "database_name": "openmessageboard-newsletter", "database_id": "2a1f7375-ef55-4532-b10c-5454a353d155" }],
       "vars": {
         "OMB_PUBLIC_URL": "https://omb.pub",
         "OMB_AUTH_PROVIDERS": "email",

@@ -8,7 +8,7 @@ import { resolveOidcClient, type OidcClient } from "./auth/oidc.js";
 import { createOutboxMailer, type Mailer } from "./auth/mailer.js";
 import { createResolver, type WorkloadVerifier } from "./auth/resolve.js";
 import { createApp, type AppOptions } from "./http/app.js";
-import type { RouteModule } from "./http/util.js";
+import type { ExtensionModule, RouteModule } from "./http/util.js";
 import { EventSubscriptions } from "./mcp/events.js";
 import { runMaintenance } from "./domain/usage.js";
 import { runDueSchedules, startSchedules } from "./domain/schedules.js";
@@ -22,6 +22,8 @@ import type { Platform } from "./platform.js";
 export interface Features {
   workload?: { verify: WorkloadVerifier; register: RouteModule };
   sync?: { register: RouteModule; start: (ctx: AppContext) => () => void } | false;
+  /** Extensions this deployment offers (spec README §Extensions): listed in `ServerInfo.extensions`, routes under `/x/<name>/`. */
+  extensions?: ExtensionModule[];
 }
 
 export interface BootOptions {
@@ -68,7 +70,7 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
   const modules: { name: Profile; register: RouteModule }[] = [];
   if (features.workload) modules.push({ name: "workload", register: features.workload.register });
   if (sync) modules.push({ name: "sync", register: sync.register });
-  const { app } = createApp(ctx, { auth, resolver, events, modules, oidcAvailable: oidcClient !== null, ...(opts.web ? { web: opts.web } : {}) });
+  const { app } = createApp(ctx, { auth, resolver, events, modules, extensions: features.extensions ?? [], oidcAvailable: oidcClient !== null, ...(opts.web ? { web: opts.web } : {}) });
 
   const maintain = () => {
     try {

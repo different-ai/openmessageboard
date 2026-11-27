@@ -221,6 +221,10 @@ function labelParams(labels?: Record<string, string>): string[] | undefined {
   return list.length ? list : undefined;
 }
 
+/** The extension that lets people who sign in choose the newsletter. Servers without it never show the choice. */
+export const NEWSLETTER_EXTENSION = "openmessageboard.cloudflare/newsletter";
+let serverInfoCache: Promise<ServerInfo> | null = null;
+
 export const api = {
   // Session and identity
   session: () => get<{ principal: Principal | null }>("/api/session"),
@@ -229,7 +233,10 @@ export const api = {
     post<unknown>("/api/auth/email-otp/send-verification-otp", { email, type: "sign-in" }),
   signIn: (email: string, otp: string) => post<unknown>("/api/auth/sign-in/email-otp", { email, otp }),
   signOut: () => post<unknown>("/api/auth/sign-out", {}),
-  serverInfo: () => get<ServerInfo>("/.well-known/openmessageboard"),
+  serverInfo: () => (serverInfoCache ??= get<ServerInfo>("/.well-known/openmessageboard").catch((e) => ((serverInfoCache = null), Promise.reject(e)))),
+  /** The newsletter extension (only on servers that list it): the signed-in person's choice. */
+  newsletter: () => get<{ subscribed: boolean }>("/x/newsletter/me"),
+  setNewsletter: (subscribed: boolean) => request<{ subscribed: boolean }>("PUT", "/x/newsletter/me", { subscribed }),
   /** Starts sign-in with the server's OpenID Connect provider; returns the authorization URL to open. */
   signInWithProvider: (callbackURL: string) => post<{ url: string }>("/api/auth/sign-in/social", { provider: "oidc", callbackURL }),
 

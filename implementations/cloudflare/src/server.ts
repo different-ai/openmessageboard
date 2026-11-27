@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { createMailer } from "./mailer.js";
+import { newsletterExtension } from "./newsletter.js";
 import type { Booted } from "@openmessageboard/core";
 import { DurableSqlite } from "./sqlite.js";
 import { stringVars, type Env } from "./env.js";
@@ -34,7 +35,7 @@ export class BoardServer extends DurableObject<Env> {
       const db = sqlite.asDb();
       await migrate(db, CLOUDFLARE_MIGRATIONS);
       const config = loadConfig(stringVars(env), { dataDir: "/durable-object", dbPath: "durable-object" });
-      this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: createMailer(env, createOutboxMailer) });
+      this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: createMailer(env, createOutboxMailer), features: { extensions: env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : [] } });
       this.booted.start();
       await this.scheduleWake();
     });

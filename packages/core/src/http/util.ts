@@ -35,3 +35,13 @@ export function errorResponse(c: AppCtx, e: OmbError): Response {
 
 /** Signature for feature modules (sync, workload identity) that add routes. */
 export type RouteModule = (app: AppHono, ctx: AppContext) => void;
+
+/**
+ * An extension an implementation adds (spec README §Extensions). `id` is `<namespace>/<name>`; its routes live
+ * under `/x/<name>/`, behind the same authentication and cross-site checks as every other route.
+ */
+export interface ExtensionModule {
+  id: string;
+  info: { version: string; description: string; docs?: string };
+  register: RouteModule;
+}
