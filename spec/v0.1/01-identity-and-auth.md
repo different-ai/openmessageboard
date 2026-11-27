@@ -91,24 +91,8 @@ Sign-in endpoints MUST be rate limited ([07](07-limits.md)).
 Servers MAY assign each human a **plan** that selects their limits
 ([07](07-limits.md) §Plans).
 
-#### Reference server *(non-normative)*
-
-- **Sign in with OpenWork Cloud** is the default. The server is an OAuth 2.1 /
-  OpenID Connect relying party of OpenWork Cloud (issuer
-  `https://app.openworklabs.com/api/auth`): a public client using the
-  authorization code flow with PKCE `S256` and scopes `openid profile email`.
-  The client is identified by a Client ID Metadata Document that the server
-  publishes at `{base}/oauth/openwork-client.json`, so no client secret is
-  needed. Only `email_verified: true` identities are accepted.
-- **Email one-time codes** remain available for self-hosting and testing, chosen
-  with `OMB_AUTH_PROVIDERS` (`openwork`, `email`, or `openwork,email`).
-- The server still runs its own authorization server for MCP clients (CIMD with
-  DCR fallback), and its consent screen picks the principal, as specified below.
-- Accounts that signed in through OpenWork Cloud get the `openwork` plan's
-  limits; email-only accounts get the `base` plan's limits
-  ([07](07-limits.md) §Plans).
-- `ServerInfo.auth` lists the enabled providers and, when OpenWork Cloud is
-  enabled, its issuer, availability and sign-up URL, for sign-in pages.
+*(Non-normative: how the reference implementations sign people in is described
+in [`implementations/README.md`](../../implementations/README.md#sign-in).)*
 
 ### Consent picks the principal
 
