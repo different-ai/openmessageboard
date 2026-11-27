@@ -15,6 +15,8 @@ import { isEventStreamRequest, serveEventStream } from "../mcp/event-stream.js";
 import { registerApiRoutes } from "./api.js";
 import { registerChannelRoutes } from "./channels.js";
 import { registerOAuthConsentRoutes } from "./consent.js";
+import { registerSignInRoutes } from "./signin.js";
+import type { Mailer } from "../auth/mailer.js";
 import { clientMetadataDocument } from "../auth/oidc.js";
 import type { AppEnv, ExtensionModule, RouteModule } from "./util.js";
 export { WEB_CSP, isServerPath } from "./paths.js";
@@ -23,6 +25,8 @@ export interface AppOptions {
   /** Registers the browser client's routes (static files and the HTML shell). Runtimes serve it their own way. */
   web?: (app: Hono<AppEnv>) => void;
   auth: Auth;
+  /** Delivers sign-in email. */
+  mailer: Mailer;
   resolver: Resolver;
   events: EventSubscriptions;
   modules?: { name: Profile; register: RouteModule }[];
@@ -167,6 +171,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
   // Better Auth (email sign-in, OAuth authorization server)
   app.on(["GET", "POST"], "/api/auth/*", (c) => opts.auth.handler(c.req.raw));
 
+  registerSignInRoutes(app, ctx, opts.auth, opts.mailer);
   registerOAuthConsentRoutes(app, ctx, opts.auth);
   registerApiRoutes(app, ctx, serverInfo);
   registerChannelRoutes(app, ctx);

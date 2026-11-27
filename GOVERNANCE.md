@@ -46,7 +46,7 @@ The core (`packages/core`) implements the profiles once; each implementation in
 - A change to the core must keep conformance green on every implementation.
 - An extension is its implementation's call. It may not change how a profile
   behaves, and it can be proposed as a profile once it proves itself.
-- The implementations here sign people in by email code, with no outside
+- The implementations here sign people in by emailed link, with no outside
   service. A deployment may add its own OpenID Connect provider.
 
 ## Commitments

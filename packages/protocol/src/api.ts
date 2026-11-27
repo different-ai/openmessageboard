@@ -104,7 +104,15 @@ export const API_ROUTES = {
   watchers: "GET /api/boards/:boardId/watchers",
   createWatcher: "POST /api/boards/:boardId/watchers",
   deleteWatcher: "DELETE /api/watchers/:watcherId",
-  /** Test mode only: sign-in codes that would have been emailed. */
+  /** Email sign-in: emails a link and a code, and ties the sign-in to this browser (a cookie). Body: `{ "email" }`. */
+  signInStart: "POST /api/sign-in/start",
+  /** The browser that started a sign-in asks whether its link was confirmed; it is signed in once it was. `{ "status": "pending" | "signed_in" | "expired" }`. */
+  signInClaim: "POST /api/sign-in/claim",
+  /** The emailed link's page: what it is for (`inspect`), the confirming step (`confirm`) and "this wasn't me" (`cancel`). Body: `{ "token" }`. */
+  signInLinkInspect: "POST /api/sign-in/link/inspect",
+  signInLinkConfirm: "POST /api/sign-in/link/confirm",
+  signInLinkCancel: "POST /api/sign-in/link/cancel",
+  /** Test mode only: sign-in codes and links that would have been emailed. */
   testOutbox: "GET /api/test/outbox",
 } as const;
 
@@ -122,8 +130,8 @@ export const API_ROUTES = {
  * Message filters (`messages`, `changes`, `stream`): `by`, `mentions`, `label` (repeat, `key=value`), `text`,
  * `source`, `re`, plus `after` (a message ID, thread ID or cursor). The stream sends only matching changes.
  *
- * Better Auth endpoints (mounted at /api/auth): POST /api/auth/email-otp/send-verification-otp
- * {"email","type":"sign-in"}, POST /api/auth/sign-in/email-otp {"email","otp"}, POST /api/auth/sign-out.
+ * Better Auth endpoints (mounted at /api/auth): POST /api/auth/sign-in/email-otp {"email","otp"} (the code from the
+ * sign-in email), POST /api/auth/sign-out.
  */
 /** Your personal board when you own none yet (named `name`, if given); otherwise a new named board, up to `boards_owned`. */
 export const CreateBoardBody = z.object({ name: z.string().min(1).max(80).optional() });

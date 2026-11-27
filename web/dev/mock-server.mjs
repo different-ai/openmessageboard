@@ -413,11 +413,44 @@ route("GET", "/api/session", ({ req }) => {
   return { principal: u ? { id: u.id, kind: u.kind, display_name: u.display_name, email: u.email, owner: u.owner_id ? ref(u.owner_id) : null } : null };
 });
 
-route("POST", "/api/auth/email-otp/send-verification-otp", async ({ body }) => {
+// Email sign-in: one pending sign-in at a time is enough for the mock. The link is /signin/link#mock.
+let mockSignIn = null;
+const mockUser = (email) => {
+  let user = [...principals.values()].find((p) => p.email === email);
+  if (!user) {
+    const local = email.split("@")[0];
+    user = { id: id("p"), kind: "human", display_name: local.charAt(0).toUpperCase() + local.slice(1), email, owner_id: null };
+    principals.set(user.id, user);
+  }
+  return user;
+};
+route("POST", "/api/sign-in/start", async ({ body, origin }) => {
   await delay(300);
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email || "")) return [400, { code: "INVALID_EMAIL", message: "Enter a valid email address." }];
-  console.log(`[mock] sign-in code for ${body.email}: 123456 (any 6 digits work)`);
-  return { success: true };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email || "")) return [400, { error: { code: "invalid_argument", message: "Enter a valid email address" } }];
+  mockSignIn = { email: String(body.email).toLowerCase(), requested_at: new Date().toISOString(), confirmed: false };
+  console.log(`[mock] sign-in link for ${body.email}: ${origin}/signin/link#mock  (or the code 123456; any 6 digits work)`);
+  return { ok: true, expires_in: 600 };
+});
+route("POST", "/api/sign-in/link/inspect", () =>
+  mockSignIn && !mockSignIn.confirmed
+    ? { email: mockSignIn.email, same_browser: true, requested_at: mockSignIn.requested_at }
+    : [400, { error: { code: "invalid_argument", message: "This sign-in link has expired or was already used. Ask for a new one on the sign-in page." } }],
+);
+route("POST", "/api/sign-in/link/confirm", () => {
+  if (!mockSignIn || mockSignIn.confirmed) return [400, { error: { code: "invalid_argument", message: "This sign-in link has expired or was already used. Ask for a new one on the sign-in page." } }];
+  mockSignIn.confirmed = true;
+  return { same_browser: true };
+});
+route("POST", "/api/sign-in/link/cancel", () => {
+  mockSignIn = null;
+  return { ok: true };
+});
+route("POST", "/api/sign-in/claim", () => {
+  if (!mockSignIn) return { status: "expired" };
+  if (!mockSignIn.confirmed) return { status: "pending" };
+  const user = mockUser(mockSignIn.email);
+  mockSignIn = null;
+  return [200, { status: "signed_in" }, { "Set-Cookie": `${SESSION_COOKIE}=${user.id}; Path=/; HttpOnly; SameSite=Lax` }];
 });
 
 route("POST", "/api/auth/sign-in/email-otp", async ({ body }) => {
@@ -1174,7 +1207,7 @@ createServer(async (req, res) => {
       if (!r) fail(404, "not_found", `No route for ${req.method} ${path}.`);
       const p = Object.fromEntries(Object.entries(r.re.exec(path).groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
       const body = req.method === "GET" ? {} : await readBody(req);
-      const isPublic = path.startsWith("/.well-known/") || path.startsWith("/api/auth/") || path === "/api/session" || path === "/api/test/outbox" || (req.method === "GET" && path.startsWith("/api/invite-links/"));
+      const isPublic = path.startsWith("/.well-known/") || path.startsWith("/api/auth/") || path.startsWith("/api/sign-in/") || path === "/api/session" || path === "/api/test/outbox" || (req.method === "GET" && path.startsWith("/api/invite-links/"));
       const user = isPublic ? sessionOf(req) : requireUser(req);
       const out = await r.handler({ req, res, user, p, q, body, origin });
       if (Array.isArray(out)) return send(res, out[0], out[1], out[2]);

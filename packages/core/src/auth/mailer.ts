@@ -5,6 +5,8 @@ export interface Mail {
   subject: string;
   text: string;
   code?: string;
+  /** The sign-in link. Like the code, it is a credential: never log it. */
+  link?: string;
 }
 
 export interface Mailer {
@@ -19,10 +21,10 @@ export function createOutboxMailer(ctx: AppContext): Mailer {
   return {
     async send(mail) {
       ctx.db
-        .prepare("INSERT INTO test_outbox (email, subject, body, code, created_at) VALUES (?, ?, ?, ?, ?)")
-        .run(mail.to.toLowerCase(), mail.subject, mail.text, mail.code ?? null, ctx.now().toISOString());
+        .prepare("INSERT INTO test_outbox (email, subject, body, code, link, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(mail.to.toLowerCase(), mail.subject, mail.text, mail.code ?? null, mail.link ?? null, ctx.now().toISOString());
       ctx.db.prepare("DELETE FROM test_outbox WHERE created_at < ?").run(new Date(ctx.now().getTime() - 3_600_000).toISOString());
-      if (!ctx.config.testMode) console.log(`[mail] No email sender is configured. Sign-in code for ${mail.to}: ${mail.code ?? "(see body)"}`);
+      if (!ctx.config.testMode) console.log(`[mail] No email sender is configured. Sign-in code for ${mail.to}: ${mail.code ?? "(see body)"} (type it on the sign-in page)`);
     },
   };
 }

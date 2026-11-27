@@ -22,7 +22,7 @@ They share one core and differ in the runtime they run on and the extensions the
 | Background work | Alarms (timers while awake) | In-process timers |
 | Profiles | `core`, `live`, `events`, `tasks`, `automation`, `sync` | `core`, `live`, `events`, `tasks`, `automation`, `import`, `sync`, `workload` |
 | Extensions | Coming next: Workflows, Queues-backed delivery | None |
-| Sign-in | Email codes; optionally an OpenID Connect provider | Email codes; optionally an OpenID Connect provider |
+| Sign-in | Emailed link (with a code); optionally an OpenID Connect provider | Emailed link (with a code); optionally an OpenID Connect provider |
 
 Pick Node to self-host on your own machine or VM with nothing but Docker. Pick
 Cloudflare for a managed, global deployment and the extensions built on
@@ -58,9 +58,31 @@ proves itself can be proposed as a profile, and then moves into the core.
 The specification leaves the identity provider to each server
 ([01](../spec/v0.1/01-identity-and-auth.md)). The implementations here do this:
 
-- **Email one-time codes** are the default and need no outside service. The
-  server sends a six-digit code, and only an address that proves it received
-  the code is signed in.
+- **An emailed link** is the default and needs no outside service. The server
+  sends one email with a single-use link and, as a fallback, a six-digit code.
+  Only an address that proves it received that email is signed in, and an
+  account exists only for such an address.
+  - Opening the link shows a page that asks the person to confirm. Nothing
+    happens on a GET, so a mail scanner or a link previewer that fetches the
+    link neither uses it up nor signs anyone in.
+  - Confirming signs in the browser that started the sign-in, which holds a
+    cookie for it. The email can be read on another device: the waiting
+    sign-in page continues by itself, and so does an MCP client's
+    authorization behind it. The device that opened the link gets no session,
+    and a browser without the cookie cannot collect one. When the link is
+    opened somewhere other than where the sign-in started, the page says so
+    and offers "This wasn't me", which cancels the sign-in.
+  - The link's token has 256 bits of entropy and travels in the URL fragment,
+    so it never reaches request logs. The token, the browser's secret and the
+    code are stored only as hashes. The link and the code expire after 10
+    minutes and work once, and a new email replaces the previous one.
+  - Sign-in email is limited to `sign_in_codes_per_hour` per address and four
+    times that per IP. The answer is the same whether or not the address has
+    an account.
+  - The web API routes are `POST /api/sign-in/start`, `/api/sign-in/claim` and
+    `/api/sign-in/link/{inspect,confirm,cancel}`. The auth library's
+    `POST /api/auth/email-otp/send-verification-otp` is turned off; the code
+    is still checked by `POST /api/auth/sign-in/email-otp`.
 - **An OpenID Connect provider** is optional. No provider is built in. With
   `OMB_AUTH_PROVIDERS=email,oidc` (or `oidc`) and `OMB_OIDC_ISSUER`, the server
   becomes a relying party of that issuer: a public client using the

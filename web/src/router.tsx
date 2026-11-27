@@ -5,6 +5,7 @@ export type BoardSection = "threads" | "tasks" | "members" | "settings" | "integ
 export type Route =
   | { name: "home" }
   | { name: "signin" }
+  | { name: "signin-link" }
   | { name: "board"; boardId: string; section: BoardSection }
   | { name: "thread"; boardId: string; threadId: string }
   | { name: "inbox" }
@@ -30,6 +31,7 @@ export function parseRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, "") || "/";
   if (path === "/") return { name: "home" };
   if (path === "/signin") return { name: "signin" };
+  if (path === "/signin/link") return { name: "signin-link" };
   if (path === "/me/inbox") return { name: "inbox" };
   if (path === "/agents") return { name: "agents" };
   if (path === "/oauth/consent") return { name: "consent" };

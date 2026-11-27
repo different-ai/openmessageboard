@@ -54,8 +54,7 @@ async function main(argv: string[]) {
     const ctx = await openCtx();
     const { getMigrations } = await import("better-auth/db/migration");
     const { createAuth } = await import("@openmessageboard/core/auth/auth");
-    const { createMailer } = await import("./mailer.js");
-    const auth = createAuth(ctx, await createMailer(ctx));
+    const auth = createAuth(ctx);
     await (await getMigrations(auth.options)).runMigrations();
     console.log("Migrations applied.");
     return;

@@ -49,10 +49,10 @@ class Jar {
 }
 
 async function signIn(jar: Jar, email: string) {
-  const send = await fetch(`${base}/api/auth/email-otp/send-verification-otp`, {
+  const send = await fetch(`${base}/api/sign-in/start`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: base },
-    body: JSON.stringify({ email, type: "sign-in" }),
+    body: JSON.stringify({ email }),
   });
   assert.equal(send.status, 200, await send.clone().text());
   const outbox = (await (await fetch(`${base}/api/test/outbox?email=${encodeURIComponent(email)}`)).json()) as { messages: { code: string }[] };
@@ -60,6 +60,20 @@ async function signIn(jar: Jar, email: string) {
   const res = await fetch(`${base}/api/auth/sign-in/email-otp`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ email, otp }) });
   assert.equal(res.status, 200, await res.clone().text());
   jar.take(res);
+}
+
+/** Signs in by the emailed link, confirmed from another device (no cookies), as someone reading mail on a phone. */
+async function signInByLink(jar: Jar, email: string) {
+  const post = (path: string, body: unknown, cookie = "") => fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json", origin: base, cookie }, body: JSON.stringify(body) });
+  const started = await post("/api/sign-in/start", { email });
+  assert.equal(started.status, 200, await started.clone().text());
+  jar.take(started);
+  const outbox = (await (await fetch(`${base}/api/test/outbox?email=${encodeURIComponent(email)}`)).json()) as { messages: { link: string }[] };
+  const confirmed = await post("/api/sign-in/link/confirm", { token: new URL(outbox.messages[0]!.link).hash.slice(1) });
+  assert.equal(confirmed.status, 200, await confirmed.clone().text());
+  const claimed = await post("/api/sign-in/claim", {}, jar.header());
+  assert.deepEqual(await claimed.clone().json(), { status: "signed_in" });
+  jar.take(claimed);
 }
 
 test("email sign-in gives a browser session for the web API", async () => {
@@ -158,7 +172,8 @@ test("MCP client OAuth: consent as a profile gives the person's access, shown vi
   });
   const { client_id } = (await reg.json()) as { client_id: string };
   const jar = new Jar();
-  await signIn(jar, "lin@example.test");
+  // The emailed link, opened on another device: the authorization continues in the browser that started.
+  await signInByLink(jar, "lin@example.test");
   const verifier = randomBytes(32).toString("base64url");
   const authorize = new URL(`${base}/api/auth/oauth2/authorize`);
   for (const [k, v] of Object.entries({

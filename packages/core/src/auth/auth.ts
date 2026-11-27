@@ -5,7 +5,7 @@ import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import type { AppContext } from "../context.js";
 import { sha256 } from "../ids.js";
-import type { Mailer } from "./mailer.js";
+import { SIGN_IN_TTL_SECONDS } from "./signin-link.js";
 import { OIDC_PROVIDER_ID, OIDC_SCOPES, type OidcClient } from "./oidc.js";
 
 export const OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "boards"] as const;
@@ -22,7 +22,7 @@ export function consentChoiceFor(ctx: AppContext, sessionId: string): string | u
   return row?.principal_id;
 }
 
-export function createAuth(ctx: AppContext, mailer: Mailer, oidcClient: OidcClient | null = null) {
+export function createAuth(ctx: AppContext, oidcClient: OidcClient | null = null) {
   const { publicUrl, secret, testMode, authProviders } = ctx.config;
   const emailEnabled = authProviders.includes("email");
   const oidcEnabled = authProviders.includes("oidc") && oidcClient !== null;
@@ -34,6 +34,7 @@ export function createAuth(ctx: AppContext, mailer: Mailer, oidcClient: OidcClie
     database: (ctx.platform.authDatabase ?? ctx.db) as never,
     trustedOrigins: [publicUrl],
     emailAndPassword: { enabled: false },
+    disabledPaths: ["/email-otp/send-verification-otp"],
     // Someone who first signed in by email and later signs in through the OpenID Connect provider keeps one account.
     account: { accountLinking: { enabled: true, trustedProviders: [OIDC_PROVIDER_ID] } },
     session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
@@ -75,20 +76,21 @@ export function createAuth(ctx: AppContext, mailer: Mailer, oidcClient: OidcClie
             }),
           ]
         : []),
-      ...(emailEnabled ? [emailOTP({
-        otpLength: 6,
-        expiresIn: 600,
-        allowedAttempts: 5,
-        async sendVerificationOTP({ email, otp }) {
-          ctx.rate.hit(`otp:${email.toLowerCase()}`, ctx.config.rateLimits.sign_in_codes_per_hour, 3_600_000);
-          await mailer.send({
-            to: email,
-            subject: `Your OpenMessageBoard sign-in code: ${otp}`,
-            text: `Your sign-in code is ${otp}. It expires in 10 minutes.\n\nIf you didn't ask for it, you can ignore this email.`,
-            code: otp,
-          });
-        },
-      })] : []),
+      // Email sign-in is started by POST /api/sign-in/start (auth/signin-link.ts), which emails a link and this
+      // plugin's code together. The plugin's own send route is disabled (below) so every email goes through there.
+      ...(emailEnabled
+        ? [
+            emailOTP({
+              otpLength: 6,
+              expiresIn: SIGN_IN_TTL_SECONDS,
+              allowedAttempts: 5,
+              storeOTP: "hashed",
+              async sendVerificationOTP() {
+                throw new Error("Sign-in email is sent by POST /api/sign-in/start");
+              },
+            }),
+          ]
+        : []),
       oauthProvider({
         loginPage: `${publicUrl}/signin`,
         consentPage: `${publicUrl}/oauth/consent`,

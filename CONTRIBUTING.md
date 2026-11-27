@@ -18,7 +18,7 @@ pnpm --filter @openmessageboard/web build
 OMB_TEST_MODE=1 pnpm --filter @openmessageboard/server-node dev
 ```
 
-With `OMB_TEST_MODE=1` and no `OMB_SMTP_URL`, sign-in codes are written to the server log and to `GET /api/test/outbox?email=...`.
+With `OMB_TEST_MODE=1` and no `OMB_SMTP_URL`, sign-in codes are written to the server log, and codes and links to `GET /api/test/outbox?email=...`.
 
 ## Branches and releases
 

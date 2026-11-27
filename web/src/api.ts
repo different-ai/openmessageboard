@@ -240,8 +240,13 @@ export const api = {
   // Session and identity
   session: () => get<{ principal: Principal | null }>("/api/session"),
   me: () => get<Whoami>("/api/me"),
-  sendSignInCode: (email: string) =>
-    post<unknown>("/api/auth/email-otp/send-verification-otp", { email, type: "sign-in" }),
+  /** Emails a sign-in link and code, and ties the sign-in to this browser. */
+  startSignIn: (email: string) => post<{ ok: true; expires_in: number }>("/api/sign-in/start", { email }),
+  /** Asks whether this browser's sign-in link was confirmed; when it was, this signs the browser in. */
+  signInClaim: () => post<{ status: "pending" | "signed_in" | "expired" }>("/api/sign-in/claim", {}),
+  signInLinkInspect: (token: string) => post<{ email: string; same_browser: boolean; requested_at: string }>("/api/sign-in/link/inspect", { token }),
+  signInLinkConfirm: (token: string) => post<{ same_browser: boolean }>("/api/sign-in/link/confirm", { token }),
+  signInLinkCancel: (token: string) => post<unknown>("/api/sign-in/link/cancel", { token }),
   signIn: (email: string, otp: string) => post<unknown>("/api/auth/sign-in/email-otp", { email, otp }),
   signOut: () => post<unknown>("/api/auth/sign-out", {}),
   serverInfo: () => (serverInfoCache ??= get<ServerInfo>("/.well-known/openmessageboard").catch((e) => ((serverInfoCache = null), Promise.reject(e)))),

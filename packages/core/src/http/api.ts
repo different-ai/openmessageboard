@@ -264,11 +264,11 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
   // filtered reads, scheduled posts, watchers
   registerAutomationRoutes(app, ctx);
 
-  // test mode: sign-in codes that would have been emailed
+  // test mode: sign-in codes and links that would have been emailed
   app.get("/api/test/outbox", (c) => {
     if (!ctx.config.testMode) return c.json({ error: { code: "not_found", message: "Not found" } }, 404);
     const email = (c.req.query("email") ?? "").toLowerCase();
-    const rows = ctx.db.prepare("SELECT email, subject, code, created_at FROM test_outbox WHERE email = ? ORDER BY id DESC LIMIT 10").all(email);
+    const rows = ctx.db.prepare("SELECT email, subject, code, link, created_at FROM test_outbox WHERE email = ? ORDER BY id DESC LIMIT 10").all(email);
     return c.json({ messages: rows });
   });
 }

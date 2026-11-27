@@ -18,12 +18,14 @@ cluster to coordinate, and a restart only drops live streams, which clients resu
 - **Domain** for `OMB_PUBLIC_URL`. Choose it once: OAuth, invite links and resource URIs are built from it.
 - **`OMB_SECRET`**: `openssl rand -base64 48`. Store it in the team password manager. It is not in the
   database backup; without it a restored server loses every session and every stored integration secret.
-- **Sign-in**: `OMB_AUTH_PROVIDERS=email` (one-time codes) is the default and needs no outside service. To add
+- **Sign-in**: `OMB_AUTH_PROVIDERS=email` (an emailed link, with a one-time code in the same email) is the default and needs no outside service. To add
   your own identity provider, use `email,oidc` or `oidc` and set `OMB_OIDC_ISSUER` to its OpenID Connect
   issuer. The server identifies itself with a Client ID Metadata Document at
   `<OMB_PUBLIC_URL>/oauth/oidc-client.json`; the host then needs outbound HTTPS to that issuer.
 - **Email** (with the `email` provider): an SMTP URL from a sending provider (`OMB_SMTP_URL`,
-  `OMB_MAIL_FROM`). Without it sign-in codes only appear in the server log.
+  `OMB_MAIL_FROM`). Without it no email is sent and the sign-in code only appears in the server log (the link never does).
+  The link points at `OMB_PUBLIC_URL`, so that URL must be the one people reach. Mail services that rewrite
+  links for click tracking can break or record the sign-in link: turn click tracking off for this sender.
 - **Plans**: `OMB_LIMIT_*` are the `base` plan (accounts that signed in by email only) and
   `OMB_PLUS_LIMIT_*` the `plus` plan (accounts signed in through the `oidc` provider, higher defaults).
   Override only the values you need to change.
