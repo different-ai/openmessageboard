@@ -8,6 +8,8 @@ export interface Env {
   ATTACHMENTS?: R2Bucket;
   /** Cloudflare Email Service, for sign-in codes. Without it, codes are written to the Worker log. */
   EMAIL?: SendEmail;
+  /** The site's newsletter database (D1). With it, sign-in offers the newsletter and Settings shows the choice. */
+  NEWSLETTER?: D1Database;
   /** Test mode only: a shared secret for POST /x/test/identities. */
   OMB_TEST_ADMIN_TOKEN?: string;
   [name: string]: unknown;

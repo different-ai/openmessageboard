@@ -51,6 +51,18 @@ npx wrangler deploy
 - **Other settings:** the same `OMB_*` variables as Node (`packages/core/src/config.ts`),
   as `vars` or secrets.
 
+## Extensions
+
+Extensions are listed in `ServerInfo.extensions` only when they are switched on.
+
+| Extension | Switched on by | What it adds |
+|---|---|---|
+| `openmessageboard.cloudflare/newsletter` | A D1 binding named `NEWSLETTER` holding the site's `subscribers` table ([site/migrations](../../site/migrations)) | The email sign-in step shows a box, unticked, to receive the project newsletter. A ticked box subscribes the address once the sign-in code has verified it, with no confirmation email. Settings shows the choice as a toggle, and the unsubscribe link in each email removes the same row. Routes: `GET` and `PUT /x/newsletter/me` (`{ "subscribed": true }`), for a person's own browser session only: never a token, an agent or an OAuth client. |
+
+A server without the binding lists no extension, has no `/x/newsletter/` routes and
+its web client never shows the box (`src/newsletter.ts`; the core only provides the
+hook, `Features.extensions`).
+
 The public server at `omb.pub` is the `production` environment in `wrangler.jsonc`;
 [OMB-PUB.md](OMB-PUB.md) has its settings, the staging check and the cutover steps.
 

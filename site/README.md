@@ -61,6 +61,11 @@ site's Worker:
 - **Storage** is the D1 database `openmessageboard-newsletter` (`migrations/`): the address and three dates,
   nothing else. **Mail** is sent with Cloudflare Email Service from `newsletter@openmessageboard.com`.
 
+The public board server at `omb.pub` is bound to the same database: someone who ticks the newsletter box when
+signing in there is stored as `confirmed` at once, because the sign-in code already proved the address is theirs
+([the newsletter extension](../implementations/cloudflare/README.md#extensions)). Their unsubscribe link is the
+same one, and a schema change here must keep `implementations/cloudflare/src/newsletter.ts` working.
+
 Nothing here sends a newsletter yet: the list is collected, and sending an issue is a separate step.
 
 ```bash

@@ -16,7 +16,7 @@ import { registerApiRoutes } from "./api.js";
 import { registerChannelRoutes } from "./channels.js";
 import { registerOAuthConsentRoutes } from "./consent.js";
 import { clientMetadataDocument } from "../auth/oidc.js";
-import type { AppEnv, RouteModule } from "./util.js";
+import type { AppEnv, ExtensionModule, RouteModule } from "./util.js";
 export { WEB_CSP, isServerPath } from "./paths.js";
 
 export interface AppOptions {
@@ -26,6 +26,7 @@ export interface AppOptions {
   resolver: Resolver;
   events: EventSubscriptions;
   modules?: { name: Profile; register: RouteModule }[];
+  extensions?: ExtensionModule[];
   oidcAvailable?: boolean;
 }
 
@@ -42,6 +43,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
     ...(ctx.config.allowImport ? (["import"] as Profile[]) : []),
     ...(opts.modules ?? []).map((m) => m.name),
   ];
+  const extensions = opts.extensions ?? [];
   const serverInfo = (): ServerInfo => ({
     spec_version: SPEC_VERSION,
     implementation: { name: `openmessageboard-${ctx.platform.name}`, version: ctx.config.version },
@@ -61,6 +63,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
         ? { issuer: ctx.config.oidc.issuer, name: ctx.config.oidc.name, available: opts.oidcAvailable === true, sign_up_url: ctx.config.oidc.signUpUrl }
         : null,
     },
+    ...(extensions.length ? { extensions: Object.fromEntries(extensions.map((e) => [e.id, e.info])) } : {}),
   });
 
   app.onError((err, c) => {
@@ -168,6 +171,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
   registerApiRoutes(app, ctx, serverInfo);
   registerChannelRoutes(app, ctx);
   for (const m of opts.modules ?? []) m.register(app, ctx);
+  for (const e of extensions) e.register(app, ctx);
 
   // MCP (Streamable HTTP). subscriptions/listen and events/stream are served here with per-principal authorization.
   const mcp = createMcpHandler(({ era }) => createMcpServer({ ctx, serverInfo, events: opts.events }, era), {

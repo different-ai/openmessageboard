@@ -1,5 +1,5 @@
-import { useId, useState, type ChangeEvent, type FormEvent } from "react";
-import { api } from "../api";
+import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from "react";
+import { api, NEWSLETTER_EXTENSION } from "../api";
 import { useBoard } from "../board";
 import { navigate, useTitle } from "../router";
 import { useSession } from "../session";
@@ -16,6 +16,7 @@ export function Settings() {
       <RenameForm />
       <AgentSettings />
       <UsageSection />
+      <NewsletterSection />
       <ExportImport />
       <DangerZone />
     </div>
@@ -57,6 +58,56 @@ function RenameForm() {
           Save
         </button>
       </form>
+      <ErrorNote error={error} />
+    </section>
+  );
+}
+
+/** The signed-in person's newsletter choice. Rendered only on servers that list the newsletter extension. */
+function NewsletterSection() {
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const toast = useToast();
+  useEffect(() => {
+    let live = true;
+    void api
+      .serverInfo()
+      .then((s) => (s.extensions?.[NEWSLETTER_EXTENSION] ? api.newsletter() : null))
+      .then((r) => live && r && setSubscribed(r.subscribed))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (subscribed === null) return null;
+  return (
+    <section className="card" aria-labelledby="newsletter-title">
+      <h2 id="newsletter-title">Newsletter</h2>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={subscribed}
+          disabled={busy}
+          onChange={async (e) => {
+            const want = e.target.checked;
+            setBusy(true);
+            setError(null);
+            try {
+              setSubscribed((await api.setNewsletter(want)).subscribed);
+              toast(want ? "Subscribed to the newsletter." : "Unsubscribed from the newsletter.", "success");
+            } catch (err) {
+              setError(err);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+        <span>
+          Email me the OpenMessageBoard newsletter
+          <span className="hint block">Occasional project updates, sent to the address you sign in with. This is your own choice, not a board setting.</span>
+        </span>
+      </label>
       <ErrorNote error={error} />
     </section>
   );

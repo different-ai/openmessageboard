@@ -1,21 +1,21 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { ServerInfo } from "@openmessageboard/protocol";
-import { api } from "../api";
+import { api, NEWSLETTER_EXTENSION } from "../api";
 import { navigate, safeNext, useSearchParams, useTitle } from "../router";
 import { useSession } from "../session";
 import { ErrorNote } from "../ui";
 
-type AuthInfo = NonNullable<ServerInfo["auth"]>;
+type AuthInfo = NonNullable<ServerInfo["auth"]> & { newsletter: boolean };
 let authInfoCache: Promise<AuthInfo> | null = null;
 
 /** How this server lets people sign in (an identity provider, an email code, or both). */
 function useAuthInfo(): AuthInfo | null {
   const [info, setInfo] = useState<AuthInfo | null>(null);
   useEffect(() => {
-    const fallback: AuthInfo = { providers: ["email"], oidc: null };
+    const fallback: AuthInfo = { providers: ["email"], oidc: null, newsletter: false };
     const pending: Promise<AuthInfo> = (authInfoCache ??= api
       .serverInfo()
-      .then((s) => s.auth ?? fallback)
+      .then((s) => ({ ...(s.auth ?? fallback), newsletter: !!s.extensions?.[NEWSLETTER_EXTENSION] }))
       .catch(() => fallback));
     let live = true;
     void pending.then((i) => live && setInfo(i));
@@ -79,14 +79,16 @@ export function SignInForm({ onSignedIn, compact, next = "/" }: { onSignedIn: ()
     <div className={`stack signin-form ${compact ? "compact" : ""}`}>
       {oidc && <ProviderButton next={next} name={oidc.name} available={oidc.available} signUpUrl={oidc.sign_up_url} />}
       {oidc && email && <p className="muted center">or</p>}
-      {email && <EmailCodeForm onSignedIn={onSignedIn} compact={compact} secondary={!!oidc} />}
+      {email && <EmailCodeForm onSignedIn={onSignedIn} compact={compact} secondary={!!oidc} newsletter={auth.newsletter} />}
     </div>
   );
 }
 
 /** Email one-time code sign-in. */
-function EmailCodeForm({ onSignedIn, compact, secondary }: { onSignedIn: () => void; compact?: boolean; secondary?: boolean }) {
+function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSignedIn: () => void; compact?: boolean; secondary?: boolean; newsletter?: boolean }) {
   const ids = { email: useId(), code: useId() };
+  // Offered only by servers with the newsletter extension, and never ticked for the person.
+  const [wantsNewsletter, setWantsNewsletter] = useState(false);
   const { refresh } = useSession();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -127,6 +129,9 @@ function EmailCodeForm({ onSignedIn, compact, secondary }: { onSignedIn: () => v
       await api.signIn(email.trim(), code.trim());
       const p = await refresh();
       if (!p) throw new Error("Signed in, but the session didn't start. Check that cookies are allowed for this site.");
+      // The code has just proved the address is theirs, so a ticked box subscribes it without a second email.
+      // Sign-in never fails over this: the choice is also in Settings.
+      if (newsletter && wantsNewsletter) await api.setNewsletter(true).catch(() => undefined);
       const resume = pendingAuthorization();
       if (resume) window.location.href = resume;
       else onSignedIn();
@@ -153,6 +158,15 @@ function EmailCodeForm({ onSignedIn, compact, secondary }: { onSignedIn: () => v
             placeholder="you@example.com"
           />
         </div>
+        {newsletter && (
+          <label className="checkbox">
+            <input type="checkbox" checked={wantsNewsletter} onChange={(e) => setWantsNewsletter(e.target.checked)} />
+            <span>
+              Email me the OpenMessageBoard newsletter
+              <span className="hint block">Occasional project updates. Optional: you can stop any time in Settings or from any issue.</span>
+            </span>
+          </label>
+        )}
         <ErrorNote error={error} />
         <button type="submit" className={`button ${secondary ? "" : "button-primary"} button-block`} disabled={busy}>
           {busy ? "Sending…" : "Email me a sign-in code"}
