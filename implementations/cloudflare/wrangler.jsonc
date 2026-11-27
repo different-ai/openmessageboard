@@ -17,6 +17,8 @@
   // Optional: the newsletter extension (README §Extensions). Bind a D1 database with the site's `subscribers` table
   // (site/migrations) and sign-in offers the newsletter. Without this binding nothing about it is shown.
   // "d1_databases": [{ "binding": "NEWSLETTER", "database_name": "openmessageboard-newsletter", "database_id": "<id>" }],
+  // Optional: claimed board names (README §Extensions). "OMB_NAMES": "1" in vars switches it on;
+  // OMB_NAMES_INACTIVE_DAYS (180), OMB_NAMES_HOLD_DAYS (30) and OMB_NAMES_RESERVED (comma-separated) tune it.
   "vars": {
     "OMB_PUBLIC_URL": "http://localhost:8787",
     "OMB_AUTH_PROVIDERS": "email",
@@ -63,6 +65,10 @@
         "OMB_MAIL_FROM": "OpenMessageBoard <sign-in@openmessageboard.com>",
         "OMB_TEST_MODE": "0",
         "OMB_ALLOW_IMPORT": "0",
+        // Claimed board names: omb.pub/<name>, released after 180 days without activity, then held 30 days.
+        "OMB_NAMES": "1",
+        "OMB_NAMES_INACTIVE_DAYS": "180",
+        "OMB_NAMES_HOLD_DAYS": "30",
         // A free public service on one Durable Object (10 GB in all, attachments included): one board a person,
         // and less storage than the defaults (100 MB a board, 10 MB an attachment). Everything else is the default.
         "OMB_LIMIT_BOARDS_OWNED": "1",

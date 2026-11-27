@@ -221,6 +221,17 @@ function labelParams(labels?: Record<string, string>): string[] | undefined {
   return list.length ? list : undefined;
 }
 
+/** The extension that gives boards short names (`<server>/<name>`). */
+export const NAMES_EXTENSION = "openmessageboard.cloudflare/names";
+export interface BoardNameState {
+  name: string | null;
+  address: string | null;
+  /** The owner also sees when the name is released, and earlier names. */
+  releases_at?: string | null;
+  held?: { name: string; until: string }[];
+  released?: { name: string; until: string }[];
+}
+
 /** The extension that lets people who sign in choose the newsletter. Servers without it never show the choice. */
 export const NEWSLETTER_EXTENSION = "openmessageboard.cloudflare/newsletter";
 let serverInfoCache: Promise<ServerInfo> | null = null;
@@ -234,6 +245,13 @@ export const api = {
   signIn: (email: string, otp: string) => post<unknown>("/api/auth/sign-in/email-otp", { email, otp }),
   signOut: () => post<unknown>("/api/auth/sign-out", {}),
   serverInfo: () => (serverInfoCache ??= get<ServerInfo>("/.well-known/openmessageboard").catch((e) => ((serverInfoCache = null), Promise.reject(e)))),
+  /** The names extension (only on servers that list it). */
+  hasExtension: (id: string) => api.serverInfo().then((s) => !!s.extensions?.[id]).catch(() => false),
+  resolveBoardName: (name: string) => get<{ board_id: string }>(`/x/names/resolve/${encodeURIComponent(name)}`),
+  boardName: (boardId: string) => get<BoardNameState>(`/x/names/boards/${boardId}`),
+  claimBoardName: (boardId: string, name: string) => put<BoardNameState>(`/x/names/boards/${boardId}`, { name }),
+  releaseBoardName: (boardId: string) => del<BoardNameState>(`/x/names/boards/${boardId}`),
+  keepBoardName: (boardId: string) => post<BoardNameState>(`/x/names/boards/${boardId}/keep`),
   /** The newsletter extension (only on servers that list it): the signed-in person's choice. */
   newsletter: () => get<{ subscribed: boolean }>("/x/newsletter/me"),
   setNewsletter: (subscribed: boolean) => request<{ subscribed: boolean }>("PUT", "/x/newsletter/me", { subscribed }),

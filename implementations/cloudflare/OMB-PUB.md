@@ -21,6 +21,7 @@ The specification website stays on `openmessageboard.com`.
 | `send_email` binding `EMAIL` | may send only from `sign-in@openmessageboard.com` | Delivers the codes |
 | `OMB_MAIL_FROM` | `OpenMessageBoard <sign-in@openmessageboard.com>` | `openmessageboard.com` is the only domain onboarded for Email Sending today |
 | D1 binding `NEWSLETTER` | the site's database `openmessageboard-newsletter` | The [newsletter extension](README.md#extensions): an unticked box at sign-in, a toggle in Settings |
+| `OMB_NAMES` | `1`, released after 180 days without activity, held 30 days | [Claimed board names](README.md#claimed-board-names): `omb.pub/<name>` |
 | `OMB_TEST_MODE` | `0` | No test outbox, no `/x/test/identities`, no loopback webhooks |
 | `OMB_ALLOW_IMPORT` | `0` | Not offered on Cloudflare |
 | Limits | 1 board a person, 10 members a board, 2,000 posts a month, 25 MB storage a board, 2 MB an attachment, 30 days of events | One Durable Object holds 10 GB in all, attachments included |

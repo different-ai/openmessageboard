@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from "react";
-import { api, NEWSLETTER_EXTENSION } from "../api";
+import { api, NAMES_EXTENSION, NEWSLETTER_EXTENSION, type BoardNameState } from "../api";
+import { formatDateTime } from "../format";
 import { useBoard } from "../board";
 import { navigate, useTitle } from "../router";
 import { useSession } from "../session";
@@ -14,6 +15,7 @@ export function Settings() {
     <div className="page-section settings">
       <h1 className="page-title">Settings</h1>
       <RenameForm />
+      <ShortNameSection />
       <AgentSettings />
       <UsageSection />
       <NewsletterSection />
@@ -59,6 +61,105 @@ function RenameForm() {
         </button>
       </form>
       <ErrorNote error={error} />
+    </section>
+  );
+}
+
+/** The board's claimed name (`<server>/<name>`). Rendered only on servers that list the names extension. */
+function ShortNameSection() {
+  const { board } = useBoard();
+  const id = useId();
+  const [state, setState] = useState<BoardNameState | null>(null);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const toast = useToast();
+  useEffect(() => {
+    let live = true;
+    void api
+      .hasExtension(NAMES_EXTENSION)
+      .then((on) => (on ? api.boardName(board.id) : null))
+      .then((s) => {
+        if (!live || !s) return;
+        setState(s);
+        setName(s.name ?? "");
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [board.id]);
+  if (!state) return null;
+  const host = window.location.host;
+  const wanted = name.trim().toLowerCase();
+  async function run(action: () => Promise<BoardNameState>, done: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await action();
+      setState(next);
+      setName(next.name ?? "");
+      toast(done, "success");
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="card" aria-labelledby="short-name-title">
+      <h2 id="short-name-title">Short address</h2>
+      <p className="muted">
+        {state.name ? (
+          <>
+            Members can open this board at <strong>{host}/{state.name}</strong>.
+          </>
+        ) : (
+          <>Claim a name and members can open this board at {host}/your-name.</>
+        )}{" "}
+        A name is only an address: it never lets anyone in, and the board keeps its permanent address.
+      </p>
+      <form
+        className="inline-form"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          void run(() => api.claimBoardName(board.id, wanted), state.name ? "Name changed." : "Name claimed.");
+        }}
+      >
+        <Field label="Name" htmlFor={id} hint="3 to 32 characters: lowercase letters, digits and hyphens, starting with a letter.">
+          <input id={id} value={name} maxLength={32} required autoCapitalize="none" spellCheck={false} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <button type="submit" className="button button-primary" disabled={busy || !wanted || wanted === state.name}>
+          {state.name ? "Change name" : "Claim name"}
+        </button>
+      </form>
+      <ErrorNote error={error} />
+      {state.name && state.releases_at && (
+        <>
+          <p className="hint">
+            The name is released if the board has no posts, and you don't visit this page, until {formatDateTime(state.releases_at)}. We email you 30 and 7 days
+            before. The board and everything in it stay either way.
+          </p>
+          <div className="actions start">
+            <button type="button" className="button" disabled={busy} onClick={() => void run(() => api.keepBoardName(board.id), "Name kept.")}>
+              Keep name
+            </button>
+            <button type="button" className="button" disabled={busy} onClick={() => void run(() => api.releaseBoardName(board.id), "Name given up.")}>
+              Give up name
+            </button>
+          </div>
+        </>
+      )}
+      {(state.held?.length ?? 0) > 0 && (
+        <p className="hint">
+          Earlier names that still lead here: {state.held!.map((h) => `${h.name} (until ${formatDateTime(h.until)})`).join(", ")}. Only you can claim them until then.
+        </p>
+      )}
+      {(state.released?.length ?? 0) > 0 && (
+        <p className="hint">
+          Names you can take back: {state.released!.map((r) => `${r.name} (until ${formatDateTime(r.until)})`).join(", ")}. After that anyone can claim them.
+        </p>
+      )}
     </section>
   );
 }

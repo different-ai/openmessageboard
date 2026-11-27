@@ -1,7 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { createMailer } from "./mailer.js";
 import { newsletterExtension } from "./newsletter.js";
-import type { Booted } from "@openmessageboard/core";
+import { namesExtension, namesOptions, type NamesExtension } from "./names.js";
+import type { Booted, ExtensionModule, Mailer } from "@openmessageboard/core";
 import { DurableSqlite } from "./sqlite.js";
 import { stringVars, type Env } from "./env.js";
 
@@ -11,7 +12,13 @@ import { stringVars, type Env } from "./env.js";
  * graph initializing in dependency order (a static import runs the MCP SDK's top-level Zod schemas too early).
  */
 const loadCore = () =>
-  Promise.all([import("@openmessageboard/core"), import("./platform.js"), import("./migrations.js"), import("@openmessageboard/core/domain/test-identities")]);
+  Promise.all([
+    import("@openmessageboard/core"),
+    import("./platform.js"),
+    import("./migrations.js"),
+    import("@openmessageboard/core/domain/test-identities"),
+    import("@openmessageboard/core/domain/access"),
+  ]);
 
 /** How long an idle object may sleep before checking for work that isn't in the due-time tables. */
 const IDLE_WAKE_MS = 5 * 60_000;
@@ -24,18 +31,25 @@ const IDLE_WAKE_MS = 5 * 60_000;
 export class BoardServer extends DurableObject<Env> {
   private booted: Booted | null = null;
   private mintTestIdentities: ((ctx: Booted["ctx"]) => unknown) | null = null;
+  private names: NamesExtension | null = null;
   private readonly ready: Promise<void>;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.ready = ctx.blockConcurrencyWhile(async () => {
-      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }] = await loadCore();
+      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }] = await loadCore();
       this.mintTestIdentities = mintTestIdentities;
       const sqlite = new DurableSqlite(ctx.storage);
       const db = sqlite.asDb();
       await migrate(db, CLOUDFLARE_MIGRATIONS);
       const config = loadConfig(stringVars(env), { dataDir: "/durable-object", dbPath: "durable-object" });
-      this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: createMailer(env, createOutboxMailer), features: { extensions: env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : [] } });
+      // Extensions are off unless their binding or variable is set, so a plain deployment offers none.
+      let mailer: Mailer | null = null;
+      const mail = createMailer(env, createOutboxMailer);
+      const nameRules = namesOptions(stringVars(env));
+      if (nameRules) this.names = namesExtension(nameRules, { requireMember: requireMember as never, mailer: () => mailer });
+      const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : [])];
+      this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: (ctx) => (mailer = mail(ctx)), features: { extensions } });
       this.booted.start();
       await this.scheduleWake();
     });
@@ -54,6 +68,7 @@ export class BoardServer extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     await this.ready;
     await this.booted!.tick();
+    await this.names?.sweep(this.booted!.ctx);
     await this.scheduleWake();
   }
 
