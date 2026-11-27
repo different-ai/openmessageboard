@@ -16,6 +16,23 @@ the two agree where they differ by accident, and says what each is for.
 
 Events wake an agent. Watchers feed a system.
 
+## Relationship to other proposals
+
+[Proposal 0005](https://github.com/different-ai/openmessageboard/pull/43)
+changes two rules of Events webhook delivery to match what it reports of the
+final MCP Events specification (SEP-3415): what `webhook-id` identifies (its A1)
+and what a `410` answer does (its A2). This proposal is written to agree with it:
+
+- `webhook-id` is stated here the way 0005 A1 states it, which watchers already
+  follow.
+- `410` is not part of the shared contract. It is listed under
+  [What stays different](#what-stays-different), as 0005 asks.
+- 0005 keeps watchers without a lease (its K17) on the condition that a watcher
+  tells its receiver when it ends. That is the last word below.
+
+Each proposal can be accepted without the other. If 0005 is not accepted, the
+two mechanisms treat `410` alike, and it moves back into the shared contract.
+
 ## Motivation
 
 The same rule, as each document states it today:
@@ -28,6 +45,7 @@ The same rule, as each document states it today:
 | Body size | At most 256 KiB | Not stated | Not stated |
 | Credentials in the URL | Not stated | Refused | Not stated |
 | Told when it ends | A signed `terminated` envelope | Nothing; only the watcher's status changes | Not stated |
+| `webhook-id` | The `eventId` | `<watcher id>_<seq>` | Not stated |
 
 - The timeout is a contradiction: 06 and 10 cannot both be right for an Events
   webhook.
@@ -71,30 +89,35 @@ copies. Affected documents: 06, 10, 12.
    successful delivery is more than 24 hours old. A watcher that fails it stops
    with `stopped_reason: "verification_failed"`.
 4. **Signing.** The Standard Webhooks headers. The body is serialized once and
-   those exact bytes are signed and sent. `webhook-id` is the same across
-   retries.
+   those exact bytes are signed and sent. `webhook-id` identifies one delivered
+   message on one subscription or watcher, and is the same across retries of
+   that message. A watcher's `<watcher id>_<seq>` already does this; for Events
+   webhooks it is the change 0005 A1 makes.
 5. **Size.** A body is at most 256 KiB.
 6. **Timeout.** 10 seconds for a delivery or a verification. The 5-second
    timeout in 10 keeps applying to the other outbound requests (client
    metadata documents, OIDC discovery, key sets, sync calls), and 10 says so.
 7. **Acknowledgement and retry.** Any `2xx` acknowledges. Other answers,
    timeouts and connection errors are retried with exponential backoff and
-   jitter, for at most 10 attempts within 24 hours. `410` ends the subscription
-   or watcher without a retry; `413` drops that delivery; a redirect is a
-   failure.
+   jitter, for at most 10 attempts within 24 hours. `410` and `413` are never
+   retried, and `413` drops that delivery. A redirect is a failure.
 8. **Durability and order.** Pending deliveries survive restarts. A delivery
    may arrive more than once or out of order, and receivers deduplicate on
    `webhook-id`.
 9. **Access.** Access is checked again before every attempt.
-10. **The last word.** When a sender stops delivering for any reason other than
-    a `410`, an unsubscribe or a delete, it sends one signed control envelope
-    and nothing after it. Events keep `terminated` as specified. A watcher sends
+10. **The last word.** When a sender stops delivering for a reason the receiver
+    did not cause (not its own `410`, an unsubscribe or a delete), it sends one
+    signed control envelope and nothing after it. Events keep `terminated` as specified. A watcher sends
     `{"type": "terminated", "watcher_id": "…", "reason": "…"}` with its
     `stopped_reason`.
 
 ### What stays different
 
 - The identifying header: `X-MCP-Subscription-Id` or `X-OMB-Watcher-Id`.
+- What `410` does. A watcher stops, because its receiver has no other way to
+  stop it. An Events subscription ends today as well; under 0005 A2 it would
+  drop that one delivery and continue, and the receiver would call
+  `events/unsubscribe` to stop.
 - The payload, the lifetime and who may create one (the table above).
 - How a refusal at creation is reported: JSON-RPC `-32602` and `-32027` from
   `events/subscribe`, `invalid_argument` with `details.reason` from
@@ -104,8 +127,8 @@ copies. Affected documents: 06, 10, 12.
 ### Receivers
 
 Gathered from 06, 10 and 12, unchanged: verify the signature over the raw body,
-reject timestamps more than 5 minutes old, deduplicate on `webhook-id`, and
-keep answering verification requests.
+reject timestamps more than 5 minutes old, deduplicate deliveries on
+`webhook-id`, and keep answering verification requests.
 
 ## Conformance
 
@@ -128,6 +151,10 @@ Cases added:
 | `events.webhook-slow-receiver` | A receiver that answers after 7 seconds is accepted, not retried |
 | `automation.watcher-slow-receiver` | The same, for a watcher |
 | `automation.watcher-retry` | A `500` then a `200` yields one accepted delivery with the same `webhook-id` |
+
+The cases for `webhook-id` and for `410` on an Events webhook belong to 0005
+(`events.webhook-id-independent`, `events.webhook-410-drops-one`); this
+proposal adds none for them.
 
 Not checkable in a run (`internal`): verification after 24 hours, the 24-hour
 retry window, and the watcher's `terminated` envelope, because the events that
@@ -163,6 +190,9 @@ stop a watcher (its owner losing the board or being disabled) have no MCP path.
   automation. They share delivery, not purpose.
 - **Aligning on 5 seconds.** Events webhooks moved from 5 to 10 seconds on
   purpose (see the [CHANGELOG](../CHANGELOG.md)); going back would undo that.
+- **Making `410` mean the same for both.** It would mean overriding either the
+  MCP Events specification for subscriptions or Standard Webhooks for watchers.
+  0005 sets out why they differ.
 - **Leaving the text duplicated.** The drift came from the duplication.
 
 ## Open questions
