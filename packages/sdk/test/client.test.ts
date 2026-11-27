@@ -24,6 +24,34 @@ describe("OmbClient against the fake server", () => {
     assert.ok(fake.rpcMethods.includes("server/discover"));
   });
 
+  it("as(profile) sends the OMB-Profile header on its own connection; the original client does not", async () => {
+    const fx = client.as("fixer-1");
+    assert.equal(fx.profile, "fixer-1");
+    await fx.whoami();
+    assert.equal(fake.calls.at(-1)?.profile, "fixer-1");
+    assert.equal(fake.calls.at(-1)?.auth, "Bearer good-token");
+    await client.whoami();
+    assert.equal(fake.calls.at(-1)?.profile, undefined);
+    assert.equal(fx.as(null).profile, null);
+    await fx.close();
+    assert.throws(() => client.as("1-bad name"), (e: unknown) => e instanceof OmbError && e.code === "invalid_argument");
+  });
+
+  it("createScopedToken and listActors call their tools", async () => {
+    fake.tools.create_scoped_token = (args) => ({
+      id: "tok_1",
+      token: "omb_pt_secret",
+      prefix: "omb_pt_secre",
+      scope: { boards: args.boards ?? null, can: args.can ?? ["read", "post", "react", "label"], profile: null, expires_at: new Date(Date.now() + 3_600_000).toISOString() },
+    });
+    fake.tools.list_actors = () => ({ actors: [{ id: "p_maya", kind: "human", handle: "maya", display_name: "Maya", via: null, is_member: true }] });
+    const t = await client.createScopedToken({ boards: ["b_main"], can: ["read"] });
+    assert.deepEqual(t.scope.can, ["read"]);
+    assert.deepEqual(fake.calls.at(-1)?.args, { boards: ["b_main"], can: ["read"] });
+    const { actors } = await client.listActors({ board_id: "b_main" });
+    assert.equal(actors[0]?.handle, "maya");
+  });
+
   it("maps tool errors to OmbError with code and details", async () => {
     fake.tools.claim_task = () => {
       throw new ToolError("task_already_claimed", "Someone else holds this task", { assignee: "p_omar" });
@@ -97,6 +125,51 @@ describe("OmbClient against the fake server", () => {
     };
     assert.equal(await client.claimNext(fake.boardId, { area: "ios" }), null);
     assert.deepEqual(fake.calls.at(-1)?.args, { board_id: fake.boardId, labels: { area: "ios" } });
+  });
+
+  it("claimNext waits in server-side slices and returns a ClaimedTask that renews and completes", async () => {
+    const { thread } = fake.addThread("Fix it", undefined, "Do it", { task: true, labels: { area: "ios" } });
+    let calls = 0;
+    fake.tools.claim_task = (args) => {
+      calls++;
+      if (calls === 1) throw new ToolError("no_task_available", "Nothing yet");
+      return { thread: { ...thread, task: { ...thread.task!, state: "claimed" } }, claim: { epoch: 3, token: "tok-1", until: "2026-11-24T12:05:00.000Z" } };
+    };
+    fake.tools.renew_task = (args) => {
+      assert.equal(args.token, "tok-1");
+      return { thread, claim: { epoch: 3, token: "tok-1", until: "2026-11-24T12:10:00.000Z" } };
+    };
+    let settled: Record<string, unknown> | undefined;
+    fake.tools.update_task = (args) => {
+      settled = args;
+      if (args.action === "fail") throw new ToolError("claim_lost", "This claim is over", { state: "ready" });
+      return { thread, message: null };
+    };
+    const claimed = await client.claimNext(fake.boardId, { area: "ios" }, { waitSeconds: 30 });
+    assert.ok(claimed);
+    assert.equal(calls, 2);
+    assert.equal(fake.calls.filter((c) => c.name === "claim_task").at(-1)?.args.wait_seconds, 25);
+    assert.equal(claimed.id, thread.id);
+    assert.equal(claimed.epoch, 3);
+    await claimed.renew();
+    assert.equal(claimed.until, "2026-11-24T12:10:00.000Z");
+    await claimed.complete("Done.", { idempotencyKey: "k-1" });
+    assert.deepEqual(settled, { thread_id: thread.id, action: "complete", token: "tok-1", result: "Done.", idempotency_key: "k-1" });
+    await assert.rejects(claimed.fail("gave up"), (err: unknown) => err instanceof OmbError && err.code === "claim_lost");
+    delete fake.tools.claim_task;
+    delete fake.tools.renew_task;
+    delete fake.tools.update_task;
+  });
+
+  it("createMany sends the plan in one call", async () => {
+    fake.tools.create_tasks = () => ({ threads: [] });
+    await client.createMany(fake.boardId, [{ key: "a", title: "A", body: "a" }, { title: "B", body: "b", needs: [{ key: "a" }] }], { idempotencyKey: "plan-1" });
+    assert.deepEqual(fake.calls.at(-1)?.args, {
+      board_id: fake.boardId,
+      tasks: [{ key: "a", title: "A", body: "a" }, { title: "B", body: "b", needs: [{ key: "a" }] }],
+      idempotency_key: "plan-1",
+    });
+    delete fake.tools.create_tasks;
   });
 
   it("waitForReply resolves with the next message from someone else", async () => {

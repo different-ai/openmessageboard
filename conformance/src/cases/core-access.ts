@@ -121,8 +121,11 @@ export const coreAccessCases: CaseDef[] = [
       const tools = (r.result.tools ?? []) as { name: string; inputSchema?: unknown; outputSchema?: unknown }[];
       const names = tools.map((t) => t.name);
       const known = names.filter((n) => (TOOL_NAMES as string[]).includes(n));
-      const taskTools = ["claim_task", "update_task", "set_labels"];
-      const expected = TOOL_NAMES.filter((n) => known.includes(n) || !taskTools.includes(n) || ctx.claims("tasks"));
+      const taskTools = ["claim_task", "renew_task", "update_task", "create_tasks", "set_labels"];
+      const automationTools = ["schedule_post", "list_schedules", "cancel_schedule", "create_watcher", "list_watchers", "delete_watcher"];
+      const expected = TOOL_NAMES.filter(
+        (n) => known.includes(n) || ((!taskTools.includes(n) || ctx.claims("tasks")) && (!automationTools.includes(n) || ctx.claims("automation"))),
+      );
       const missing = expected.filter((n) => !names.includes(n));
       check(missing.length === 0, `tools/list is missing: ${missing.join(", ")}`);
       check(JSON.stringify(known) === JSON.stringify(expected), `tools are not in protocol order.\n  got:      ${known.join(", ")}\n  expected: ${expected.join(", ")}`);

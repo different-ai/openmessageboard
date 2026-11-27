@@ -1,12 +1,26 @@
 import type { Change, Integration, Message, Thread } from "@openmessageboard/protocol";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { api, isApiError } from "../api";
 import { useBoard, useBoardChanges } from "../board";
-import { MarkdownEditor, extractMentions, useIdempotencyKey } from "../composer";
-import { formatDateTime, labelError, newIdempotencyKey, MAX_LABELS } from "../format";
+import { AttachmentPicker, MarkdownEditor, extractMentions, useAttachments, useIdempotencyKey } from "../composer";
+import { formatDateTime, labelError, MAX_LABELS } from "../format";
 import { excerpt, Markdown } from "../markdown";
+import {
+  AttachmentList,
+  BlockList,
+  EditedMark,
+  MessageEditor,
+  MessageLabels,
+  ReactionChips,
+  ReactionPicker,
+  canEditMessage,
+  useReactionToggle,
+  type MessageUpdate,
+} from "../messageParts";
 import { Link, useTitle } from "../router";
 import { AccessRequired } from "./Status";
+import { ScheduleDialog, ThreadSchedules } from "../schedules";
+import { TaskPanel } from "./TaskPanel";
 import {
   Author,
   Avatar,
@@ -29,6 +43,11 @@ function upsertMessage(list: Message[], m: Message): Message[] {
   return copy;
 }
 
+/** Updates a message only if it is loaded; never appends. */
+function replaceMessage(list: Message[], m: Message): Message[] {
+  return list.some((x) => x.id === m.id) ? list.map((x) => (x.id === m.id ? m : x)) : list;
+}
+
 export function ThreadPage({ threadId }: { threadId: string }) {
   const { board, live, members, meId, isOwner, canWrite } = useBoard();
   const [thread, setThread] = useState<Thread | null>(null);
@@ -38,6 +57,7 @@ export function ThreadPage({ threadId }: { threadId: string }) {
   const [denied, setDenied] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [scheduleKey, setScheduleKey] = useState(0);
   const nextRef = useRef<string | null>(null);
   nextRef.current = next;
   useTitle(thread?.title ?? "Thread");
@@ -79,9 +99,14 @@ export function ThreadPage({ threadId }: { threadId: string }) {
       if (c.thread) setThread({ ...c.thread, unread_count: 0 });
       if (c.message) {
         const m = c.message;
-        // While older pages are still unloaded, new messages arrive with the last page.
-        if (c.type === "message.created" && nextRef.current) return;
-        setMessages((list) => upsertMessage(list, m));
+        if (c.type === "message.created") {
+          // While older pages are still unloaded, new messages arrive with the last page.
+          if (nextRef.current) return;
+          setMessages((list) => upsertMessage(list, m));
+        } else {
+          // Edits, reactions, labels and deletes update a loaded message in place.
+          setMessages((list) => replaceMessage(list, m));
+        }
       } else if (c.type === "message.deleted" && c.message_id) {
         setMessages((list) => list.map((x) => (x.id === c.message_id ? { ...x, deleted: true, body: null } : x)));
       }
@@ -107,6 +132,14 @@ export function ThreadPage({ threadId }: { threadId: string }) {
   }
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const updateMessage = useCallback(
+    (id: string, next: Message | ((current: Message) => Message)) =>
+      setMessages((list) => list.map((x) => (x.id === id ? (typeof next === "function" ? next(x) : next) : x))),
+    [],
+  );
+  // The first page loads first, so the root is always messages[0]. Its labels are the thread's
+  // labels, edited in the Labels panel.
+  const rootId = messages[0]?.id;
 
   if (denied) return <AccessRequired />;
   if (error && !thread)
@@ -127,6 +160,9 @@ export function ThreadPage({ threadId }: { threadId: string }) {
           <h1>{thread.title}</h1>
           <div className="thread-head-meta">
             {thread.task ? <TaskBadge state={thread.task.state} /> : <span className="badge">Discussion</span>}
+            <Link to={`/b/${board.id}?channel=${encodeURIComponent(thread.channel)}`} className="channel-tag">
+              #{thread.channel}
+            </Link>
             <span>
               Started by <Author p={thread.created_by} /> <TimeAgo iso={thread.created_at} />
             </span>
@@ -143,6 +179,11 @@ export function ThreadPage({ threadId }: { threadId: string }) {
               parent={m.reply_to ? (byId.get(m.reply_to) ?? null) : null}
               canDelete={!m.deleted && (m.author.id === meId || isOwner)}
               canReply={canWrite && !m.deleted}
+              canEdit={canEditMessage(m, meId, canWrite)}
+              canLabel={canWrite && !m.deleted && m.id !== rootId}
+              showLabels={m.id !== rootId}
+              members={members}
+              onUpdate={(next) => updateMessage(m.id, next)}
               onReply={() => {
                 setReplyTo(m);
                 document.getElementById("reply-body")?.focus();
@@ -160,8 +201,10 @@ export function ThreadPage({ threadId }: { threadId: string }) {
         )}
         <ErrorNote error={error} />
 
+        <ThreadSchedules threadId={thread.id} refreshKey={scheduleKey} />
         {canWrite ? (
           <ReplyForm
+            onScheduled={() => setScheduleKey((k) => k + 1)}
             thread={thread}
             replyTo={replyTo}
             onClearReply={() => setReplyTo(null)}
@@ -179,6 +222,7 @@ export function ThreadPage({ threadId }: { threadId: string }) {
       <aside className="aside-col">
         {thread.task && (
           <TaskPanel
+            key={thread.id}
             thread={thread}
             onThread={setThread}
             onMessage={(m) => setMessages((list) => upsertMessage(list, m))}
@@ -244,18 +288,35 @@ function MessageItem({
   parent,
   canDelete,
   canReply,
+  canEdit,
+  canLabel,
+  showLabels,
+  members,
   onReply,
   onDeleted,
+  onUpdate,
 }: {
   m: Message;
   parent: Message | null;
   canDelete: boolean;
   canReply: boolean;
+  canEdit: boolean;
+  canLabel: boolean;
+  showLabels: boolean;
+  members: ReturnType<typeof useBoard>["members"];
   onReply: () => void;
   onDeleted: (m: Message) => void;
+  onUpdate: MessageUpdate;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [addingLabel, setAddingLabel] = useState(false);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const labelRef = useRef<HTMLButtonElement>(null);
+  const toggleReaction = useReactionToggle(m, onUpdate);
   const name = m.source ? m.source.author_name : m.author.display_name;
+  const isEditing = editing && canEdit;
+  const refocus = (ref: RefObject<HTMLButtonElement | null>) => requestAnimationFrame(() => ref.current?.focus());
   return (
     <li id={`m-${m.id}`} className={`message ${m.deleted ? "deleted" : ""} ${m.source ? `synced synced-${m.source.platform}` : ""}`}>
       <Avatar name={name} kind={m.author.kind} />
@@ -265,6 +326,7 @@ function MessageItem({
           <a href={`#m-${m.id}`} className="message-time">
             <TimeAgo iso={m.created_at} />
           </a>
+          <EditedMark m={m} />
         </div>
         {m.reply_to && (
           <a href={`#m-${m.reply_to}`} className="quote">
@@ -280,14 +342,60 @@ function MessageItem({
         )}
         {m.deleted ? (
           <p className="tombstone">This message was deleted.</p>
+        ) : isEditing ? (
+          <MessageEditor
+            m={m}
+            members={members}
+            onUpdate={onUpdate}
+            onClose={() => {
+              setEditing(false);
+              refocus(editRef);
+            }}
+          />
         ) : (
           <Markdown source={m.body ?? ""} />
         )}
-        {!m.deleted && (canReply || canDelete) && (
+        {!m.deleted && (
+          <>
+            <BlockList blocks={m.blocks} />
+            <AttachmentList attachments={m.attachments} />
+            {showLabels && (
+              <MessageLabels
+                m={m}
+                canEdit={canLabel}
+                adding={addingLabel}
+                onCloseAdd={() => {
+                  setAddingLabel(false);
+                  refocus(labelRef);
+                }}
+                onUpdate={onUpdate}
+              />
+            )}
+            <ReactionChips m={m} onToggle={(emoji) => void toggleReaction(emoji)} />
+          </>
+        )}
+        {!m.deleted && !isEditing && (
           <div className="message-actions">
             {canReply && (
               <button type="button" className="link-button" onClick={onReply}>
                 Reply
+              </button>
+            )}
+            <ReactionPicker m={m} onToggle={(emoji) => void toggleReaction(emoji)} />
+            {canEdit && (
+              <button ref={editRef} type="button" className="link-button" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            )}
+            {canLabel && (
+              <button
+                ref={labelRef}
+                type="button"
+                className="link-button"
+                aria-expanded={addingLabel}
+                onClick={() => setAddingLabel((a) => !a)}
+              >
+                Add label
               </button>
             )}
             {canDelete && (
@@ -318,30 +426,40 @@ function ReplyForm({
   replyTo,
   onClearReply,
   onPosted,
+  onScheduled,
   members,
 }: {
   thread: Thread;
   replyTo: Message | null;
   onClearReply: () => void;
   onPosted: (m: Message) => void;
+  onScheduled: () => void;
   members: ReturnType<typeof useBoard>["members"];
 }) {
   const [body, setBody] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const idem = useIdempotencyKey();
   const toast = useToast();
+  const files = useAttachments(thread.board_id);
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (busy || !body.trim()) return;
-    const payload = { body, reply_to: replyTo?.id, mentions: extractMentions(body, members) };
+    if (busy || files.uploading || !body.trim()) return;
+    const payload = {
+      body,
+      reply_to: replyTo?.id,
+      mentions: extractMentions(body, members),
+      attachments: files.ids.length ? files.ids : undefined,
+    };
     setBusy(true);
     setError(null);
     try {
       const res = await api.reply(thread.id, { ...payload, idempotency_key: idem.keyFor(payload) });
       idem.reset();
       setBody("");
+      files.clear();
       onPosted(res.message);
       if (res.usage_warning?.length) {
         const w = res.usage_warning[0]!;
@@ -355,6 +473,7 @@ function ReplyForm({
   }
 
   return (
+    <>
     <form className="card composer reply" onSubmit={submit} aria-label="Reply">
       {replyTo && (
         <div className="replying-to">
@@ -376,168 +495,31 @@ function ReplyForm({
         rows={4}
         onSubmitShortcut={() => void submit()}
       />
+      <AttachmentPicker state={files} disabled={busy} />
       <ErrorNote error={error} />
       <div className="actions">
-        <button type="submit" className="button button-primary" disabled={busy || !body.trim()}>
-          {busy ? "Sending…" : error ? "Retry" : "Reply"}
+        <button type="button" className="button" disabled={busy || !body.trim()} onClick={() => setScheduling(true)}>
+          Schedule…
+        </button>
+        <button type="submit" className="button button-primary" disabled={busy || files.uploading || !body.trim()}>
+          {busy ? "Sending…" : files.uploading ? "Uploading files…" : error ? "Retry" : "Reply"}
         </button>
       </div>
     </form>
-  );
-}
-
-function TaskPanel({
-  thread,
-  onThread,
-  onMessage,
-}: {
-  thread: Thread;
-  onThread: (t: Thread) => void;
-  onMessage: (m: Message) => void;
-}) {
-  const { board, meId, isOwner, canWrite } = useBoard();
-  const task = thread.task!;
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [completing, setCompleting] = useState(false);
-  const [result, setResult] = useState("");
-  const resultId = useId();
-  const toast = useToast();
-  const isAssignee = task.assignee?.id === meId;
-  const isCreator = thread.created_by.id === meId;
-  const canFinish = isAssignee || isOwner;
-  const canCancel = isCreator || isOwner;
-
-  async function run(label: string, fn: () => Promise<{ thread: Thread; message?: Message | null }>, done: string) {
-    setBusy(label);
-    setError(null);
-    try {
-      const res = await fn();
-      onThread(res.thread);
-      if (res.message) onMessage(res.message);
-      toast(done, "success");
-      setCompleting(false);
-      setResult("");
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const update = (action: "complete" | "release" | "cancel" | "reopen", extra?: string) =>
-    api.updateTask(thread.id, { action, result: extra || undefined, idempotency_key: newIdempotencyKey() });
-
-  return (
-    <section className="card panel" aria-labelledby="task-title">
-      <h2 id="task-title">Task</h2>
-      <dl className="facts">
-        <div>
-          <dt>State</dt>
-          <dd>
-            <TaskBadge state={task.state} />
-          </dd>
-        </div>
-        <div>
-          <dt>Assignee</dt>
-          <dd>{task.assignee ? <Author p={task.assignee} /> : <span className="muted">Nobody yet</span>}</dd>
-        </div>
-        {task.claimed_at && (
-          <div>
-            <dt>Claimed</dt>
-            <dd title={formatDateTime(task.claimed_at)}>
-              <TimeAgo iso={task.claimed_at} />
-            </dd>
-          </div>
-        )}
-        {task.completed_at && (
-          <div>
-            <dt>{task.state === "cancelled" ? "Closed" : "Completed"}</dt>
-            <dd>
-              <TimeAgo iso={task.completed_at} />
-            </dd>
-          </div>
-        )}
-      </dl>
-      {canWrite && (
-        <div className="task-actions">
-          {task.state === "open" && (
-            <button
-              type="button"
-              className="button button-primary"
-              disabled={!!busy}
-              onClick={() => run("claim", () => api.claimTask(board.id, { thread_id: thread.id }), "You claimed this task.")}
-            >
-              {busy === "claim" ? "Claiming…" : "Claim"}
-            </button>
-          )}
-          {task.state === "claimed" && canFinish && !completing && (
-            <button type="button" className="button button-primary" disabled={!!busy} onClick={() => setCompleting(true)}>
-              Complete…
-            </button>
-          )}
-          {task.state === "claimed" && canFinish && (
-            <button
-              type="button"
-              className="button"
-              disabled={!!busy}
-              onClick={() => run("release", () => update("release"), "Task released. It's open again.")}
-            >
-              {busy === "release" ? "Releasing…" : "Release"}
-            </button>
-          )}
-          {(task.state === "open" || task.state === "claimed") && canCancel && (
-            <button
-              type="button"
-              className="button"
-              disabled={!!busy}
-              onClick={() => run("cancel", () => update("cancel"), "Task cancelled.")}
-            >
-              {busy === "cancel" ? "Cancelling…" : "Cancel task"}
-            </button>
-          )}
-          {(task.state === "done" || task.state === "cancelled") && canCancel && (
-            <button
-              type="button"
-              className="button"
-              disabled={!!busy}
-              onClick={() => run("reopen", () => update("reopen"), "Task reopened.")}
-            >
-              {busy === "reopen" ? "Reopening…" : "Reopen"}
-            </button>
-          )}
-        </div>
-      )}
-      {completing && (
-        <form
-          className="stack complete-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run("complete", () => update("complete", result.trim()), "Task marked done.");
-          }}
-        >
-          <div className="field">
-            <label htmlFor={resultId}>Result (optional)</label>
-            <textarea
-              id={resultId}
-              rows={4}
-              value={result}
-              onChange={(e) => setResult(e.target.value)}
-              placeholder="What was done? Posted as a reply. Markdown supported."
-            />
-          </div>
-          <div className="actions">
-            <button type="button" className="button" onClick={() => setCompleting(false)}>
-              Back
-            </button>
-            <button type="submit" className="button button-primary" disabled={!!busy}>
-              {busy === "complete" ? "Completing…" : "Mark done"}
-            </button>
-          </div>
-        </form>
-      )}
-      <ErrorNote error={error} />
-    </section>
+    {/* Outside the reply form: forms can't nest. */}
+    <ScheduleDialog
+        open={scheduling}
+        onClose={() => setScheduling(false)}
+        threadId={thread.id}
+        body={body}
+        members={members}
+        onScheduled={(s) => {
+          setBody("");
+          onScheduled();
+          toast(`Scheduled for ${s.next_run_at ? formatDateTime(s.next_run_at) : "later"}.`, "success");
+        }}
+      />
+    </>
   );
 }
 

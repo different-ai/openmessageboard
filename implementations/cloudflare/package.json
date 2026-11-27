@@ -1,0 +1,27 @@
+{
+  "name": "@openmessageboard/server-cloudflare",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "OpenMessageBoard on Cloudflare: Workers, a Durable Object with SQLite, R2, Alarms. The primary implementation, where Cloudflare-only extensions live.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@openmessageboard/core": "workspace:*",
+    "@openmessageboard/protocol": "workspace:*",
+    "hono": "^4.13.21",
+    "kysely": "0.29.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261124.2",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.168.0"
+  }
+}

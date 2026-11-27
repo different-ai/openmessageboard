@@ -6,7 +6,7 @@ cluster to coordinate, and a restart only drops live streams, which clients resu
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` (repository root) | Server image: API, MCP endpoint and web client; runs as the non-root `node` user; data on `/data` |
+| `Dockerfile` (repository root) | Server image: API, MCP endpoint and web client; runs as the non-root `node` user; data on `/data`. Each release also publishes it, signed, as `ghcr.io/different-ai/openmessageboard-server:<version>` (for example `0.1.0-alpha.2`); the compose file builds from the checkout by default |
 | `deploy/docker-compose.yml` | Single host: server, Litestream sidecar, restore-on-empty-disk, Caddy for TLS |
 | `deploy/.env.example` | Every setting, with defaults and comments; copy to `deploy/.env` |
 | `deploy/litestream.yml` | Replication settings (also baked into the image at `/etc/litestream.yml`) |

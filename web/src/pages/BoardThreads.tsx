@@ -2,22 +2,26 @@ import type { Change, Labels, Thread } from "@openmessageboard/protocol";
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { api, isApiError, type ThreadQuery } from "../api";
 import { useBoard, useBoardChanges } from "../board";
-import { MarkdownEditor, extractMentions, useIdempotencyKey } from "../composer";
+import { AttachmentPicker, MarkdownEditor, extractMentions, useAttachments, useIdempotencyKey } from "../composer";
 import { MAX_TITLE, parseLabels, plural } from "../format";
 import { Link, navigate, useLocation, useTitle } from "../router";
 import { useSession } from "../session";
 import { Author, CopyField, Empty, ErrorNote, LabelChips, Loading, PlatformName, TaskBadge, TimeAgo, errorText, useToast } from "../ui";
+import { FilteredMessages, MessageFilterBar, hasMessageFilters, readMessageFilters, withMessageFilters } from "./MessageFilters";
+import { ChannelsPanel, DEFAULT_CHANNEL, channelError, inChannel, useChannels } from "../channels";
 
-type Filters = { filter: "all" | "following" | "unread"; kind: "all" | "discussion" | "task"; labels: Labels };
+type Filters = { filter: "all" | "following" | "unread"; kind: "all" | "discussion" | "task"; labels: Labels; channel?: string | undefined };
 
 function readFilters(search: string): Filters {
   const p = new URLSearchParams(search);
   const filter = p.get("filter");
   const kind = p.get("kind");
+  const channel = p.get("channel") ?? undefined;
   return {
     filter: filter === "following" || filter === "unread" ? filter : "all",
     kind: kind === "discussion" || kind === "task" ? kind : "all",
     labels: parseLabels(p.getAll("label").join(",")).labels,
+    channel: channel && !channelError(channel, true) ? channel : undefined,
   };
 }
 
@@ -26,12 +30,14 @@ function filtersHref(boardId: string, f: Filters) {
   if (f.filter !== "all") p.set("filter", f.filter);
   if (f.kind !== "all") p.set("kind", f.kind);
   for (const [k, v] of Object.entries(f.labels)) p.append("label", `${k}=${v}`);
+  if (f.channel) p.set("channel", f.channel);
   const s = p.toString();
   return `/b/${boardId}${s ? `?${s}` : ""}`;
 }
 
-export function matchesFilters(t: Thread, f: Pick<Filters, "kind" | "labels"> & { filter?: Filters["filter"] }): boolean {
+export function matchesFilters(t: Thread, f: Pick<Filters, "kind" | "labels"> & { filter?: Filters["filter"]; channel?: string | undefined }): boolean {
   if (f.kind !== "all" && t.kind !== f.kind) return false;
+  if (!inChannel(f.channel, t.channel)) return false;
   if (f.filter === "following" && !t.following) return false;
   if (f.filter === "unread" && t.unread_count === 0) return false;
   return Object.entries(f.labels).every(([k, v]) => t.labels[k] === v);
@@ -68,6 +74,7 @@ export function BoardThreads() {
   const { search } = useLocation();
   const filters = readFilters(search);
   const filterKey = filtersHref(board.id, filters);
+  const messageFilters = readMessageFilters(search);
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -77,6 +84,7 @@ export function BoardThreads() {
 
   const query = useCallback(
     (page_cursor?: string): ThreadQuery => ({
+      channel: filters.channel,
       filter: filters.filter,
       kind: filters.kind === "all" ? undefined : filters.kind,
       labels: Object.keys(filters.labels).length ? filters.labels : undefined,
@@ -135,7 +143,7 @@ export function BoardThreads() {
     }
   }
 
-  const setFilters = (f: Partial<Filters>) => navigate(filtersHref(board.id, { ...filters, ...f }), { replace: true });
+  const setFilters = (f: Partial<Filters>) => navigate(withMessageFilters(filtersHref(board.id, { ...filters, ...f }), search), { replace: true });
 
   return (
     <div className="with-aside">
@@ -175,22 +183,26 @@ export function BoardThreads() {
           )}
         </div>
         <LabelFilter labels={filters.labels} onChange={(labels) => setFilters({ labels })} />
+        <MessageFilterBar boardId={board.id} search={search} members={members} filters={messageFilters} />
 
         {composing && (
           <NewThreadForm
             boardId={board.id}
             members={members}
+            channel={filters.channel && !filters.channel.endsWith("/") ? filters.channel : DEFAULT_CHANNEL}
             onCancel={() => setComposing(false)}
             onPosted={(t) => navigate(`/b/${board.id}/t/${t.id}`)}
           />
         )}
 
         <ErrorNote error={error} />
-        {threads === null && !error ? (
+        {hasMessageFilters(messageFilters) ? (
+          <FilteredMessages filters={messageFilters} labels={filters.labels} channel={filters.channel} />
+        ) : threads === null && !error ? (
           <Loading label="Loading threads…" />
         ) : threads && threads.length === 0 ? (
           <Empty title={filters.filter === "unread" ? "You're all caught up" : "No threads here yet"}>
-            {filters.filter !== "all" || filters.kind !== "all" || Object.keys(filters.labels).length ? (
+            {filters.filter !== "all" || filters.kind !== "all" || filters.channel || Object.keys(filters.labels).length ? (
               <button type="button" className="link-button" onClick={() => navigate(`/b/${board.id}`, { replace: true })}>
                 Clear filters
               </button>
@@ -205,7 +217,7 @@ export function BoardThreads() {
             {threads?.map((t) => <ThreadRow key={t.id} t={t} boardId={board.id} />)}
           </ul>
         )}
-        {next && (
+        {next && !hasMessageFilters(messageFilters) && (
           <div className="center">
             <button type="button" className="button" onClick={loadMore} disabled={loadingMore}>
               {loadingMore ? "Loading…" : "Load more threads"}
@@ -214,6 +226,7 @@ export function BoardThreads() {
         )}
       </div>
       <aside className="aside-col">
+        <ChannelsPanel current={filters.channel} search={search} />
         <ConnectPanel />
       </aside>
     </div>
@@ -237,6 +250,7 @@ function ThreadRow({ t, boardId }: { t: Thread; boardId: string }) {
           )}
         </div>
         <div className="thread-row-meta">
+          <span className="channel-tag">#{t.channel}</span>
           <Author p={t.created_by} />
           <span>{plural(t.message_count, "message")}</span>
           <TimeAgo iso={t.last_activity_at} prefix="active" />
@@ -326,15 +340,19 @@ export function LabelFilter({ labels, onChange }: { labels: Labels; onChange: (l
 function NewThreadForm({
   boardId,
   members,
+  channel: initialChannel,
   onPosted,
   onCancel,
 }: {
   boardId: string;
   members: ReturnType<typeof useBoard>["members"];
+  channel: string;
   onPosted: (t: Thread) => void;
   onCancel: () => void;
 }) {
-  const ids = { title: useId(), body: useId(), labels: useId(), task: useId() };
+  const ids = { title: useId(), body: useId(), labels: useId(), task: useId(), channel: useId(), channels: useId() };
+  const [channel, setChannel] = useState(initialChannel);
+  const { channels } = useChannels();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [labelText, setLabelText] = useState("");
@@ -344,25 +362,31 @@ function NewThreadForm({
   const idem = useIdempotencyKey();
   const toast = useToast();
   const { refreshMe } = useSession();
+  const files = useAttachments(boardId);
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (busy) return;
+    if (busy || files.uploading) return;
     const parsed = parseLabels(labelText);
     if (parsed.error) return setError(new Error(parsed.error));
     if (!title.trim() || !body.trim()) return setError(new Error("Add a title and a message."));
+    const channelProblem = channelError(channel.trim());
+    if (channelProblem) return setError(new Error(channelProblem));
     const payload = {
+      ...(channel.trim() !== DEFAULT_CHANNEL ? { channel: channel.trim() } : {}),
       title: title.trim(),
       body,
       mentions: extractMentions(body, members),
       labels: Object.keys(parsed.labels).length ? parsed.labels : undefined,
       task: task || undefined,
+      attachments: files.ids.length ? files.ids : undefined,
     };
     setBusy(true);
     setError(null);
     try {
       const res = await api.startThread(boardId, { ...payload, idempotency_key: idem.keyFor(payload) });
       idem.reset();
+      files.clear();
       if (res.usage_warning?.length) {
         const w = res.usage_warning[0]!;
         toast(`Heads up: ${w.allowance.replace(/_/g, " ")} at ${Math.round((w.used / w.limit) * 100)}% of the limit.`, "warning");
@@ -379,6 +403,21 @@ function NewThreadForm({
 
   return (
     <form id="new-thread" className="card composer" onSubmit={submit} aria-label="New thread">
+      <div className="field">
+        <label htmlFor={ids.channel}>Channel</label>
+        <input
+          id={ids.channel}
+          value={channel}
+          list={ids.channels}
+          maxLength={120}
+          onChange={(e) => setChannel(e.target.value.toLowerCase())}
+          placeholder={DEFAULT_CHANNEL}
+        />
+        <datalist id={ids.channels}>
+          {channels?.filter((c) => c.my_permissions.includes("post")).map((c) => <option key={c.path} value={c.path} />)}
+        </datalist>
+        <div className="hint">A new name creates the channel with this post.</div>
+      </div>
       <div className="field">
         <label htmlFor={ids.title}>Title</label>
         <input
@@ -404,6 +443,7 @@ function NewThreadForm({
         required
         onSubmitShortcut={() => void submit()}
       />
+      <AttachmentPicker state={files} disabled={busy} />
       <div className="grid-2">
         <div className="field">
           <label htmlFor={ids.labels}>Labels (optional)</label>
@@ -431,8 +471,8 @@ function NewThreadForm({
         <button type="button" className="button" onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="button button-primary" disabled={busy}>
-          {busy ? "Posting…" : error ? "Retry" : task ? "Post task" : "Post thread"}
+        <button type="submit" className="button button-primary" disabled={busy || files.uploading}>
+          {busy ? "Posting…" : files.uploading ? "Uploading files…" : error ? "Retry" : task ? "Post task" : "Post thread"}
         </button>
       </div>
     </form>

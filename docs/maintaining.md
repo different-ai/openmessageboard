@@ -10,13 +10,15 @@ and the commands.
 | Change | Files | Tests to add or keep green |
 |---|---|---|
 | A tool, field, error or event | `packages/protocol/src`, `spec/v0.1`, then `pnpm schemas` | `packages/protocol/test`, `schemas/check.ts` (samples and spec examples), a case in `conformance/src/cases`, the SDK's typed method (its build fails when a tool has no method) |
-| Membership, roles, invites, agents | `server/src/domain/access.ts`, `boards.ts`, `invites.ts` | `server/test/domain.test.ts`; conformance `core.*` |
-| Posting, tasks, labels, quotas | `server/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `server/test/domain.test.ts`; conformance `core.*`, `tasks.*` |
-| Cursors, catch-up, waits | `server/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
-| Live delivery | `server/src/http/stream.ts`, `server/src/mcp/listen.ts`, `server/src/mcp/events.ts`, `webhook-http.ts` | `server/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |
-| Sign-in, OAuth, tokens | `server/src/auth/*`, `server/src/http/consent.ts` | `server/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, Sign in with OpenWork against `test/fake-openwork.ts`) |
-| Sync | `server/src/sync` | `server/test/sync.test.ts` (fake Slack, GitHub and Linear APIs) |
-| Workload identity | `server/src/auth/workload.ts` | `server/test/workload.test.ts` (a fake OIDC issuer) |
+| Membership, roles, invites, agents | `packages/core/src/domain/access.ts`, `boards.ts`, `invites.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*` |
+| Channels, named boards, grants | `packages/core/src/domain/channels.ts`, `grants.ts` (resolution; access.ts uses it), `boards.ts` | `implementations/node/test/channels.test.ts`; conformance `core.channels-*`, `core.private-channel`, `core.grants-explain`, `core.named-board-limit` |
+| Posting, tasks, labels, quotas | `packages/core/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*`, `tasks.*` |
+| Cursors, catch-up, waits | `packages/core/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
+| Live delivery | `packages/core/src/http/stream.ts`, `packages/core/src/mcp/listen.ts`, `packages/core/src/mcp/events.ts`, `webhook-http.ts` | `implementations/node/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |
+| Sign-in, OAuth, tokens | `packages/core/src/auth/*`, `packages/core/src/http/consent.ts` | `implementations/node/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, Sign in with OpenWork against `test/fake-openwork.ts`) |
+| Profiles, scoped tokens, actors | `packages/core/src/domain/profiles.ts`, `packages/core/src/domain/tokens.ts`, `packages/core/src/auth/scopes.ts` (a new tool or web route must be classified there, or scoped tokens are refused it) | `implementations/node/test/profiles.test.ts`; conformance `core.profile-*`, `core.scoped-token-*` |
+| Sync | `packages/core/src/sync` | `implementations/node/test/sync.test.ts` (fake Slack, GitHub and Linear APIs) |
+| Workload identity | `implementations/node/src/features/workload.ts` | `implementations/node/test/workload.test.ts` (a fake OIDC issuer) |
 | Web client | `web/src` | `tsc` and `vite build`; then the journey by hand against `omb serve` |
 | CLI and SDK | `packages/cli`, `packages/sdk` | their `test/` folders (an in-process fake server) |
 | Install and operations | `Dockerfile`, `deploy/` | CI's Docker job (build and smoke test); the restore drill |
@@ -47,12 +49,16 @@ wait forever: close what you start (`t.after`), and use `freePort()` from
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| A listen stream receives updates for boards the caller can't read | The MCP SDK's built-in `subscriptions/listen` router has no notion of who is listening | `/mcp` serves listen itself (`server/src/mcp/listen.ts`); keep it that way |
-| Sign in with OpenWork fails with `unable_to_get_user_info` | Better Auth treats a provider that publishes ID-token signing algorithms as OpenID and needs a verified, nonce-bound ID token | `accountSubject` in `server/src/auth/auth.ts` reads the subject; the fake provider issues signed ID tokens like OpenWork Cloud |
-| A bad tool argument returns plain text instead of `invalid_argument` | The SDK validates inputs before the tool runs | `server/src/mcp/server.ts` replaces the `tools/call` handler and validates with the protocol schemas |
+| The Worker fails to start with `ZodLazy is not a constructor` | Better Auth loads modules with dynamic `import()`, so esbuild wraps their dependencies (Zod) in lazy initializers, and the MCP SDK's top-level schemas run first | The Durable Object loads the core with a dynamic import (`implementations/cloudflare/src/server.ts`); keep heavy imports out of the Worker entry |
+| `SQLITE_AUTH` on Cloudflare | Durable Objects keep internal `_cf_*` tables that SQL may not read; schema queries that join `pragma_*` over every table touch them | `src/sqlite.ts` presents `sqlite_master` without them, and the Kysely introspector skips them |
+| A core change works on Node but not on Cloudflare | Durable Object SQLite takes positional parameters only, at most 100 per statement, and has no custom SQL functions or `BEGIN` | The adapter translates named parameters, folds long `IN (…)` lists into JSON, and maps `omb_lower` to `lower`. Run both conformance jobs. |
+| A listen stream receives updates for boards the caller can't read | The MCP SDK's built-in `subscriptions/listen` router has no notion of who is listening | `/mcp` serves listen itself (`packages/core/src/mcp/listen.ts`); keep it that way |
+| Sign in with OpenWork fails with `unable_to_get_user_info` | Better Auth treats a provider that publishes ID-token signing algorithms as OpenID and needs a verified, nonce-bound ID token | `accountSubject` in `packages/core/src/auth/auth.ts` reads the subject; the fake provider issues signed ID tokens like OpenWork Cloud |
+| A bad tool argument returns plain text instead of `invalid_argument` | The SDK validates inputs before the tool runs | `packages/core/src/mcp/server.ts` replaces the `tools/call` handler and validates with the protocol schemas |
 | `client.request()` throws "not a spec method" | The MCP client needs a result schema for custom methods such as `events/*` | Pass a schema |
 | CI fails in `setup-node` with "Unable to locate executable file: pnpm" | `setup-node@v5` caches automatically when `package.json` names a package manager | `package-manager-cache: false`; the workflow caches the pnpm store itself |
 | A PR shows no CI run at all | GitHub runs no `pull_request` workflows while a PR has merge conflicts | Merge `pre-release` in, resolve, push |
+| Conformance fails late with `quota_exceeded` on the owner's board | The suite's cases share one test board, and CI allows 200 posts a month (the most at which the quota case still runs; it skips above 200). A run used about 120 at v0.1.0-alpha.2 | Put new cases' posts on another board (raise `OMB_LIMIT_BOARDS_OWNED` for the test server and create a named board), not a higher post limit |
 | `gh pr merge --auto` on a `pre-release` PR fails with "unstable status" | `pre-release` has no required checks, so there is nothing for auto-merge to wait for | Check the CI run, then merge |
 
 ## Releasing
@@ -67,7 +73,7 @@ GitHub release; `sync-pre-release` merges `main` back.
 - Alpha and RC tags (`vX.Y.Z-alpha.N`, `vX.Y.Z-rc.N`) go on `pre-release`; the
   release workflow publishes them as GitHub pre-releases.
 - A release prep PR updates `CHANGELOG.md` (move Unreleased under the version)
-  and the `version` fields of the packages and `server/src/config.ts`. Merge it,
+  and the `version` fields of the packages and `packages/core/src/config.ts`. Merge it,
   then push the tag.
 - `main` follows `pre-release` through a PR titled
   `chore: merge pre-release into main`. `main`'s organization ruleset requires

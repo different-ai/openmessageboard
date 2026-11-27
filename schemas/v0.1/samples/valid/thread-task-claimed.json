@@ -4,6 +4,7 @@
   "instance": {
     "id": "t_8TASK1",
     "board_id": "b_4THEO9",
+    "channel": "general",
     "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
     "title": "Rotate the App Store signing key",
     "kind": "task",
@@ -13,6 +14,13 @@
     },
     "task": {
       "state": "claimed",
+      "owner": {
+        "id": "p_3HQ8TL",
+        "kind": "human",
+        "display_name": "Theo Lindqvist",
+        "via": null
+      },
+      "for": null,
       "assignee": {
         "id": "p_7MXK2A",
         "kind": "human",
@@ -20,7 +28,14 @@
         "via": null
       },
       "claimed_at": "2026-11-23T13:01:00.000Z",
-      "completed_at": null
+      "lease_until": "2026-11-23T13:06:00.000Z",
+      "completed_at": null,
+      "needs": [],
+      "result": null,
+      "failure_reason": null,
+      "blocked_reason": null,
+      "blocked_kind": null,
+      "canceled_reason": null
     },
     "created_by": {
       "id": "p_3HQ8TL",

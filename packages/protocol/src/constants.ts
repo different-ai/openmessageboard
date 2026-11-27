@@ -15,10 +15,33 @@ export type PrincipalKind = (typeof PRINCIPAL_KINDS)[number];
 export const THREAD_KINDS = ["discussion", "task"] as const;
 export type ThreadKind = (typeof THREAD_KINDS)[number];
 
-export const TASK_STATES = ["open", "claimed", "done", "cancelled"] as const;
+/**
+ * `waiting` (a task it needs has not completed), `ready` (claimable), `claimed` (a worker holds its lease), `blocked`
+ * (held for a person), and the finished states `completed`, `failed` and `canceled`.
+ */
+export const TASK_STATES = ["waiting", "ready", "claimed", "blocked", "completed", "failed", "canceled"] as const;
 export type TaskState = (typeof TASK_STATES)[number];
-export const TASK_ACTIONS = ["complete", "release", "cancel", "reopen"] as const;
+/** Unfinished states. The filter value `open` matches any of them. */
+export const OPEN_TASK_STATES = ["waiting", "ready", "claimed", "blocked"] as const satisfies readonly TaskState[];
+export const FINISHED_TASK_STATES = ["completed", "failed", "canceled"] as const satisfies readonly TaskState[];
+/** `task_state` filter values: one state, or `open` for every unfinished state. */
+export const TASK_STATE_FILTERS = [...TASK_STATES, "open"] as const;
+export type TaskStateFilter = (typeof TASK_STATE_FILTERS)[number];
+/**
+ * `update_task` actions. `complete`, `fail` and `release` need the claim's token; `block` takes it from the worker
+ * that holds the task. `block` (without a token), `unblock`, `reopen`, `cancel`, `assign` and `set_needs` are for the
+ * task's owner or the board owner.
+ */
+export const TASK_ACTIONS = ["complete", "fail", "release", "block", "unblock", "reopen", "cancel", "assign", "set_needs"] as const;
 export type TaskAction = (typeof TASK_ACTIONS)[number];
+/** Reserved label key: `board.task=<state>` (or `open`) in a label filter matches the task state. */
+export const TASK_STATE_LABEL = "board.task";
+/** Labels under this prefix belong to the board; setting or removing one fails with `reserved_label`. */
+export const RESERVED_LABEL_PREFIX = "board.";
+export const MAX_PLAN_TASKS = 15;
+export const MAX_TASK_NEEDS = 20;
+export const MAX_TASK_REASON_CHARS = 500;
+export const TASK_BLOCK_KIND_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 
 export const INVITE_AUDIENCES = ["link", "email", "domain"] as const;
 export type InviteAudience = (typeof INVITE_AUDIENCES)[number];
@@ -31,6 +54,9 @@ export const EVENT_TYPES = [
   "thread.updated",
   "message.created",
   "message.deleted",
+  "message.edited",
+  "reactions.changed",
+  "labels.changed",
   "member.joined",
   "member.updated",
   "member.left",
@@ -41,9 +67,32 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export const SYNC_PLATFORMS = ["slack", "github", "linear"] as const;
 export type SyncPlatform = (typeof SYNC_PLATFORMS)[number];
 
+/** Where a message came from, for filters: written on the board, or synced from a platform. */
+export const MESSAGE_SOURCES = ["board", ...SYNC_PLATFORMS] as const;
+export type MessageSourceName = (typeof MESSAGE_SOURCES)[number];
+
 /** Conformance profiles a server can claim in `/.well-known/openmessageboard`. */
-export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import"] as const;
+export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import", "automation"] as const;
 export type Profile = (typeof PROFILES)[number];
+
+/**
+ * Profiles: named identities a person writes as ("fx via ada"), with no access of their own.
+ * Names start with a letter and use up to 32 letters, digits and hyphens; they match regardless of case.
+ */
+export const PROFILE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9-]{0,31}$/;
+/** HTTP request header that names the profile a request writes as. */
+export const PROFILE_HEADER = "OMB-Profile";
+
+/** Who appears on a board in `list_actors`. A profile is an agent principal that acts with its person's access. */
+export const ACTOR_KINDS = ["human", "agent", "profile", "integration"] as const;
+export type ActorKind = (typeof ACTOR_KINDS)[number];
+
+/** What a scoped token may do. Today `read` alone (a reader) or all four (at most a contributor). */
+export const TOKEN_PERMISSIONS = ["read", "post", "react", "label"] as const;
+export type TokenPermission = (typeof TOKEN_PERMISSIONS)[number];
+/** The longest a token from `create_scoped_token` can live. */
+export const SCOPED_TOKEN_MAX_SECONDS = 86_400;
+export const MAX_TOKEN_BOARDS = 20;
 
 export const LABEL_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 export const MAX_LABELS = 16;
@@ -52,6 +101,32 @@ export const MAX_TITLE_CHARS = 200;
 export const MAX_MENTIONS = 10;
 export const MAX_IDEMPOTENCY_KEY = 64;
 export const WAIT_MAX_SECONDS = 25;
+export const MAX_FILTER_TEXT = 200;
+export const READ_MESSAGES_DEFAULT = 50;
+export const READ_MESSAGES_MAX = 500;
+
+export const SCHEDULE_STATES = ["pending", "done", "cancelled", "stopped"] as const;
+export type ScheduleState = (typeof SCHEDULE_STATES)[number];
+export const WATCHER_STATES = ["active", "stopped"] as const;
+export type WatcherState = (typeof WATCHER_STATES)[number];
+export const DELIVERY_STATES = ["pending", "delivered", "failed"] as const;
+export type DeliveryState = (typeof DELIVERY_STATES)[number];
+
+/** Message features: attachments, structured data blocks, reactions. */
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+/** Largest file one upload may carry. */
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+/** `get_attachment` returns the file inline (base64) up to this size. */
+export const MAX_INLINE_ATTACHMENT_BYTES = 1024 * 1024;
+export const MAX_ATTACHMENT_NAME = 255;
+export const MAX_BLOCKS_PER_MESSAGE = 10;
+/** Distinct emoji on one message. */
+export const MAX_REACTIONS_PER_MESSAGE = 20;
+/** Schema names: `git-commit`, `deployment`; a schema is identified as `name@version`. */
+export const SCHEMA_NAME_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
+export const MAX_SCHEMA_VERSION = 10000;
+/** Serialized JSON Schema definition, in bytes. */
+export const MAX_SCHEMA_BYTES = 16 * 1024;
 
 /** Free cloud defaults. Every value is a host setting. */
 export const DEFAULT_LIMITS = {
@@ -61,12 +136,17 @@ export const DEFAULT_LIMITS = {
   live_connections_per_board: 20,
   message_bytes: 16 * 1024,
   storage_bytes: 100 * 1024 * 1024,
+  attachment_bytes: 10 * 1024 * 1024,
   webhook_subscriptions_per_principal: 10,
   webhook_subscriptions_per_board: 50,
   agent_posts_per_day: 200,
   agent_consecutive_limit: 20,
   event_retention_days: 30,
   waits_per_principal: 2,
+  task_lease_seconds: 300,
+  pending_schedules_per_board: 25,
+  watchers_per_board: 3,
+  schedule_min_repeat_seconds: 60,
 } as const;
 export type Limits = { -readonly [K in keyof typeof DEFAULT_LIMITS]: number };
 
@@ -83,10 +163,13 @@ export const OPENWORK_PLAN_LIMITS = {
   live_connections_per_board: 50,
   message_bytes: 32 * 1024,
   storage_bytes: 1024 * 1024 * 1024,
+  attachment_bytes: 100 * 1024 * 1024,
   webhook_subscriptions_per_principal: 25,
   webhook_subscriptions_per_board: 100,
   agent_posts_per_day: 1000,
   waits_per_principal: 4,
+  pending_schedules_per_board: 250,
+  watchers_per_board: 25,
 } as const;
 
 export const AUTH_PROVIDERS = ["openwork", "email"] as const;
@@ -105,10 +188,13 @@ export type RateLimits = { -readonly [K in keyof typeof DEFAULT_RATE_LIMITS]: nu
 export const ALLOWANCES = [
   "posts",
   "storage",
+  "attachments",
   "members",
   "live_connections",
   "webhook_subscriptions",
   "boards_owned",
   "agent_posts",
+  "pending_schedules",
+  "watchers",
 ] as const;
 export type Allowance = (typeof ALLOWANCES)[number];

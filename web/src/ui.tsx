@@ -63,6 +63,14 @@ export function errorText(e: unknown): string {
       if (d.resets_at) parts.push(`Resets ${formatDateTime(d.resets_at)}.`);
       return parts.join(" ");
     }
+    if (e.code === "revision_conflict") {
+      return "Someone changed this message since you opened it. Reload it to see the latest version, then edit again.";
+    }
+    if (e.code === "label_conflict") return "That label changed since you loaded it. Check the current labels and try again.";
+    if (e.code === "attachment_too_large" && typeof e.details.limit === "number") {
+      const size = typeof e.details.size === "number" ? `; this one is ${formatBytes(e.details.size)}` : "";
+      return `Files can be up to ${formatBytes(e.details.limit)}${size}.`;
+    }
     if (e.code === "rate_limited" && typeof e.details.retry_after_ms === "number") {
       return `${e.message} Try again in ${Math.ceil((e.details.retry_after_ms as number) / 1000)} s.`;
     }
@@ -407,6 +415,8 @@ const ALLOWANCE_LABEL: Record<string, string> = {
   webhook_subscriptions: "Webhook subscriptions",
   boards_owned: "Boards owned",
   agent_posts: "Agent posts today",
+  pending_schedules: "Pending scheduled posts",
+  watchers: "Watchers",
 };
 
 export function UsageMeter({ a }: { a: AllowanceUsage }) {

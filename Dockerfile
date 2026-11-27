@@ -38,24 +38,25 @@ COPY . .
 RUN --mount=type=cache,id=omb-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prefer-offline --store-dir=/pnpm/store
 
-# protocol first: server and sdk type-check against its dist/ output.
+# protocol and core first: the packages that use them type-check against their dist/ output.
 RUN pnpm --filter @openmessageboard/protocol run build \
+ && pnpm --filter @openmessageboard/core run build \
  && pnpm --filter @openmessageboard/sdk run build \
- && pnpm --filter @openmessageboard/server run build \
+ && pnpm --filter @openmessageboard/server-node run build \
  && pnpm --filter @openmessageboard/web run build
 
-# A self-contained server directory with production dependencies only. The workspace protocol package is
-# copied in as a regular dependency (its dist/ is what Node resolves without the "source" condition).
+# A self-contained server directory with production dependencies only. The workspace protocol and core packages
+# are copied in as regular dependencies (their dist/ is what Node resolves without the "source" condition).
 RUN --mount=type=cache,id=omb-pnpm-store,target=/pnpm/store \
-    pnpm --filter @openmessageboard/server deploy --prod --legacy --store-dir=/pnpm/store /out/server \
+    pnpm --filter @openmessageboard/server-node deploy --prod --legacy --store-dir=/pnpm/store /out/server \
  && rm -rf /out/server/dist /out/server/src /out/server/test \
- && cp -R server/dist /out/server/dist \
+ && cp -R implementations/node/dist /out/server/dist \
  && mkdir -p /out/web \
  && cp -R web/dist /out/web/dist \
  && test -f /out/server/dist/cli.js \
  && test -f /out/web/dist/index.html \
  && cd /out/server \
- && node -e "new (require('better-sqlite3'))(':memory:').close(); import('@openmessageboard/protocol').then(() => console.log('runtime dependencies load'))"
+ && node -e "new (require('better-sqlite3'))(':memory:').close(); Promise.all([import('@openmessageboard/protocol'), import('@openmessageboard/core')]).then(() => console.log('runtime dependencies load'))"
 
 # ---------- runtime ----------
 FROM ${NODE_IMAGE} AS runtime

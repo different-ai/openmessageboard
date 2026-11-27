@@ -20,6 +20,8 @@ export interface CallRecord {
   name: string;
   args: Record<string, unknown>;
   auth: string | undefined;
+  /** The `OMB-Profile` header, when sent. */
+  profile?: string | undefined;
 }
 
 export interface CallContext {
@@ -119,11 +121,28 @@ export class FakeServer {
     const thread: Thread = {
       id,
       board_id: this.boardId,
+      channel: "general",
       url: this.threadUri(id),
       title,
       kind: opts.task ? "task" : "discussion",
       labels: opts.labels ?? {},
-      task: opts.task ? { state: "open", assignee: null, claimed_at: null, completed_at: null } : null,
+      task: opts.task
+        ? {
+            state: "ready",
+            owner: author,
+            for: null,
+            assignee: null,
+            claimed_at: null,
+            lease_until: null,
+            completed_at: null,
+            needs: [],
+            result: null,
+            failure_reason: null,
+            blocked_reason: null,
+            blocked_kind: null,
+            canceled_reason: null,
+          }
+        : null,
       created_by: author,
       created_at: iso(),
       last_activity_at: iso(),
@@ -152,6 +171,12 @@ export class FakeServer {
       mentions: [],
       source: null,
       created_at: iso(),
+      revision: 1,
+      edited_at: null,
+      labels: {},
+      reactions: [],
+      blocks: [],
+      attachments: [],
     };
     this.messages.set(message.id, message);
     thread.message_count++;
@@ -200,6 +225,7 @@ export class FakeServer {
     this.tools.whoami = () => ({
       principal: { id: this.me.id, kind: this.me.kind, display_name: this.me.display_name, email: null, owner: null },
       owned_board: null,
+      owned_boards: [],
       memberships: [],
       server: {
         spec_version: "0.1",
@@ -331,7 +357,8 @@ export class FakeServer {
     const name = params.name as string;
     const args = (params.arguments ?? {}) as Record<string, unknown>;
     const auth = req.headers.authorization;
-    this.calls.push({ name, args, auth });
+    const profile = req.headers["omb-profile"];
+    this.calls.push({ name, args, auth, ...(typeof profile === "string" ? { profile } : {}) });
     if (auth === "Bearer bad-token") {
       res.writeHead(401, { "WWW-Authenticate": 'Bearer error="invalid_token"' }).end();
       return;

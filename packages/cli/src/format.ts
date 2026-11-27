@@ -1,4 +1,4 @@
-import type { Change, InboxItem, Member, Membership, Message, PrincipalRef, Thread, Usage } from "@openmessageboard/sdk";
+import type { AccessExplanation, BoardActor, Change, Channel, DataSchema, Grant, InboxItem, Member, Membership, Message, PrincipalRef, Schedule, Thread, Usage, Watcher, WatcherFilter } from "@openmessageboard/sdk";
 
 /** "release-agent (via Maya)" for agents, the display name otherwise. */
 export function authorName(p: PrincipalRef): string {
@@ -33,9 +33,20 @@ function indent(text: string, prefix = "  "): string {
 export function formatMessage(m: Message, now?: Date): string {
   const parts = [authorName(m.author), relativeTime(m.created_at, now)];
   if (m.source) parts.push(`from ${m.source.platform} (${m.source.author_name})`);
+  if (m.edited_at) parts.push(`edited (revision ${m.revision})`);
   parts.push(m.id);
   const body = m.deleted || m.body === null ? "[deleted]" : m.body;
-  return `${parts.join(" · ")}\n${indent(body)}`;
+  const extra: string[] = [];
+  if (Object.keys(m.labels ?? {}).length) extra.push(`labels: ${formatLabels(m.labels)}`);
+  for (const b of m.blocks ?? []) extra.push(`${b.schema}@${b.version}: ${JSON.stringify(b.data)}`);
+  for (const a of m.attachments ?? []) extra.push(`file: ${a.name} (${a.type}, ${a.size} bytes) ${a.id}`);
+  if (m.reactions?.length) extra.push(`reactions: ${m.reactions.map((r) => `${r.emoji} ${r.count}${r.me ? " (you)" : ""}`).join(", ")}`);
+  return `${parts.join(" · ")}\n${indent(body)}${extra.length ? `\n${indent(extra.join("\n"))}` : ""}`;
+}
+
+export function formatSchema(s: DataSchema): string {
+  const head = `${s.id}${s.builtin ? " (built in)" : ""}${s.description ? ` · ${s.description}` : ""}`;
+  return `${head}\n${JSON.stringify(s.schema, null, 2)}`;
 }
 
 export function formatLabels(labels: Record<string, string>): string {
@@ -44,18 +55,46 @@ export function formatLabels(labels: Record<string, string>): string {
     .join(" ");
 }
 
-function taskSummary(t: Thread): string | undefined {
-  if (!t.task) return undefined;
-  return t.task.assignee ? `${t.task.state} by ${authorName(t.task.assignee)}` : t.task.state;
+/** "4m", "45s", "2h": how long until `iso`, for lease countdowns. */
+export function timeLeft(iso: string, now: Date = new Date()): string {
+  const s = Math.round((Date.parse(iso) - now.getTime()) / 1000);
+  if (Number.isNaN(s)) return iso;
+  if (s <= 0) return "0s";
+  if (s < 90) return `${s}s`;
+  if (s < 5400) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
 }
 
-export function formatThreadHeader(t: Thread): string {
-  const meta = [t.id];
-  const task = taskSummary(t);
+function taskSummary(t: Thread, now?: Date): string | undefined {
+  if (!t.task) return undefined;
+  const k = t.task;
+  let out: string = k.state;
+  if (k.assignee) out += ` by ${authorName(k.assignee)}`;
+  if (k.state === "claimed" && k.lease_until) out += ` (lease ends in ${timeLeft(k.lease_until, now)})`;
+  if (k.for && !(k.state === "claimed" && k.assignee?.id === k.for.id)) out += ` · kept for ${authorName(k.for)}`;
+  return out;
+}
+
+/** Extra task lines for the thread header: needs, holds, reasons and the result. */
+function taskDetails(t: Thread): string[] {
+  const k = t.task;
+  if (!k) return [];
+  const lines: string[] = [];
+  if (k.needs.length) lines.push(`needs: ${k.needs.map((n) => `${n.thread_id} (${n.state})`).join(", ")}`);
+  if (k.blocked_reason) lines.push(`blocked${k.blocked_kind ? ` (${k.blocked_kind})` : ""}: ${k.blocked_reason}`);
+  if (k.failure_reason) lines.push(`failed: ${k.failure_reason}`);
+  if (k.canceled_reason) lines.push(`canceled: ${k.canceled_reason}`);
+  if (k.result) lines.push(`result: ${k.result.split("\n")[0]}`);
+  return lines;
+}
+
+export function formatThreadHeader(t: Thread, now?: Date): string {
+  const meta = [t.id, t.channel];
+  const task = taskSummary(t, now);
   if (task) meta.push(`task: ${task}`);
   if (Object.keys(t.labels).length) meta.push(formatLabels(t.labels));
   meta.push(t.url);
-  return `# ${t.title}\n${meta.join(" · ")}`;
+  return [`# ${t.title}`, meta.join(" · "), ...taskDetails(t)].join("\n");
 }
 
 export function formatThreadRow(t: Thread, now?: Date): string {
@@ -64,7 +103,7 @@ export function formatThreadRow(t: Thread, now?: Date): string {
   if (t.unread_count > 0) meta.push(`${t.unread_count} unread`);
   if (Object.keys(t.labels).length) meta.push(formatLabels(t.labels));
   meta.push(relativeTime(t.last_activity_at, now));
-  return `${t.id}  ${badge}${t.title}\n  ${meta.join(" · ")}`;
+  return `${t.id}  ${badge}${t.title}\n  ${[t.channel, ...meta].join(" · ")}`;
 }
 
 /** Left-aligned columns separated by two spaces; the last column is not padded. */
@@ -82,11 +121,25 @@ function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-export function formatTasks(threads: Thread[]): string {
+/** Who a task row names: its holder (or who finished it), else who it is kept for. */
+function taskWho(t: Thread): string {
+  const k = t.task;
+  if (!k) return "-";
+  if (k.assignee) return authorName(k.assignee);
+  if (k.for) return `for ${authorName(k.for)}`;
+  return "-";
+}
+
+export function formatTasks(threads: Thread[], now?: Date): string {
   if (threads.length === 0) return "No tasks.";
   return formatTable(
-    ["ID", "STATE", "ASSIGNEE", "LABELS", "TITLE"],
-    threads.map((t) => [t.id, t.task?.state ?? "-", t.task?.assignee ? authorName(t.task.assignee) : "-", formatLabels(t.labels) || "-", truncate(t.title, 72)]),
+    ["ID", "STATE", "WHO", "NEEDS", "LABELS", "TITLE"],
+    threads.map((t) => {
+      const k = t.task;
+      const state = k?.state === "claimed" && k.lease_until ? `claimed ${timeLeft(k.lease_until, now)}` : (k?.state ?? "-");
+      const pending = k ? k.needs.filter((n) => n.state !== "completed").length : 0;
+      return [t.id, state, taskWho(t), pending ? `${pending} open` : "-", formatLabels(t.labels) || "-", truncate(t.title, 72)];
+    }),
   );
 }
 
@@ -103,6 +156,14 @@ export function formatMembers(members: Member[]): string {
   return formatTable(
     ["ID", "HANDLE", "NAME", "KIND", "ROLE", "ACCESS ENDS"],
     members.map((m) => [m.principal.id, `@${m.handle}`, authorName(m.principal), m.principal.kind, m.role, m.access_ends_at ?? "-"]),
+  );
+}
+
+export function formatActors(actors: BoardActor[]): string {
+  if (actors.length === 0) return "No one yet.";
+  return formatTable(
+    ["ID", "HANDLE", "NAME", "KIND", "MEMBER"],
+    actors.map((a) => [a.id, `@${a.handle}`, a.via ? `${a.display_name} (via ${a.via.display_name})` : a.display_name, a.kind, a.is_member ? "yes" : "no"]),
   );
 }
 
@@ -142,6 +203,14 @@ export function formatChange(c: Change, now?: Date): string {
       return c.message ? `${c.thread_id} ${formatMessage(c.message, now)}` : `+ message ${c.message_id} in ${c.thread_id}${by}`;
     case "message.deleted":
       return `- message ${c.message_id} in ${c.thread_id} deleted${by}`;
+    case "message.edited":
+      return `~ message ${c.message_id} in ${c.thread_id} edited${by}${c.message?.body ? `\n${indent(c.message.body)}` : ""}`;
+    case "reactions.changed": {
+      const r = (c.message?.reactions ?? []).map((x) => `${x.emoji} ${x.count}`).join(", ");
+      return `~ reactions on ${c.message_id}${by}${r ? ` (${r})` : ""}`;
+    }
+    case "labels.changed":
+      return `~ labels on ${c.message_id}${by} [${formatLabels(c.message?.labels ?? {})}]`;
     case "thread.updated": {
       const t = c.thread;
       const assignee = t?.task?.assignee && t.task.assignee.id !== c.actor?.id ? ` (assignee ${authorName(t.task.assignee)})` : "";
@@ -157,4 +226,103 @@ export function formatChange(c: Change, now?: Date): string {
     case "board.updated":
       return `~ board updated${by}`;
   }
+}
+
+/** "every 1h", "every 2d" and so on, for schedules. */
+export function formatInterval(seconds: number): string {
+  for (const [unit, n] of [["w", 604_800], ["d", 86_400], ["h", 3600], ["m", 60]] as const) if (seconds % n === 0) return `${seconds / n}${unit}`;
+  return `${seconds}s`;
+}
+
+function repeatOf(s: Schedule): string {
+  if (!s.every_seconds) return "once";
+  const parts = [`every ${formatInterval(s.every_seconds)}`];
+  if (s.times !== null) parts.push(`${s.times} times`);
+  if (s.until) parts.push(`until ${s.until}`);
+  return parts.join(", ");
+}
+
+export function formatSchedules(schedules: Schedule[]): string {
+  if (schedules.length === 0) return "No scheduled posts.";
+  return formatTable(
+    ["ID", "STATE", "NEXT RUN", "REPEAT", "IN", "BY", "TEXT"],
+    schedules.map((s) => [
+      s.id,
+      s.state === "stopped" && s.stopped_reason ? `stopped (${s.stopped_reason})` : s.state,
+      s.next_run_at ?? "-",
+      repeatOf(s),
+      s.thread_id ?? `new thread in ${s.channel}: "${truncate(s.title ?? "", 30)}"`,
+      authorName(s.created_by),
+      truncate(s.body.replace(/\s+/g, " "), 48),
+    ]),
+  );
+}
+
+/** Channels grouped by path, with thread counts and what you can do in each. */
+export function formatChannels(channels: Channel[], now?: Date): string {
+  if (channels.length === 0) return "No channels yet. A first post creates one.";
+  return formatTable(
+    ["CHANNEL", "THREADS", "LAST ACTIVITY", "YOU CAN", ""],
+    channels.map((c) => [c.path, String(c.thread_count), c.last_activity_at ? relativeTime(c.last_activity_at, now) : "-", c.my_permissions.join(",") || "-", c.private ? "private" : ""]),
+  );
+}
+
+export function formatGrants(grants: Grant[], members: Member[] = []): string {
+  if (grants.length === 0) return "No grants you can manage. With no grants, board roles decide everything.";
+  const name = (id: string) => {
+    const m = members.find((x) => x.principal.id === id);
+    return m ? `@${m.handle}` : id;
+  };
+  return formatTable(
+    ["ID", "WHO", "CAN"],
+    grants.map((g) => [
+      g.id,
+      g.principals.map((p) => (p.kind === "member" ? name(p.principal_id) : p.kind)).join(", "),
+      Object.entries(g.can)
+        .map(([pattern, perms]) => `${pattern}=${perms.length ? perms.join(",") : "none"}`)
+        .join(" "),
+    ]),
+  );
+}
+
+export function formatScheduled(s: Schedule): string {
+  return `Scheduled ${s.id}: ${s.next_run_at ? `next run ${s.next_run_at}` : s.state}, ${repeatOf(s)}`;
+}
+
+export function formatWatcherFilter(f: WatcherFilter): string {
+  const parts: string[] = [];
+  if (f.channel) parts.push(`channel=${f.channel}`);
+  if (f.thread) parts.push(`re=${f.thread}`);
+  if (f.types) parts.push(`types=${f.types.join(",")}`);
+  if (f.by) parts.push(`by=${f.by}`);
+  if (f.mentions) parts.push(`mentions=${f.mentions}`);
+  if (f.labels) parts.push(formatLabels(f.labels));
+  if (f.text) parts.push(`text="${f.text}"`);
+  if (f.source) parts.push(`source=${f.source}`);
+  return parts.join(" ") || "every change";
+}
+
+export function formatWatchers(watchers: Watcher[]): string {
+  if (watchers.length === 0) return "No watchers.";
+  return formatTable(
+    ["ID", "STATUS", "URL", "FILTER", "LAST DELIVERY"],
+    watchers.map((w) => {
+      const d = w.recent_deliveries[0];
+      return [
+        w.id,
+        w.status === "stopped" && w.stopped_reason ? `stopped (${w.stopped_reason})` : w.status,
+        w.url,
+        formatWatcherFilter(w.filter),
+        d ? `${d.status}${d.last_error ? ` (${d.last_error})` : ""} ${d.created_at}` : "-",
+      ];
+    }),
+  );
+}
+
+export function formatAccess(a: AccessExplanation): string {
+  const lines = [`${authorName(a.principal)} (${a.role}) in ${a.channel}: ${a.can.length ? a.can.join(", ") : "nothing"}`];
+  lines.push(a.pattern ? `Decided by ${a.grant_ids.join(", ")} at ${a.pattern} (${a.level?.replace("_", " ")}), which gives ${a.granted.join(", ") || "none"}` : `No grant applies; the ${a.role} role's defaults hold`);
+  lines.push(`The ${a.role} role allows at most ${a.role_cap.join(", ")}`);
+  if (a.person_cap) lines.push(`The person this agent acts for can ${a.person_cap.join(", ") || "do nothing"} here`);
+  return lines.join("\n");
 }

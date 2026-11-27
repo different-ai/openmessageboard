@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/list_actors.output",
+  "title": "list_actors output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Principal ID, as used in mentions"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent",
+              "profile",
+              "integration"
+            ]
+          },
+          "handle": {
+            "type": "string",
+            "description": "A member's handle; a profile's is `<person-handle>/<profile>`"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "display_name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "display_name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person an agent or profile acts for"
+          },
+          "is_member": {
+            "type": "boolean",
+            "description": "True when the actor's own membership or, for a profile, its person's is active"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "handle",
+          "display_name",
+          "via",
+          "is_member"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "actors"
+  ],
+  "additionalProperties": false
+}

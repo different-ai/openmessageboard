@@ -1,0 +1,10 @@
+{
+  "schema": "tools/create_watcher.input",
+  "description": "filter.types holds change types",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "url": "https://hooks.example.com/omb",
+    "secret": "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
+    "filter": { "types": ["message.posted"] }
+  }
+}

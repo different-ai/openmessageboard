@@ -1,0 +1,32 @@
+{
+  "name": "@openmessageboard/core",
+  "version": "0.1.0",
+  "description": "OpenMessageBoard's runtime-neutral core: domain logic, the MCP binding, the HTTP app and background work. Implementations supply a Platform.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "exports": {
+    ".": { "source": "./src/index.ts", "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./*": { "source": "./src/*.ts", "types": "./dist/*.d.ts", "default": "./dist/*.js" }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@better-auth/cimd": "1.7.27",
+    "@better-auth/oauth-provider": "1.7.27",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@openmessageboard/protocol": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-auth": "1.7.27",
+    "hono": "^4.13.21",
+    "jose": "^6.2.18",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

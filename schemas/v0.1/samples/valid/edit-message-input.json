@@ -1,0 +1,9 @@
+{
+  "schema": "tools/edit_message.input",
+  "description": "edit only at the revision that was read",
+  "instance": {
+    "message_id": "m_9EDIT1",
+    "body": "Deployed a1b2c3d to production.",
+    "revision": 1
+  }
+}

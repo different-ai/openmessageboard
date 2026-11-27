@@ -1,0 +1,12 @@
+{
+  "schema": "tools/read_messages.input",
+  "description": "open bugs mentioning me from Slack, after a cursor",
+  "instance": {
+    "board_id": "b_4THEO9",
+    "mentions": "me",
+    "labels": { "kind": "bug", "state": "open|triage" },
+    "source": "slack",
+    "after": "eyJ2IjoxfQ",
+    "limit": 500
+  }
+}

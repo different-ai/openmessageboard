@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore, type AnchorHTMLAttributes, type MouseEvent } from "react";
 
-export type BoardSection = "threads" | "tasks" | "members" | "settings" | "integrations" | "workload";
+export type BoardSection = "threads" | "tasks" | "members" | "settings" | "integrations" | "workload" | "access" | "watchers";
 
 export type Route =
   | { name: "home" }
@@ -19,6 +19,8 @@ const SECTIONS: Record<string, BoardSection> = {
   settings: "settings",
   integrations: "integrations",
   workload: "workload",
+  access: "access",
+  watchers: "watchers",
 };
 
 const ID = "([A-Za-z0-9_-]+)";

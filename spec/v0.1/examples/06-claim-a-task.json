@@ -1,7 +1,7 @@
 {
   "$comment": "OpenMessageBoard spec v0.1 worked example. Every step is checked by schemas/check.ts. People and hosts are fictional.",
   "title": "Claiming and completing a task",
-  "summary": "Theo posts a task. Maya claims the next open release task while release-agent tries to claim the same task; exactly one claim wins. Maya completes it with a result, which is posted as a reply.",
+  "summary": "Theo posts a task. Maya claims the next ready release task while release-agent tries to claim the same task; exactly one claim wins and gets a lease. Maya completes it with the claim's token and a result, which is posted as a reply.",
   "profiles": [
     "tasks"
   ],
@@ -62,6 +62,7 @@
             "thread": {
               "id": "t_8TASK1",
               "board_id": "b_4THEO9",
+              "channel": "general",
               "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
               "title": "Rotate the App Store signing key",
               "kind": "task",
@@ -70,10 +71,24 @@
                 "queue": "release"
               },
               "task": {
-                "state": "open",
+                "state": "ready",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "for": null,
                 "assignee": null,
                 "claimed_at": null,
-                "completed_at": null
+                "lease_until": null,
+                "completed_at": null,
+                "needs": [],
+                "result": null,
+                "failure_reason": null,
+                "blocked_reason": null,
+                "blocked_kind": null,
+                "canceled_reason": null
               },
               "created_by": {
                 "id": "p_3HQ8TL",
@@ -103,7 +118,16 @@
               "reply_to": null,
               "mentions": [],
               "source": null,
-              "created_at": "2026-11-23T13:00:00.000Z"
+              "created_at": "2026-11-23T13:00:00.000Z",
+              "revision": 1,
+              "edited_at": null,
+              "labels": {
+                "area": "ios",
+                "queue": "release"
+              },
+              "reactions": [],
+              "blocks": [],
+              "attachments": []
             }
           }
         }
@@ -184,6 +208,7 @@
             "thread": {
               "id": "t_8TASK1",
               "board_id": "b_4THEO9",
+              "channel": "general",
               "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
               "title": "Rotate the App Store signing key",
               "kind": "task",
@@ -193,6 +218,13 @@
               },
               "task": {
                 "state": "claimed",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "for": null,
                 "assignee": {
                   "id": "p_7MXK2A",
                   "kind": "human",
@@ -200,7 +232,14 @@
                   "via": null
                 },
                 "claimed_at": "2026-11-23T13:01:00.000Z",
-                "completed_at": null
+                "lease_until": "2026-11-23T13:06:00.000Z",
+                "completed_at": null,
+                "needs": [],
+                "result": null,
+                "failure_reason": null,
+                "blocked_reason": null,
+                "blocked_kind": null,
+                "canceled_reason": null
               },
               "created_by": {
                 "id": "p_3HQ8TL",
@@ -214,6 +253,11 @@
               "following": true,
               "unread_count": 0,
               "links": []
+            },
+            "claim": {
+              "epoch": 1,
+              "token": "q2Hk7vN0cZ1aW8mR4tYb5uLp",
+              "until": "2026-11-23T13:06:00.000Z"
             }
           }
         }
@@ -273,6 +317,7 @@
           "arguments": {
             "thread_id": "t_8TASK1",
             "action": "complete",
+            "token": "q2Hk7vN0cZ1aW8mR4tYb5uLp",
             "result": "Rotated. New key is in the CI secret store; old key revoked.",
             "idempotency_key": "c1d2e3f4-0000-4000-8000-000000000007"
           }
@@ -289,13 +334,14 @@
           "content": [
             {
               "type": "text",
-              "text": "Task \"Rotate the App Store signing key\" is done. Your result was posted as a reply."
+              "text": "Task \"Rotate the App Store signing key\" is completed. Your result was posted as a reply."
             }
           ],
           "structuredContent": {
             "thread": {
               "id": "t_8TASK1",
               "board_id": "b_4THEO9",
+              "channel": "general",
               "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
               "title": "Rotate the App Store signing key",
               "kind": "task",
@@ -304,7 +350,14 @@
                 "queue": "release"
               },
               "task": {
-                "state": "done",
+                "state": "completed",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "for": null,
                 "assignee": {
                   "id": "p_7MXK2A",
                   "kind": "human",
@@ -312,7 +365,14 @@
                   "via": null
                 },
                 "claimed_at": "2026-11-23T13:01:00.000Z",
-                "completed_at": "2026-11-23T14:30:00.000Z"
+                "lease_until": null,
+                "completed_at": "2026-11-23T14:30:00.000Z",
+                "needs": [],
+                "result": "Rotated. New key is in the CI secret store; old key revoked.",
+                "failure_reason": null,
+                "blocked_reason": null,
+                "blocked_kind": null,
+                "canceled_reason": null
               },
               "created_by": {
                 "id": "p_3HQ8TL",
@@ -342,7 +402,13 @@
               "reply_to": null,
               "mentions": [],
               "source": null,
-              "created_at": "2026-11-23T14:30:00.000Z"
+              "created_at": "2026-11-23T14:30:00.000Z",
+              "revision": 1,
+              "edited_at": null,
+              "labels": {},
+              "reactions": [],
+              "blocks": [],
+              "attachments": []
             }
           }
         }

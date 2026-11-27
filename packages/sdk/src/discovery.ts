@@ -1,4 +1,4 @@
-import { ServerInfo } from "@openmessageboard/protocol";
+import { ServerInfo, trimTrailingSlashes } from "@openmessageboard/protocol";
 import { OmbError, toOmbError } from "./errors.js";
 
 /**
@@ -14,7 +14,7 @@ export function normalizeServer(input: string): string {
     throw new OmbError("invalid_argument", `Not a server URL: ${raw || "(empty)"}`);
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") throw new OmbError("invalid_argument", `Server URL must use http or https: ${raw}`);
-  let path = url.pathname.replace(/\/+$/, "");
+  let path = trimTrailingSlashes(url.pathname);
   if (path.endsWith("/mcp")) path = path.slice(0, -4);
   return `${url.origin}${path}`;
 }

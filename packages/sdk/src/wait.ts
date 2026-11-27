@@ -1,5 +1,5 @@
 import type { OmbClient } from "./client.js";
-import { toOmbError } from "./errors.js";
+import { OmbError, toOmbError } from "./errors.js";
 import {
   abortedError,
   backoffDelay,
@@ -9,6 +9,7 @@ import {
   resolveTarget,
   retryAfterMs,
   sleep,
+  type ChangeFilters,
   type WatchItem,
   type WatchTarget,
 } from "./shared.js";
@@ -18,6 +19,13 @@ export interface WaitForChangesOptions {
   timeoutMs?: number;
   /** Start after this cursor instead of now. */
   cursor?: string;
+  /**
+   * Start after this message ID, thread ID or cursor. A message that already follows it returns at once, so
+   * `{ after: myPost.id }` never misses a fast answer.
+   */
+  after?: string;
+  /** Server-side message filters (board and thread targets): `by`, `mentions`, `labels`, `text`, `source`, `re`. */
+  filters?: ChangeFilters;
   /** Only resolve for items that pass (others are skipped and waiting continues). */
   filter?: (item: WatchItem) => boolean;
   signal?: AbortSignal;
@@ -37,7 +45,10 @@ export async function waitForChanges(client: OmbClient, target: WatchTarget, opt
   const { signal } = options;
   const deadline = options.timeoutMs === undefined ? Number.POSITIVE_INFINITY : Date.now() + options.timeoutMs;
   const resolved = await resolveTarget(client, target, signal);
-  let cursor = options.cursor ?? resolved.asOf ?? (await currentCursor(client, resolved, signal));
+  if (options.after && options.cursor) throw new OmbError("invalid_argument", "Pass cursor or after, not both");
+  let after = options.after;
+  let cursor = options.cursor ?? (after ? "" : (resolved.asOf ?? (await currentCursor(client, resolved, signal))));
+  const filters = "inbox" in resolved.wait ? {} : (options.filters ?? {});
   let attempt = 0;
   for (;;) {
     if (signal?.aborted) throw abortedError();
@@ -45,8 +56,9 @@ export async function waitForChanges(client: OmbClient, target: WatchTarget, opt
     if (remaining <= 0) return null;
     const timeout_seconds = Math.max(1, Math.min(25, Math.ceil(remaining / 1000)));
     try {
-      const page = await client.waitForActivity({ ...resolved.wait, cursor, timeout_seconds }, { signal });
+      const page = await client.waitForActivity({ ...resolved.wait, ...filters, ...(after ? { after } : { cursor }), timeout_seconds }, { signal });
       attempt = 0;
+      after = undefined;
       cursor = page.cursor;
       const matches = pageItems(page).filter((item) => inScope(resolved, item) && (options.filter?.(item) ?? true));
       if (matches.length > 0) return { changes: matches, cursor };
@@ -54,6 +66,7 @@ export async function waitForChanges(client: OmbClient, target: WatchTarget, opt
       if (signal?.aborted) throw abortedError();
       const e = toOmbError(err);
       if (e.code === "cursor_expired") {
+        after = undefined;
         cursor = await currentCursor(client, resolved, signal);
         continue;
       }

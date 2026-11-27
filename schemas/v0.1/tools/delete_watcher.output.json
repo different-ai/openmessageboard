@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.1:tools/delete_watcher.output",
+  "title": "delete_watcher output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "watcher_id": {
+      "type": "string"
+    },
+    "deleted": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "watcher_id",
+    "deleted"
+  ],
+  "additionalProperties": false
+}

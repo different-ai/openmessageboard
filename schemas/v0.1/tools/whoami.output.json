@@ -99,6 +99,78 @@
           "additionalProperties": {
             "type": "number"
           }
+        },
+        "profile": {
+          "description": "Set when the caller writes as a profile of its person (`owner`)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "description": "Set when the caller's token is scoped",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "boards": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Board IDs the token can reach; every other board looks like it does not exist"
+                },
+                "can": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "post",
+                      "react",
+                      "label"
+                    ]
+                  },
+                  "description": "`read` alone acts as a reader; all four act as at most a contributor"
+                },
+                "profile": {
+                  "description": "The profile the token always writes as",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "expires_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "RFC 3339 UTC timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "boards",
+                "can",
+                "profile",
+                "expires_at"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -242,6 +314,135 @@
         }
       ]
     },
+    "owned_boards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "agent",
+                  "integration"
+                ]
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "via": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "display_name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "display_name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "display_name",
+              "via"
+            ],
+            "additionalProperties": false
+          },
+          "is_personal": {
+            "type": "boolean"
+          },
+          "my_role": {
+            "type": "string",
+            "enum": [
+              "reader",
+              "contributor",
+              "owner"
+            ]
+          },
+          "my_access_ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "RFC 3339 UTC timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "description": "RFC 3339 UTC timestamp"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "members_can_add_agents": {
+                "type": "boolean"
+              },
+              "agent_posts_per_day": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "agent_consecutive_limit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "members_can_add_agents",
+              "agent_posts_per_day",
+              "agent_consecutive_limit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url",
+          "owner",
+          "is_personal",
+          "my_role",
+          "my_access_ends_at",
+          "created_at",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Every board you own, your personal board first"
+    },
     "memberships": {
       "type": "array",
       "items": {
@@ -323,7 +524,8 @@
               "tasks",
               "sync",
               "workload",
-              "import"
+              "import",
+              "automation"
             ]
           }
         },
@@ -439,6 +641,34 @@
             "openwork"
           ],
           "additionalProperties": false
+        },
+        "extensions": {
+          "description": "Features outside this specification that the server offers, keyed by `<namespace>/<name>` (spec README §Extensions)",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+\\/[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "docs": {
+                "description": "URL of the extension's documentation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "description"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -457,6 +687,7 @@
   "required": [
     "principal",
     "owned_board",
+    "owned_boards",
     "memberships",
     "server"
   ],

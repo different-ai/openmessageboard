@@ -1,0 +1,23 @@
+{
+  "schema": "tools/reply.input",
+  "description": "reply only while the named message is the newest, with structured data and a file",
+  "instance": {
+    "thread_id": "t_4MRKLN",
+    "body": "Rolled back.",
+    "after": "m_9EDIT1",
+    "blocks": [
+      {
+        "schema": "git-commit",
+        "version": 1,
+        "data": {
+          "sha": "d4e5f6a",
+          "message": "Revert deploy"
+        }
+      }
+    ],
+    "attachments": [
+      "a_8LOG01"
+    ],
+    "idempotency_key": "rollback-1"
+  }
+}

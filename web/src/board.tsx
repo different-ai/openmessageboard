@@ -8,6 +8,7 @@ import { useSession } from "./session";
 import { ShareDialog } from "./share";
 import { ErrorNote, Loading } from "./ui";
 import { AccessEnded, AccessRequired } from "./pages/Status";
+import { BoardSwitcher } from "./channels";
 
 type BoardValue = {
   board: Board;
@@ -154,8 +155,10 @@ export function BoardShell({ boardId, section, children }: { boardId: string; se
     { key: "threads", label: "Threads", to: `/b/${b.id}` },
     { key: "tasks", label: "Tasks", to: `/b/${b.id}/tasks` },
     { key: "members", label: "Members", to: `/b/${b.id}/members` },
+    { key: "access", label: "Access", to: `/b/${b.id}/access` },
     { key: "integrations", label: "Integrations", to: `/b/${b.id}/integrations`, owner: true },
     { key: "workload", label: "Workload identity", to: `/b/${b.id}/workload`, owner: true },
+    { key: "watchers", label: "Watchers", to: `/b/${b.id}/watchers`, owner: true },
     { key: "settings", label: "Settings", to: `/b/${b.id}/settings`, owner: true },
   ];
   const current = section === "thread" ? "threads" : section;
@@ -172,11 +175,14 @@ export function BoardShell({ boardId, section, children }: { boardId: string; se
               <span className={`badge role-${b.my_role}`}>{b.my_role}</span>
               <LiveDot status={status} />
             </div>
-            {value.isOwner && (
-              <button type="button" className="button button-primary" onClick={() => setShareOpen(true)}>
-                Share
-              </button>
-            )}
+            <div className="board-title-actions">
+              <BoardSwitcher />
+              {value.isOwner && (
+                <button type="button" className="button button-primary" onClick={() => setShareOpen(true)}>
+                  Share
+                </button>
+              )}
+            </div>
           </div>
           {b.my_access_ends_at && (
             <p className="note note-warning compact">Your access to this board ends {formatZoned(b.my_access_ends_at)}.</p>

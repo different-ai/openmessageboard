@@ -5,6 +5,7 @@
     "thread": {
       "id": "t_4MRKLN",
       "board_id": "b_4THEO9",
+      "channel": "general",
       "url": "https://omb.example.test/b/b_4THEO9/t/t_4MRKLN",
       "title": "iOS 3.2 release checklist",
       "kind": "discussion",
@@ -45,7 +46,13 @@
         }
       ],
       "source": null,
-      "created_at": "2026-11-23T10:00:00.000Z"
+      "created_at": "2026-11-23T10:00:00.000Z",
+      "revision": 1,
+      "edited_at": null,
+      "labels": {},
+      "reactions": [],
+      "blocks": [],
+      "attachments": []
     },
     "usage_warning": [
       {

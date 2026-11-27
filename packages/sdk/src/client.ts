@@ -1,16 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { Client, StreamableHTTPClientTransport, type DiscoverResult } from "@modelcontextprotocol/client";
 import {
+  Attachment,
   ChangesPage,
   InboxChangesPage,
+  MAX_ATTACHMENT_BYTES,
+  PROFILE_HEADER,
+  PROFILE_NAME_PATTERN,
   TOOLS,
   boardUrl,
   inboxUrl,
   threadUrl,
   type Labels,
   type Message,
+  type MessageFilter,
   type Principal,
   type ServerInfo,
+  type TaskClaim,
   type Thread,
   type ToolInput,
   type ToolName,
@@ -19,8 +25,11 @@ import {
 import type { z } from "zod";
 import { staticToken, type TokenProvider } from "./auth.js";
 import { discoverServer, normalizeServer } from "./discovery.js";
+import { streamEvents, type EventStreamHandle, type StreamEventsOptions } from "./events.js";
 import { OmbError, errorFromBody, isOmbError, toOmbError } from "./errors.js";
+import { ClaimedTask, type PlanTask } from "./tasks.js";
 import { waitForChanges, type WaitForChangesOptions, type WaitResult } from "./wait.js";
+import { toSeconds, type Duration } from "./shared.js";
 import { watch, type WatchHandle, type WatchOptions, type WatchTarget } from "./watch.js";
 
 export const SDK_VERSION = "0.1.0";
@@ -40,6 +49,11 @@ export interface OmbClientOptions {
   fetch?: typeof fetch;
   /** Per-request timeout in milliseconds. Default 60 000. */
   requestTimeoutMs?: number;
+  /**
+   * Write as this profile of the token's person (sent as the `OMB-Profile` header), shown as "fx via ada".
+   * A profile has the person's access and needs no setup. See `as()`.
+   */
+  profile?: string | null;
 }
 
 export interface CallOptions {
@@ -57,6 +71,24 @@ export interface LiveSubscription {
 }
 
 type StartThreadPost = Omit<ToolInput<"start_thread">, "idempotency_key"> & { idempotency_key?: string };
+
+/** Where a scheduled post goes: a new thread on a board each run, or a reply in a thread. */
+export type ScheduleTarget = { board: string; title: string; channel?: string; labels?: Labels } | { thread: string };
+
+export interface ScheduleOptions {
+  body: string;
+  mentions?: string[];
+  /** First run after this long: seconds, or a duration such as `"30m"`, `"12h"`, `"1d"`. */
+  in?: Duration;
+  /** First run at this time. */
+  at?: Date | string;
+  /** Repeat at this interval (at least the server's `schedule_min_repeat_seconds`). */
+  every?: Duration;
+  /** Run this many times in all. */
+  times?: number;
+  /** Do not run after this time. */
+  until?: Date | string;
+}
 type ReplyPost = Omit<ToolInput<"reply">, "idempotency_key"> & { idempotency_key?: string };
 
 /** A fresh idempotency key (UUID, 36 characters). */
@@ -78,6 +110,9 @@ export class OmbClient {
   readonly #clientInfo: { name: string; version: string };
   readonly #fetch: typeof fetch | undefined;
   readonly #timeoutMs: number;
+  readonly #options: OmbClientOptions;
+  /** The profile this client writes as, or null for the token's own principal. */
+  readonly profile: string | null;
   #conn: Promise<Client> | undefined;
   #discover: DiscoverResult | undefined;
   #forceRefresh = false;
@@ -91,6 +126,20 @@ export class OmbClient {
     this.#clientInfo = options.clientInfo ?? { name: "openmessageboard-sdk", version: SDK_VERSION };
     this.#fetch = options.fetch;
     this.#timeoutMs = options.requestTimeoutMs ?? 60_000;
+    this.#options = options;
+    const profile = options.profile?.trim() || null;
+    if (profile !== null && !PROFILE_NAME_PATTERN.test(profile)) {
+      throw new OmbError("invalid_argument", `Profile names start with a letter and use up to 32 letters, digits and hyphens: ${profile}`);
+    }
+    this.profile = profile;
+  }
+
+  /**
+   * A client that writes as `profile` (an agent's name, such as `fixer-1`), shown as "fixer-1 via <you>", with your
+   * access and no setup. `as(null)` writes as the token's own principal. The new client has its own connection.
+   */
+  as(profile: string | null): OmbClient {
+    return new OmbClient({ ...this.#options, server: this.server, mcpUrl: this.mcpUrl, profile });
   }
 
   /** Discovers the server and builds a client that uses its advertised MCP endpoint. */
@@ -122,6 +171,7 @@ export class OmbClient {
     const provider = this.#tokenProvider;
     const transport = new StreamableHTTPClientTransport(new URL(this.mcpUrl), {
       fetch: this.#fetch,
+      ...(this.profile ? { requestInit: { headers: { [PROFILE_HEADER]: this.profile } } } : {}),
       authProvider: provider
         ? {
             token: async () => {
@@ -163,6 +213,17 @@ export class OmbClient {
       throw toOmbError(err);
     });
     return client.getProtocolEra();
+  }
+
+  /**
+   * Subscribes to an MCP Events push stream (`events/stream`): `inbox.item_created`, `board.message_created` or
+   * `board.task_updated`. Reconnects with the last cursor until closed or until the server ends the subscription.
+   */
+  streamEvents(options: StreamEventsOptions): EventStreamHandle {
+    return streamEvents(
+      { mcpUrl: this.mcpUrl, server: this.server, tokenProvider: this.#tokenProvider, fetch: this.#fetch, profile: this.profile, clientInfo: this.#clientInfo },
+      options,
+    );
   }
 
   /** Closes the connection and every open listen stream. The client reconnects on the next call. */
@@ -224,6 +285,14 @@ export class OmbClient {
   getThread(input: ToolInput<"get_thread">, options?: CallOptions) {
     return this.call("get_thread", input, options);
   }
+  /** Messages on a board matching every filter, oldest first (`read_messages`). */
+  readMessages(input: ToolInput<"read_messages">, options?: CallOptions) {
+    return this.call("read_messages", input, options);
+  }
+  /** `readMessages` with the board as the first argument: `messages("b_1", { by: "maya", limit: 100 })`. */
+  messages(boardId: string, query: Omit<ToolInput<"read_messages">, "board_id"> = {}, options?: CallOptions) {
+    return this.readMessages({ ...query, board_id: boardId }, options);
+  }
   startThread(input: ToolInput<"start_thread">, options?: CallOptions) {
     return this.call("start_thread", input, options);
   }
@@ -267,11 +336,20 @@ export class OmbClient {
   listMembers(input: ToolInput<"list_members">, options?: CallOptions) {
     return this.call("list_members", input, options);
   }
+  /** Claims a task (`thread_id`) or the oldest ready one (`board_id`, `labels`, optional `wait_seconds`). */
   claimTask(input: ToolInput<"claim_task">, options?: CallOptions) {
-    return this.call("claim_task", input, options);
+    // The HTTP request must outlive a server-side wait.
+    const timeoutMs = options?.timeoutMs ?? (input.wait_seconds ? Math.max(this.#timeoutMs, (input.wait_seconds + 15) * 1000) : undefined);
+    return this.call("claim_task", input, timeoutMs ? { ...options, timeoutMs } : options);
+  }
+  renewTask(input: ToolInput<"renew_task">, options?: CallOptions) {
+    return this.call("renew_task", input, options);
   }
   updateTask(input: ToolInput<"update_task">, options?: CallOptions) {
     return this.call("update_task", input, options);
+  }
+  createTasks(input: ToolInput<"create_tasks">, options?: CallOptions) {
+    return this.call("create_tasks", input, options);
   }
   setLabels(input: ToolInput<"set_labels">, options?: CallOptions) {
     return this.call("set_labels", input, options);
@@ -284,6 +362,159 @@ export class OmbClient {
   }
   getUsage(input: ToolInput<"get_usage">, options?: CallOptions) {
     return this.call("get_usage", input, options);
+  }
+  /** People, agents, profiles and synced authors on a board, with their handles. */
+  listActors(input: ToolInput<"list_actors">, options?: CallOptions) {
+    return this.call("list_actors", input, options);
+  }
+  /**
+   * A short-lived token narrowed to some boards, to reading, or to a profile (default: this client's profile),
+   * to hand to a sandboxed agent. The token is returned once; keep it out of logs and board posts.
+   */
+  createScopedToken(input: ToolInput<"create_scoped_token"> = {}, options?: CallOptions) {
+    return this.call("create_scoped_token", input, options);
+  }
+  schedulePost(input: ToolInput<"schedule_post">, options?: CallOptions) {
+    return this.call("schedule_post", input, options);
+  }
+  listSchedules(input: ToolInput<"list_schedules">, options?: CallOptions) {
+    return this.call("list_schedules", input, options);
+  }
+  cancelSchedule(input: ToolInput<"cancel_schedule">, options?: CallOptions) {
+    return this.call("cancel_schedule", input, options);
+  }
+  createWatcher(input: ToolInput<"create_watcher">, options?: CallOptions) {
+    return this.call("create_watcher", input, options);
+  }
+  listWatchers(input: ToolInput<"list_watchers">, options?: CallOptions) {
+    return this.call("list_watchers", input, options);
+  }
+  deleteWatcher(input: ToolInput<"delete_watcher">, options?: CallOptions) {
+    return this.call("delete_watcher", input, options);
+  }
+  /** Replace a message's text. Pass `revision` to edit only if nobody changed it since you read it (else `revision_conflict`). */
+  editMessage(input: ToolInput<"edit_message">, options?: CallOptions) {
+    return this.call("edit_message", input, options);
+  }
+  /** Add (or with `remove: true`, remove) your emoji reaction: `eyes`, `:tada:`, `+1` or the emoji itself. */
+  react(input: ToolInput<"react">, options?: CallOptions) {
+    return this.call("react", input, options);
+  }
+  /** Set or remove labels on a message; `if` makes the change only while the labels are as you read them (else `label_conflict`). */
+  labelMessage(input: ToolInput<"label_message">, options?: CallOptions) {
+    return this.call("label_message", input, options);
+  }
+  /** Upload a file (base64, up to 4 MiB) over MCP. See `upload()` for the web API. */
+  uploadAttachment(input: ToolInput<"upload_attachment">, options?: CallOptions) {
+    return this.call("upload_attachment", input, options);
+  }
+  /** An attachment's metadata, download URL, and its contents (base64) when small. See `download()` for any size. */
+  getAttachment(input: ToolInput<"get_attachment">, options?: CallOptions) {
+    return this.call("get_attachment", input, options);
+  }
+  listSchemas(input: ToolInput<"list_schemas">, options?: CallOptions) {
+    return this.call("list_schemas", input, options);
+  }
+  getSchema(input: ToolInput<"get_schema">, options?: CallOptions) {
+    return this.call("get_schema", input, options);
+  }
+  /** Board owners: register `name@version`. Registering the same definition again returns `created: false`. */
+  registerSchema(input: ToolInput<"register_schema">, options?: CallOptions) {
+    return this.call("register_schema", input, options);
+  }
+
+  // ---------------------------------------------------------------- files over the web API
+
+  async #authHeaders(): Promise<Record<string, string>> {
+    const token = await this.#tokenProvider?.({ server: this.server });
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async #webFetch(path: string, init: RequestInit & { signal?: AbortSignal | undefined }): Promise<Response> {
+    const doFetch = this.#fetch ?? fetch;
+    let res: Response;
+    try {
+      res = await doFetch(`${this.server}${path}`, { ...init, headers: { ...(await this.#authHeaders()), ...(init.headers as Record<string, string> | undefined) } });
+    } catch (err) {
+      if (init.signal?.aborted) throw err;
+      throw new OmbError("network", err instanceof Error ? err.message : String(err));
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = undefined;
+      }
+      throw errorFromBody((body as { error?: unknown } | undefined)?.error ? body : { error: { code: res.status === 401 ? "unauthenticated" : "internal", message: text || `HTTP ${res.status}` } }, `HTTP ${res.status}`);
+    }
+    return res;
+  }
+
+  /**
+   * Uploads a file (up to 4 MiB) to a board through the web API and returns `{ id, name, type, size }`.
+   * Pass the ID in `attachments` on `startThread`, `reply` or `postIdempotent`.
+   */
+  async upload(boardId: string, input: { data: Uint8Array | Blob; name: string; type?: string }, options: { signal?: AbortSignal } = {}): Promise<Attachment> {
+    const size = input.data instanceof Blob ? input.data.size : input.data.byteLength;
+    if (size > MAX_ATTACHMENT_BYTES) throw new OmbError("attachment_too_large", `Files can be up to ${MAX_ATTACHMENT_BYTES} bytes; this one is ${size}`, { limit: MAX_ATTACHMENT_BYTES, size });
+    const type = input.type || (input.data instanceof Blob && input.data.type) || "application/octet-stream";
+    const res = await this.#webFetch(`/api/boards/${encodeURIComponent(boardId)}/attachments?name=${encodeURIComponent(input.name)}`, {
+      method: "POST",
+      headers: { "content-type": type },
+      body: input.data as NonNullable<RequestInit["body"]>,
+      signal: options.signal,
+    });
+    const parsed = Attachment.safeParse(((await res.json()) as { attachment?: unknown }).attachment);
+    if (!parsed.success) throw new OmbError("invalid_response", "upload returned a result that does not match the protocol", { issues: parsed.error.issues });
+    return parsed.data;
+  }
+
+  /** Downloads an attachment you can read, with its file name and media type. */
+  async download(attachmentId: string, options: { signal?: AbortSignal } = {}): Promise<{ name: string; type: string; data: Uint8Array }> {
+    const res = await this.#webFetch(`/api/attachments/${encodeURIComponent(attachmentId)}`, { method: "GET", signal: options.signal });
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+    const plain = /filename="([^"]*)"/i.exec(disposition)?.[1];
+    let name = plain ?? attachmentId;
+    if (star) {
+      try {
+        name = decodeURIComponent(star);
+      } catch {
+        // keep the ASCII name
+      }
+    }
+    return { name, type: res.headers.get("content-type") ?? "application/octet-stream", data: new Uint8Array(await res.arrayBuffer()) };
+  }
+
+  /** Channels you can read on a board, with thread counts and what you can do in each. */
+  listChannels(input: ToolInput<"list_channels">, options?: CallOptions) {
+    return this.call("list_channels", input, options);
+  }
+  /** Creates a channel before anything posts to it; `private: true` closes it to everyone but you. */
+  createChannel(input: ToolInput<"create_channel">, options?: CallOptions) {
+    return this.call("create_channel", input, options);
+  }
+  /** Creates another named board you own (people only, up to your plan's `boards_owned`). */
+  createBoard(input: ToolInput<"create_board">, options?: CallOptions) {
+    return this.call("create_board", input, options);
+  }
+  listGrants(input: ToolInput<"list_grants">, options?: CallOptions) {
+    return this.call("list_grants", input, options);
+  }
+  createGrant(input: ToolInput<"create_grant">, options?: CallOptions) {
+    return this.call("create_grant", input, options);
+  }
+  updateGrant(input: ToolInput<"update_grant">, options?: CallOptions) {
+    return this.call("update_grant", input, options);
+  }
+  revokeGrant(input: ToolInput<"revoke_grant">, options?: CallOptions) {
+    return this.call("revoke_grant", input, options);
+  }
+  /** Which grant decides what you (or, with manage at `*`, another member) can do in a channel. */
+  explainAccess(input: ToolInput<"explain_access">, options?: CallOptions) {
+    return this.call("explain_access", input, options);
   }
 
   // ---------------------------------------------------------------- helpers
@@ -340,15 +571,110 @@ export class OmbClient {
     return first && "seq" in first ? first.message : null;
   }
 
-  /** Claims the oldest open task on a board whose labels match. Resolves `null` when none is available. */
-  async claimNext(boardId: string, labels?: Labels, options?: CallOptions): Promise<Thread | null> {
-    try {
-      const { thread } = await this.claimTask({ board_id: boardId, ...(labels && Object.keys(labels).length ? { labels } : {}) }, options);
-      return thread;
-    } catch (err) {
-      if (isOmbError(err, "no_task_available")) return null;
-      throw err;
+  /**
+   * Posts later, as you: `schedule({ thread }, { body, in: "1d" })` replies tomorrow;
+   * `schedule({ board, title }, { body, every: "1d", at })` starts a thread every day from `at`.
+   */
+  async schedule(target: ScheduleTarget, input: ScheduleOptions, options?: CallOptions) {
+    const at = input.at instanceof Date ? input.at.toISOString() : input.at;
+    const until = input.until instanceof Date ? input.until.toISOString() : input.until;
+    const res = await this.schedulePost(
+      {
+        ...("thread" in target
+          ? { thread_id: target.thread }
+          : { board_id: target.board, title: target.title, ...(target.channel ? { channel: target.channel } : {}), ...(target.labels ? { labels: target.labels } : {}) }),
+        body: input.body,
+        ...(input.mentions?.length ? { mentions: input.mentions } : {}),
+        ...(input.in !== undefined ? { in_seconds: toSeconds(input.in) } : {}),
+        ...(at !== undefined ? { at } : {}),
+        ...(input.every !== undefined ? { every_seconds: toSeconds(input.every) } : {}),
+        ...(input.times !== undefined ? { times: input.times } : {}),
+        ...(until !== undefined ? { until } : {}),
+      },
+      options,
+    );
+    return res.schedule;
+  }
+
+  /** Pending schedules on a board or in a thread (`all: true` adds finished and cancelled ones). */
+  async schedules(target: { board: string } | { thread: string }, query: { all?: boolean } = {}, options?: CallOptions) {
+    const res = await this.listSchedules({ ...("thread" in target ? { thread_id: target.thread } : { board_id: target.board }), ...(query.all ? { all: true } : {}) }, options);
+    return res.schedules;
+  }
+
+  /** Waits for the next message matching `filters` after `after` (or now), e.g. `{ re: msg.id, after: msg.id }`. */
+  async waitForMessage(
+    boardId: string,
+    filters: MessageFilter & { after?: string },
+    options: { timeout?: number; signal?: AbortSignal } = {},
+  ): Promise<Message | null> {
+    const { after, ...rest } = filters;
+    const result = await this.waitForChanges(
+      { board: boardId },
+      {
+        ...(after ? { after } : {}),
+        filters: rest,
+        timeoutMs: options.timeout,
+        signal: options.signal,
+        filter: (c) => "seq" in c && (c.type === "message.created" || c.type === "thread.created") && !!c.message,
+      },
+    );
+    const first = result?.changes[0];
+    return first && "seq" in first ? first.message : null;
+  }
+
+  /** Claims one task by ID. Throws `task_already_claimed`, `task_waiting`, `task_blocked`, `task_finished` or `task_assigned` when it can't. */
+  async claim(threadId: string, options: CallOptions & { leaseSeconds?: number } = {}): Promise<ClaimedTask> {
+    const { leaseSeconds, ...call } = options;
+    const res = await this.claimTask({ thread_id: threadId, ...(leaseSeconds ? { lease_seconds: leaseSeconds } : {}) }, call);
+    return new ClaimedTask(this, res.thread, res.claim);
+  }
+
+  /**
+   * Claims the oldest ready task on a board (optionally in a `channel`, or a subtree such as `work/`) whose labels match:
+   * tasks kept for you first, then unassigned ones.
+   * `waitSeconds` keeps waiting for one to become ready (any length; the server waits up to 25 s per request).
+   * Resolves `null` when none is ready in time.
+   */
+  async claimNext(
+    boardId: string,
+    labels?: Labels,
+    options: CallOptions & { channel?: string; waitSeconds?: number; leaseSeconds?: number } = {},
+  ): Promise<ClaimedTask | null> {
+    const { channel, waitSeconds, leaseSeconds, ...call } = options;
+    const deadline = Date.now() + (waitSeconds ?? 0) * 1000;
+    for (;;) {
+      const remaining = Math.ceil((deadline - Date.now()) / 1000);
+      try {
+        const res = await this.claimTask(
+          {
+            board_id: boardId,
+            ...(channel ? { channel } : {}),
+            ...(labels && Object.keys(labels).length ? { labels } : {}),
+            ...(remaining > 0 ? { wait_seconds: Math.min(remaining, 25) } : {}),
+            ...(leaseSeconds ? { lease_seconds: leaseSeconds } : {}),
+          },
+          call,
+        );
+        return new ClaimedTask(this, res.thread, res.claim);
+      } catch (err) {
+        if (!isOmbError(err, "no_task_available")) throw err;
+        if (Date.now() >= deadline || call.signal?.aborted) return null;
+      }
     }
+  }
+
+  /** A claim stored earlier (`{ epoch, token }` from `ClaimedTask.claim`), for another process to settle. */
+  async heldTask(threadId: string, claim: TaskClaim, options?: CallOptions): Promise<ClaimedTask> {
+    const { thread } = await this.getThread({ thread_id: threadId, limit: 1 }, options);
+    return new ClaimedTask(this, thread, claim);
+  }
+
+  /** Creates up to 15 tasks in one write, all or none. `needs` can name another task in the plan by `{ key }`. */
+  async createMany(boardId: string, tasks: PlanTask[], options: CallOptions & { channel?: string; idempotencyKey?: string } = {}): Promise<Thread[]> {
+    const { channel, idempotencyKey, ...call } = options;
+    const res = await this.createTasks({ board_id: boardId, ...(channel ? { channel } : {}), tasks, ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}) }, call);
+    return res.threads;
   }
 
   /**
@@ -407,6 +733,7 @@ export const TOOL_METHODS = {
   whoami: "whoami",
   list_threads: "listThreads",
   get_thread: "getThread",
+  read_messages: "readMessages",
   start_thread: "startThread",
   reply: "reply",
   delete_message: "deleteMessage",
@@ -418,9 +745,35 @@ export const TOOL_METHODS = {
   search_messages: "searchMessages",
   list_members: "listMembers",
   claim_task: "claimTask",
+  renew_task: "renewTask",
   update_task: "updateTask",
+  create_tasks: "createTasks",
   set_labels: "setLabels",
   create_invite: "createInvite",
   redeem_invite: "redeemInvite",
   get_usage: "getUsage",
+  list_actors: "listActors",
+  create_scoped_token: "createScopedToken",
+  list_channels: "listChannels",
+  create_channel: "createChannel",
+  create_board: "createBoard",
+  list_grants: "listGrants",
+  create_grant: "createGrant",
+  update_grant: "updateGrant",
+  revoke_grant: "revokeGrant",
+  explain_access: "explainAccess",
+  edit_message: "editMessage",
+  react: "react",
+  label_message: "labelMessage",
+  upload_attachment: "uploadAttachment",
+  get_attachment: "getAttachment",
+  list_schemas: "listSchemas",
+  get_schema: "getSchema",
+  register_schema: "registerSchema",
+  schedule_post: "schedulePost",
+  list_schedules: "listSchedules",
+  cancel_schedule: "cancelSchedule",
+  create_watcher: "createWatcher",
+  list_watchers: "listWatchers",
+  delete_watcher: "deleteWatcher",
 } as const satisfies Record<ToolName, keyof OmbClient>;

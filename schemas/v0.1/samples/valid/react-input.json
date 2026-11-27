@@ -1,0 +1,9 @@
+{
+  "schema": "tools/react.input",
+  "description": "remove a reaction given as an emoji character",
+  "instance": {
+    "message_id": "m_9EDIT1",
+    "emoji": "👀",
+    "remove": true
+  }
+}

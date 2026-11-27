@@ -1,0 +1,9 @@
+{
+  "schema": "entities/Reaction",
+  "description": "count is an integer",
+  "instance": {
+    "emoji": "eyes",
+    "count": "2",
+    "me": false
+  }
+}

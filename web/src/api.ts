@@ -1,27 +1,43 @@
 import type {
+  AccessExplanation,
   AddAgentToBoardBody,
   Agent,
   Board,
+  BoardActor,
+  Channel,
+  CreateGrantBody,
+  Grant,
+  UpdateGrantBody,
   ClaimTaskBody,
   CreateIntegrationBody,
+  CreateTasksBody,
   CreateInviteBody,
   CreateWorkloadTrustBody,
+  CreateWatcherBody,
   CreatedToken,
+  CreateTokenBody,
+  EditMessageBody,
   ErrorCode,
   ExternalLink,
   Integration,
   Invite,
   InvitePreview,
+  LabelMessageBody,
   LabelsBody,
   LinkThreadBody,
   MarkReadBody,
   Member,
   OAuthConsentBody,
   OAuthConsentInfo,
+  PersonalToken,
   Principal,
+  ReactBody,
+  RenewTaskBody,
   ReplyBody,
+  ScheduleBody,
   ServerInfo,
   StartThreadBody,
+  TaskStateFilter,
   ToolOutput,
   UpdateBoardBody,
   UpdateMemberBody,
@@ -36,8 +52,13 @@ type Out<T> = T extends { _output: infer O } ? O : never;
 export type StartThreadInput = Out<typeof StartThreadBody>;
 export type ReplyInput = Out<typeof ReplyBody>;
 export type LabelsInput = Out<typeof LabelsBody>;
+export type EditMessageInput = Out<typeof EditMessageBody>;
+export type ReactInput = Out<typeof ReactBody>;
+export type LabelMessageInput = Out<typeof LabelMessageBody>;
 export type UpdateTaskInput = Out<typeof UpdateTaskBody>;
 export type ClaimTaskInput = Out<typeof ClaimTaskBody>;
+export type RenewTaskInput = Out<typeof RenewTaskBody>;
+export type CreateTasksInput = Out<typeof CreateTasksBody>;
 export type MarkReadInput = Out<typeof MarkReadBody>;
 export type UpdateBoardInput = Out<typeof UpdateBoardBody>;
 export type UpdateMemberInput = Out<typeof UpdateMemberBody>;
@@ -48,12 +69,29 @@ export type LinkThreadInput = Out<typeof LinkThreadBody>;
 export type CreateWorkloadTrustInput = Out<typeof CreateWorkloadTrustBody>;
 export type ConsentInfo = Out<typeof OAuthConsentInfo>;
 export type ConsentInput = Out<typeof OAuthConsentBody>;
+export type ScheduleInput = Out<typeof ScheduleBody>;
+export type CreateWatcherInput = Out<typeof CreateWatcherBody>;
+export type MessageQuery = {
+  channel?: string;
+  by?: string;
+  mentions?: string;
+  labels?: Record<string, string>;
+  text?: string;
+  source?: string;
+  re?: string;
+  after?: string;
+  before?: string;
+  limit?: number;
+};
+export type CreateGrantInput = Out<typeof CreateGrantBody>;
+export type UpdateGrantInput = Out<typeof UpdateGrantBody>;
 
 export type Whoami = ToolOutput<"whoami">;
 export type ThreadList = ToolOutput<"list_threads">;
 export type ThreadPage = ToolOutput<"get_thread">;
 export type InboxPage = ToolOutput<"get_inbox">;
-export type PersonalToken = { id: string; prefix: string; label: string | null; created_at: string; last_used_at: string | null };
+export type { PersonalToken };
+export type CreateTokenInput = Out<typeof CreateTokenBody>;
 
 export type ClientErrorCode = ErrorCode | "network" | "http_error";
 
@@ -122,16 +160,18 @@ export function qs(query: Query): string {
 
 const enc = encodeURIComponent;
 
+/** Sends JSON, or a FormData body as multipart (the browser sets its Content-Type and boundary). */
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const multipart = body instanceof FormData;
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   let res: Response;
   try {
     res = await fetch(path, {
       method,
       credentials: "include",
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
       signal,
     });
   } catch (e) {
@@ -163,10 +203,12 @@ function unwrapBoard(res: { board: Board } | Board): Board {
 }
 
 export type ThreadQuery = {
+  channel?: string;
   filter?: "all" | "following" | "unread";
   kind?: "discussion" | "task";
-  task_state?: "open" | "claimed" | "done" | "cancelled";
+  task_state?: TaskStateFilter;
   assignee?: string;
+  for?: string;
   labels?: Record<string, string>;
   page_cursor?: string;
   limit?: number;
@@ -206,10 +248,12 @@ export const api = {
   threads: (boardId: string, q: ThreadQuery = {}, signal?: AbortSignal) =>
     get<ThreadList>(
       `/api/boards/${enc(boardId)}/threads${qs({
+        channel: q.channel,
         filter: q.filter && q.filter !== "all" ? q.filter : undefined,
         kind: q.kind,
         task_state: q.task_state,
         assignee: q.assignee,
+        for: q.for,
         label: labelParams(q.labels),
         page_cursor: q.page_cursor,
         limit: q.limit,
@@ -222,6 +266,19 @@ export const api = {
     get<ThreadPage>(`/api/threads/${enc(threadId)}${qs({ page_cursor, limit: 200 })}`, signal),
   reply: (threadId: string, body: ReplyInput) => post<ToolOutput<"reply">>(`/api/threads/${enc(threadId)}/messages`, body),
   deleteMessage: (messageId: string) => del<ToolOutput<"delete_message">>(`/api/messages/${enc(messageId)}`),
+  /** Pass the revision you loaded; a newer one on the server fails with `revision_conflict`. */
+  editMessage: (messageId: string, body: EditMessageInput) =>
+    patch<ToolOutput<"edit_message">>(`/api/messages/${enc(messageId)}`, body),
+  react: (messageId: string, body: ReactInput) => post<ToolOutput<"react">>(`/api/messages/${enc(messageId)}/reactions`, body),
+  labelMessage: (messageId: string, body: LabelMessageInput) =>
+    post<ToolOutput<"label_message">>(`/api/messages/${enc(messageId)}/labels`, body),
+  uploadAttachment: (boardId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return post<ToolOutput<"upload_attachment">>(`/api/boards/${enc(boardId)}/attachments`, form);
+  },
+  /** Always downloads (the server sends `Content-Disposition: attachment`). */
+  attachmentUrl: (attachmentId: string) => `/api/attachments/${enc(attachmentId)}`,
   follow: (threadId: string, following: boolean) =>
     put<ToolOutput<"set_follow">>(`/api/threads/${enc(threadId)}/follow`, { following }),
   setLabels: (threadId: string, body: LabelsInput) =>
@@ -229,11 +286,54 @@ export const api = {
   search: (boardId: string, query: string) =>
     get<ToolOutput<"search_messages">>(`/api/boards/${enc(boardId)}/search${qs({ query })}`),
 
+  messages: (boardId: string, q: MessageQuery = {}, signal?: AbortSignal) =>
+    get<ToolOutput<"read_messages">>(
+      `/api/boards/${enc(boardId)}/messages${qs({
+        channel: q.channel,
+        by: q.by,
+        mentions: q.mentions,
+        label: labelParams(q.labels),
+        text: q.text,
+        source: q.source,
+        re: q.re,
+        after: q.after,
+        before: q.before,
+        limit: q.limit,
+      })}`,
+      signal,
+    ),
+
+  // Scheduled posts and watchers
+  threadSchedules: (threadId: string, all = false, signal?: AbortSignal) =>
+    get<ToolOutput<"list_schedules">>(`/api/threads/${enc(threadId)}/schedules${qs({ all: all || undefined })}`, signal),
+  boardSchedules: (boardId: string, all = false, signal?: AbortSignal) =>
+    get<ToolOutput<"list_schedules">>(`/api/boards/${enc(boardId)}/schedules${qs({ all: all || undefined })}`, signal),
+  scheduleReply: (threadId: string, body: ScheduleInput) => post<ToolOutput<"schedule_post">>(`/api/threads/${enc(threadId)}/schedules`, body),
+  scheduleThread: (boardId: string, body: ScheduleInput) => post<ToolOutput<"schedule_post">>(`/api/boards/${enc(boardId)}/schedules`, body),
+  cancelSchedule: (scheduleId: string) => del<ToolOutput<"cancel_schedule">>(`/api/schedules/${enc(scheduleId)}`),
+  watchers: (boardId: string, signal?: AbortSignal) => get<ToolOutput<"list_watchers">>(`/api/boards/${enc(boardId)}/watchers`, signal),
+  createWatcher: (boardId: string, body: CreateWatcherInput) => post<ToolOutput<"create_watcher">>(`/api/boards/${enc(boardId)}/watchers`, body),
+  deleteWatcher: (watcherId: string) => del<ToolOutput<"delete_watcher">>(`/api/watchers/${enc(watcherId)}`),
+  // Channels and access
+  channels: (boardId: string, signal?: AbortSignal) => get<{ channels: Channel[] }>(`/api/boards/${enc(boardId)}/channels`, signal),
+  createChannel: (boardId: string, body: { path: string; private?: boolean }) =>
+    post<{ channel: Channel; created: boolean; grants: Grant[] }>(`/api/boards/${enc(boardId)}/channels`, body),
+  grants: (boardId: string, signal?: AbortSignal) => get<{ grants: Grant[] }>(`/api/boards/${enc(boardId)}/grants`, signal),
+  createGrant: (boardId: string, body: CreateGrantInput) => post<{ grant: Grant }>(`/api/boards/${enc(boardId)}/grants`, body),
+  updateGrant: (grantId: string, body: UpdateGrantInput) => patch<{ grant: Grant }>(`/api/grants/${enc(grantId)}`, body),
+  revokeGrant: (grantId: string) => del<{ grant_id: string; revoked: boolean }>(`/api/grants/${enc(grantId)}`),
+  explainAccess: (boardId: string, channel: string, principalId?: string) =>
+    get<AccessExplanation>(`/api/boards/${enc(boardId)}/access${qs({ channel, principal_id: principalId })}`),
+
   // Tasks
   updateTask: (threadId: string, body: UpdateTaskInput) =>
     post<ToolOutput<"update_task">>(`/api/threads/${enc(threadId)}/task`, body),
   claimTask: (boardId: string, body: ClaimTaskInput) =>
     post<ToolOutput<"claim_task">>(`/api/boards/${enc(boardId)}/tasks/claim`, body),
+  renewTask: (threadId: string, body: RenewTaskInput) =>
+    post<ToolOutput<"renew_task">>(`/api/threads/${enc(threadId)}/task/renew`, body),
+  createTasks: (boardId: string, body: CreateTasksInput) =>
+    post<ToolOutput<"create_tasks">>(`/api/boards/${enc(boardId)}/tasks`, body),
 
   // Inbox
   inbox: (q: { unread_only?: boolean; board_id?: string; page_cursor?: string; limit?: number } = {}) =>
@@ -242,6 +342,7 @@ export const api = {
 
   // Members and invites
   members: (boardId: string) => get<{ members: Member[] }>(`/api/boards/${enc(boardId)}/members`),
+  actors: (boardId: string) => get<{ actors: BoardActor[] }>(`/api/boards/${enc(boardId)}/actors`),
   updateMember: (boardId: string, principalId: string, body: UpdateMemberInput) =>
     patch<{ member: Member }>(`/api/boards/${enc(boardId)}/members/${enc(principalId)}`, body),
   removeMember: (boardId: string, principalId: string) => del(`/api/boards/${enc(boardId)}/members/${enc(principalId)}`),
@@ -256,13 +357,12 @@ export const api = {
   agents: () => get<{ agents: Agent[] }>("/api/agents"),
   createAgent: (display_name: string) => post<{ agent: Agent }>("/api/agents", { display_name }),
   disableAgent: (agentId: string) => del(`/api/agents/${enc(agentId)}`),
-  createAgentToken: (agentId: string, label?: string) =>
-    post<CreatedToken>(`/api/agents/${enc(agentId)}/tokens`, label ? { label } : {}),
+  createAgentToken: (agentId: string, body: CreateTokenInput = {}) => post<CreatedToken>(`/api/agents/${enc(agentId)}/tokens`, body),
   revokeAgentToken: (agentId: string, tokenId: string) => del(`/api/agents/${enc(agentId)}/tokens/${enc(tokenId)}`),
   addAgentToBoard: (boardId: string, body: AddAgentToBoardInput) =>
     post<unknown>(`/api/boards/${enc(boardId)}/agents`, body),
   tokens: () => get<{ tokens: PersonalToken[] }>("/api/tokens"),
-  createToken: (label?: string) => post<CreatedToken>("/api/tokens", label ? { label } : {}),
+  createToken: (body: CreateTokenInput = {}) => post<CreatedToken>("/api/tokens", body),
   revokeToken: (tokenId: string) => del(`/api/tokens/${enc(tokenId)}`),
 
   // Sync integrations

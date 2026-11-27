@@ -1,5 +1,5 @@
 /** events profile: MCP Events extension (SEP-3415) with poll and webhook delivery. */
-import { EVENT_DEFINITIONS, EVENT_NAMES, EVENTS_EXTENSION_ID } from "@openmessageboard/protocol";
+import { EVENT_DEFINITIONS, EVENT_NAMES, EVENTS_EXTENSION_ID, MCP_PROTOCOL_VERSION } from "@openmessageboard/protocol";
 import type { EventName } from "@openmessageboard/protocol";
 import { check, Failure } from "../errors.ts";
 import type { CaseDef, Ctx } from "../harness.ts";
@@ -282,16 +282,121 @@ export const eventCases: CaseDef[] = [
       checkOccurrence(occ, "board.task_updated", "board.task_updated");
       check(!created.seen.some((o) => (o.data as { thread: { id: string } }).thread.id === other.thread.id), "a task with non-matching labels was delivered");
       await maya.ok("claim_task", { thread_id: t.thread.id });
-      await owner.ok("update_task", { thread_id: t.thread.id, action: "release" });
+      await owner.ok("update_task", { thread_id: t.thread.id, action: "block", reason: `hold ${ctx.runId}` });
       const mayaId = (await ctx.me("maya")).id;
       type TaskData = { thread: { id: string; task: { state: string } | null }; actor: { id: string } | null };
-      const isRelease = (o: Occurrence) => {
+      const isHold = (o: Occurrence) => {
         const d = o.data as TaskData;
-        return d.thread.id === t.thread.id && d.thread.task?.state === "open" && d.actor?.id !== mayaId;
+        return d.thread.id === t.thread.id && d.thread.task?.state === "blocked" && d.actor?.id !== mayaId;
       };
-      const released = await pollUntil(maya, "board.task_updated", args, created.cursor, isRelease);
-      check(!released.seen.some((o) => (o.data as TaskData).actor?.id === mayaId), "maya's own claim was delivered to maya");
-      check(released.seen.some(isRelease), "the owner's release was not delivered");
+      const held = await pollUntil(maya, "board.task_updated", args, created.cursor, isHold);
+      check(!held.seen.some((o) => (o.data as TaskData).actor?.id === mayaId), "maya's own claim was delivered to maya");
+      check(held.seen.some(isHold), "the owner's hold was not delivered");
+      const byState = pollResult(await maya.rpc("events/poll", { name: "board.task_updated", arguments: { ...args, state: "blocked" }, cursor: created.cursor }), "task poll by state");
+      check(
+        byState.events.every((o) => (o.data as TaskData).thread.task?.state === "blocked"),
+        "the state argument filters occurrences by the task's state",
+      );
+    },
+  },
+  {
+    id: "events.push",
+    profile: "events",
+    title: "Push (optional): events/stream checks Mcp-Name, confirms with active, delivers occurrences tagged with the subscription ID, and heartbeats",
+    async run(ctx) {
+      const t = await sharedThread(ctx);
+      const owner = await ctx.session("owner");
+      const maya = await ctx.session("maya");
+      const list = await maya.rpc("events/list");
+      const def = ((list.result?.events ?? []) as { name: string; delivery?: string[] }[]).find((e) => e.name === "board.message_created");
+      if (!def?.delivery?.includes("push")) ctx.skip("board.message_created does not offer push delivery (optional)");
+      const args = { board_id: t.boardId };
+      const open = (name: string, headerName: string, signal?: AbortSignal) =>
+        fetch(ctx.endpoint, {
+          method: "POST",
+          ...(signal ? { signal } : {}),
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            authorization: `Bearer ${ctx.token("maya")}`,
+            "mcp-protocol-version": MCP_PROTOCOL_VERSION,
+            "mcp-method": "events/stream",
+            "mcp-name": headerName,
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "conf-push",
+            method: "events/stream",
+            params: {
+              name,
+              arguments: args,
+              cursor: null,
+              heartbeatMs: 5000,
+              _meta: {
+                "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
+                "io.modelcontextprotocol/clientInfo": CLIENT_INFO,
+                "io.modelcontextprotocol/clientCapabilities": { extensions: { [EVENTS_EXTENSION_ID]: {} } },
+              },
+            },
+          }),
+        });
+      const mismatch = await open("board.message_created", "inbox.item_created");
+      const mm = (await mismatch.json().catch(() => null)) as { error?: { code?: number } } | null;
+      check(mismatch.status === 400 && mm?.error?.code === -32020, `a mismatched Mcp-Name header must be rejected with 400 and -32020 (got ${mismatch.status} ${JSON.stringify(mm?.error)})`);
+
+      const ac = new AbortController();
+      const res = await open("board.message_created", "board.message_created", ac.signal);
+      try {
+        check((res.headers.get("content-type") ?? "").includes("text/event-stream"), `events/stream must answer with an SSE stream (got ${res.status} ${res.headers.get("content-type")})`);
+        const frames: Record<string, unknown>[] = [];
+        const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+        void (async () => {
+          let buf = "";
+          try {
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) return;
+              buf += value;
+              let i: number;
+              while ((i = buf.search(/\r?\n\r?\n/)) !== -1) {
+                const data = buf.slice(0, i).split(/\r?\n/).filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("");
+                buf = buf.slice(i).replace(/^\r?\n\r?\n/, "");
+                if (data) frames.push(JSON.parse(data) as Record<string, unknown>);
+              }
+            }
+          } catch {
+            /* aborted */
+          }
+        })();
+        const take = async (m: string, ms: number) => {
+          const deadline = Date.now() + ms;
+          for (;;) {
+            const i = frames.findIndex((f) => f.method === m);
+            if (i !== -1) return frames.splice(i, 1)[0] as { params: Record<string, unknown> };
+            if (Date.now() > deadline) return undefined;
+            await sleep(100);
+          }
+        };
+        const subId = (p: Record<string, unknown>) => (p._meta as Record<string, unknown> | undefined)?.["io.modelcontextprotocol/subscriptionId"];
+        const active = await take("notifications/events/active", 5000);
+        check(active, "the stream must start with notifications/events/active");
+        check(typeof active.params.heartbeatMs === "number" && typeof active.params.truncated === "boolean", "active carries the granted heartbeatMs and truncated");
+        check(subId(active.params) === "conf-push", "every notifications/events/* message carries the request id in _meta subscriptionId");
+        const own = await reply(maya, t.threadId, "Own message, not pushed.");
+        const posted = await reply(owner, t.threadId, "Push delivery check.");
+        const ev = await take("notifications/events/event", 10_000);
+        check(ev, "no notifications/events/event for a new message within 10 s");
+        check(ev.params.eventId === posted.message.id, `the first pushed event is ${String(ev.params.eventId)}, expected the owner's message (the subscriber's own message ${own.message.id} is excluded)`);
+        check(subId(ev.params) === "conf-push", "event notifications carry the subscription ID");
+        check(typeof ev.params.cursor === "string", "push occurrences carry a cursor");
+        const { _meta: _ignored, ...occurrence } = ev.params;
+        checkOccurrence(occurrence as unknown as Occurrence, "board.message_created", "push delivery");
+        const hb = await take("notifications/events/heartbeat", Number(active.params.heartbeatMs) * 2 + 2000);
+        check(hb, `no notifications/events/heartbeat within twice the granted interval (${String(active.params.heartbeatMs)} ms)`);
+        check("cursor" in hb.params, "heartbeats carry the checked-up-to cursor");
+      } finally {
+        ac.abort();
+      }
     },
   },
 ];
