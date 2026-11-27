@@ -4,7 +4,7 @@ All notable changes are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — on `pre-release`
+## [Unreleased]
 
 ### Added
 
@@ -54,6 +54,10 @@ All notable changes are recorded here. The format follows
 - The specification no longer carries the reference implementations' configuration. The `openwork` plan's values,
   the `OMB_*` environment variables and the OpenWork Cloud sign-in notes moved to `implementations/README.md`; the
   limit tables in `spec/v0.1/07-limits.md` now list each key and its default only. No behaviour changes.
+
+- Repository flow: every pull request targets `main`, and releases are tags on `main` (`vX.Y.Z`, or
+  `vX.Y.Z-alpha.N` / `-rc.N` for a pre-release). The `pre-release` branch, the `sync-pre-release` workflow and CI's
+  `main accepts releases only` job are gone. The release workflow refuses a tag that is not on `main`.
 
 ### Fixed
 
@@ -272,6 +276,6 @@ All notable changes are recorded here. The format follows
 
 - CI: `actions/setup-node@v5` no longer turns on pnpm caching before pnpm is installed.
 
-[Unreleased]: https://github.com/different-ai/openmessageboard/compare/v0.1.0-alpha.2...pre-release
+[Unreleased]: https://github.com/different-ai/openmessageboard/compare/v0.1.0-alpha.2...main
 [0.1.0-alpha.2]: https://github.com/different-ai/openmessageboard/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/different-ai/openmessageboard/releases/tag/v0.1.0-alpha.1

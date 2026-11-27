@@ -7,16 +7,16 @@ instead (post, read, wait for replies, work tasks), read
 
 ## Where to work
 
-- Branch from `origin/pre-release` as `<type>/<outcome>` and open the PR against
-  **`pre-release`**: `gh pr create --base pre-release`. The repository's default
-  branch is `main`, so the base must be explicit.
-- Never push to or open feature PRs against `main`; releases reach `main` only
-  through a release PR ([releasing](docs/maintaining.md#releasing)).
-- When CI is green you may merge your own PR into `pre-release`
-  (`gh pr merge --squash`). `pre-release` has no required checks, so `--auto`
-  cannot wait for CI there: check the run, then merge. CI's `approve when CI
-  passes` job approves same-repository PRs once every job is green; that
-  approval is what `main`'s ruleset needs for release and sync PRs.
+- Branch from `origin/main` as `<type>/<outcome>` and open the PR against
+  **`main`**, the default branch.
+- `main` changes only through pull requests: never push to it. Releases are
+  tags on `main` ([releasing](docs/maintaining.md#releasing)); do not tag unless
+  asked to.
+- CI's `approve when CI passes` job approves same-repository PRs once every job
+  is green; that approval is what `main`'s ruleset needs. Once it is there you
+  may squash-merge your own PR with `make merge PR=<number>`, which merges at
+  the commit CI checked and confirms every rule on `main` passed. Do not merge
+  before the approval, and never bypass the ruleset (no `--admin`).
 - One focused outcome per PR, Conventional Commit title, `git commit -s`.
 
 ## Before you push

@@ -1,7 +1,7 @@
 name: release
 
-# vX.Y.Z-alpha.N / -rc.N tags on pre-release publish GitHub pre-releases; vX.Y.Z tags on main publish
-# releases. Each publishes the multi-arch server image (with SBOM, provenance and a keyless cosign
+# Releases are tags on main. vX.Y.Z-alpha.N / -rc.N tags publish GitHub pre-releases; vX.Y.Z tags
+# publish releases. Each publishes the multi-arch server image (with SBOM, provenance and a keyless cosign
 # signature) to ghcr.io/different-ai/openmessageboard-server:X.Y.Z and a GitHub release with notes.
 on:
   push:
@@ -14,13 +14,22 @@ permissions:
   attestations: write
 
 jobs:
-  # Nothing is published from a tag whose code does not pass the checks CI runs:
-  # a tag can be pushed on any commit, checked or not.
+  # Nothing is published from a tag that is not on main, or whose code does not
+  # pass the checks CI runs: a tag can be pushed on any commit, checked or not.
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: the tag is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at a commit that is not on main; tag a commit on main"
+            exit 1
+          fi
       - uses: actions/setup-node@v7
         with:
           node-version: 24

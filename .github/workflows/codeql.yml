@@ -3,9 +3,9 @@ name: codeql
 # Code scanning results are required by the organization's ruleset on main.
 on:
   push:
-    branches: [main, pre-release]
+    branches: [main]
   pull_request:
-    branches: [main, pre-release]
+    branches: [main]
   schedule:
     - cron: "41 4 * * 1"
 

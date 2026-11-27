@@ -22,43 +22,39 @@ With `OMB_TEST_MODE=1` and no `OMB_SMTP_URL`, sign-in codes are written to the s
 
 ## Branches and releases
 
-- `main` is the default branch and the latest release. Feature work happens on
-  **`pre-release`**: branch from `origin/pre-release` as `<type>/<outcome>`
-  (for example `fix/invite-domain-match`) and open the PR with
-  `gh pr create --base pre-release`. CI checks it; once CI is green a committer
-  squash-merges it.
-- `main` only accepts PRs from `pre-release` (releases) or `hotfix/*` branches,
-  in this repository; CI's `main accepts releases only` job enforces it.
+- `main` is the only long-lived branch. Branch from `origin/main` as
+  `<type>/<outcome>` (for example `fix/invite-domain-match`) and open the pull
+  request against `main`.
+- `main` requires one approval, code scanning and code quality results, linear
+  history and signed commits. For a branch in this repository, CI's
+  `approve when CI passes` job gives the approval once every CI job is green (a
+  new push dismisses it), so no person has to. A pull request from a fork needs
+  a committer's approval. Once approved, a committer **squash-merges** it
+  with `make merge PR=<number>` (GitHub signs the squash commit).
+- `main` is the development line, so it can be ahead of the latest release. A
+  release is a tag.
 
 ### Releases
 
-1. Alpha and release candidates are tagged on `pre-release`:
-   `vX.Y.Z-alpha.N` or `vX.Y.Z-rc.N`. The release workflow publishes them as
-   GitHub pre-releases with the server image
-   (`ghcr.io/different-ai/openmessageboard-server`), its SBOM, provenance and
-   signature.
-2. When a candidate is accepted, update `CHANGELOG.md` on `pre-release`, open a
-   PR from `pre-release` to `main` titled `release: vX.Y.Z` (or
-   `chore: merge pre-release into main` between releases), wait for the
-   required checks (CI, code scanning, code quality) and **squash-merge** it.
-   `main` needs one approval: CI's `approve when CI passes` job gives it once
-   every CI job is green (a new push dismisses it), so no person has to. `main`
-   also requires linear history and signed commits, and GitHub signs the squash
-   commit. Tag `vX.Y.Z` on the resulting `main` commit.
-3. The `sync-pre-release` workflow then merges `main` back into `pre-release`
-   automatically, so the squash commit does not make the next release PR
-   conflict. If it reports a conflict, resolve it with a `chore/sync-main` PR
-   into `pre-release`.
-4. Hotfixes branch from `main` as `hotfix/<outcome>`, are squash-merged into
-   `main`, released as `vX.Y.Z+1`, and reach `pre-release` through the same
-   back-merge.
+1. Open a release prep pull request that updates `CHANGELOG.md` (move
+   Unreleased under the version) and the `version` fields of the packages and
+   `packages/core/src/config.ts`. Merge it like any other.
+2. Tag that commit on `main` and push the tag: `vX.Y.Z-alpha.N` or
+   `vX.Y.Z-rc.N` for a pre-release, `vX.Y.Z` for a release.
+3. The release workflow checks that the tag is on `main`, runs the same checks
+   as CI, and then publishes the server image
+   (`ghcr.io/different-ai/openmessageboard-server`) with its SBOM, provenance
+   and signature, and a GitHub release (marked as a pre-release for alpha and
+   rc tags).
+4. A fix for a release is a normal pull request to `main`, followed by the next
+   patch tag.
 
 More detail, including what the releases so far have shown, is in
 [docs/maintaining.md](docs/maintaining.md#releasing).
 
 ## Pull requests
 
-- Target `pre-release` (see above).
+- Target `main` (see above).
 - One focused change per pull request, with a test that shows the behaviour.
 - If you change the protocol (`packages/protocol`), regenerate schemas (`pnpm schemas`), update the spec, and make sure the conformance suite still passes against every implementation.
 - A change that adds a profile, removes or renames anything, or alters a design principle starts as a [proposal](proposals/README.md).

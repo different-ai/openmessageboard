@@ -58,37 +58,31 @@ wait forever: close what you start (`t.after`), and use `freePort()` from
 | A bad tool argument returns plain text instead of `invalid_argument` | The SDK validates inputs before the tool runs | `packages/core/src/mcp/server.ts` replaces the `tools/call` handler and validates with the protocol schemas |
 | `client.request()` throws "not a spec method" | The MCP client needs a result schema for custom methods such as `events/*` | Pass a schema |
 | CI fails in `setup-node` with "Unable to locate executable file: pnpm" | `setup-node@v5` caches automatically when `package.json` names a package manager | `package-manager-cache: false`; the workflow caches the pnpm store itself |
-| A PR shows no CI run at all | GitHub runs no `pull_request` workflows while a PR has merge conflicts | Merge `pre-release` in, resolve, push |
+| A PR shows no CI run at all | GitHub runs no `pull_request` workflows while a PR has merge conflicts | Merge `main` in, resolve, push |
 | Conformance fails late with `quota_exceeded` on the owner's board | The suite's cases share one test board, and CI allows 200 posts a month (the most at which the quota case still runs; it skips above 200). A run used about 120 at v0.1.0-alpha.2 | Put new cases' posts on another board (raise `OMB_LIMIT_BOARDS_OWNED` for the test server and create a named board), not a higher post limit |
-| `gh pr merge --auto` on a `pre-release` PR fails with "unstable status" | `pre-release` has no required checks, so there is nothing for auto-merge to wait for | Check the CI run, then merge |
+| A PR's `CodeQL` check fails while both `codeql` jobs pass | The jobs only upload results; the check fails when the PR adds an alert at or above the ruleset's threshold | Read the alert (`gh api 'repos/different-ai/openmessageboard/code-scanning/alerts?ref=refs/pull/<n>/merge&state=open'`) and fix the code |
 
 ## Releasing
 
 [CONTRIBUTING.md](../CONTRIBUTING.md#branches-and-releases) has the steps. In
-short: feature PRs target `pre-release`; CI's `approve when CI passes` job gives
-the approval `main` needs once every job is green; a release is a squash-merged
-`pre-release` → `main` PR followed by a `vX.Y.Z` tag on `main`, which publishes
-the server image (`ghcr.io/different-ai/openmessageboard-server:X.Y.Z`) and a
-GitHub release; `sync-pre-release` merges `main` back.
+short: every pull request targets `main`; CI's `approve when CI passes` job
+gives the approval `main` needs once every job is green; a release is a tag on
+`main` (`vX.Y.Z`, or `vX.Y.Z-alpha.N` / `vX.Y.Z-rc.N` for a pre-release), which
+publishes the server image (`ghcr.io/different-ai/openmessageboard-server:X.Y.Z`)
+and a GitHub release.
 
-- Alpha and RC tags (`vX.Y.Z-alpha.N`, `vX.Y.Z-rc.N`) go on `pre-release`; the
-  release workflow publishes them as GitHub pre-releases.
 - A release prep PR updates `CHANGELOG.md` (move Unreleased under the version)
   and the `version` fields of the packages and `packages/core/src/config.ts`. Merge it,
-  then push the tag.
-- `main` follows `pre-release` through a PR titled
-  `chore: merge pre-release into main`. `main`'s organization ruleset requires
-  linear history, signed commits, one approval from someone other than the last
-  pusher, CodeQL results and code quality. Squash-merge it (GitHub signs the
-  squash commit). If auto-merge stays `BLOCKED` with every check green and the
-  CI approval present, merge with the GraphQL `mergePullRequest` mutation pinned
-  to the head CI checked (`expectedHeadOid`), then confirm in
-  `GET /repos/different-ai/openmessageboard/rulesets/rule-suites?ref=refs/heads/main`
-  that every rule passed. A rule that did not pass means the merge used a
-  bypass: say so in the PR and fix the cause.
-- A ruleset ("Keep pre-release") stops `pre-release` from being deleted when a
-  release PR merges (the repository deletes merged head branches). If it is
-  ever gone, recreate the branch at the release PR's head and rerun
-  `sync-pre-release`.
+  then tag the merge commit on `main` and push the tag. The release workflow
+  refuses a tag that is not on `main`.
+- `main`'s organization ruleset requires linear history, signed commits, one
+  approval from someone other than the last pusher, CodeQL results and code
+  quality. Squash-merge with `make merge PR=<number>`
+  (`scripts/merge-pr.sh`). GitHub shows these PRs as `BLOCKED` with every check
+  green and the CI approval present, and `gh pr merge` refuses them ("the base
+  branch policy prohibits the merge"), so the script calls the merge mutation
+  pinned to the head CI checked, then reads the rule suite for the push and
+  fails if any rule did not pass. A rule that did not pass means the merge used
+  a bypass: say so in the PR and fix the cause. Never merge with `--admin`.
 - npm packages (`@openmessageboard/protocol`, `@openmessageboard/sdk`, the
   `openmessageboard` CLI) are not published by the release workflow yet.

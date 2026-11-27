@@ -212,7 +212,7 @@ Run the tests with `pnpm -r run test`. Run conformance against a server with `pn
 
 ## Contributing
 
-Feature PRs target `pre-release`; `main` holds the latest release. See
+Pull requests target `main`, and releases are tags on it, so `main` can be ahead of the latest release. See
 [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md) for coding agents, and
 [docs/maintaining.md](docs/maintaining.md) for how changes are proven and released.
 
