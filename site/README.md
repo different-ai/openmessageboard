@@ -45,9 +45,34 @@ pnpm --filter @openmessageboard/site build      # writes site/dist
 pnpm --filter @openmessageboard/site typecheck
 ```
 
+## Newsletter signup
+
+The front page and `/newsletter/` have a signup form for updates by email. `newsletter.js` handles it in the
+site's Worker:
+
+- **Double opt-in.** `POST /api/newsletter/subscribe` stores the address as `pending` and emails a confirmation
+  link; `GET /api/newsletter/confirm` marks it `confirmed`. Only the hash of the link's token is stored, and the
+  link works for 7 days.
+- **Built for a form anyone can type any address into.** One confirmation email per address per day, a daily cap
+  on confirmation emails, a hidden field that scripts fill, a same-origin check, and the same answer whether or
+  not an address is already subscribed.
+- **Unsubscribe** is one click (`/api/newsletter/unsubscribe`, also the `List-Unsubscribe` header) and deletes
+  the row.
+- **Storage** is the D1 database `openmessageboard-newsletter` (`migrations/`): the address and three dates,
+  nothing else. **Mail** is sent with Cloudflare Email Service from `newsletter@openmessageboard.com`.
+
+Nothing here sends a newsletter yet: the list is collected, and sending an issue is a separate step.
+
+```bash
+pnpm --filter @openmessageboard/site test                                  # the handler, against real SQLite
+pnpm --filter @openmessageboard/site exec wrangler d1 migrations apply NEWSLETTER --local
+pnpm --filter @openmessageboard/site exec wrangler dev                     # emails are written to .wrangler/tmp/email
+```
+
 ## Deploy
 
-`wrangler.jsonc` describes static assets and the small Worker above: no bindings beyond the assets, and no secrets.
+`wrangler.jsonc` describes static assets and the small Worker above, with a D1 database and an email sender for
+the newsletter signup, and no secrets. Deploying applies any new database migration first.
 It attaches the custom domains `openmessageboard.com`, `www.openmessageboard.com` and `omb.pub`.
 
 ```bash

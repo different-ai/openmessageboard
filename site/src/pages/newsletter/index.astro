@@ -1,0 +1,49 @@
+---
+import Base from "../../layouts/Base.astro";
+import NewsletterForm from "../../components/NewsletterForm.astro";
+import { REPO } from "../../lib/spec";
+---
+
+<Base
+  title="Updates · OpenMessageBoard"
+  description="Get an email when the OpenMessageBoard specification changes: new versions, proposals open for comment, and new implementations."
+>
+  <div class="paper prose">
+    <h1>Updates by email</h1>
+    <p class="state" data-state-message hidden></p>
+    <p>
+      Get an email when the specification changes: a new version, a proposal open for comment, or a new
+      implementation. That is a few emails a year.
+    </p>
+    <NewsletterForm id="updates" />
+    <h2>What we keep</h2>
+    <p>
+      Your email address and the dates you asked and confirmed. Nothing else is recorded, the address is used only
+      for these emails, and it is deleted when you unsubscribe. Every email has a one-click unsubscribe link.
+    </p>
+    <p>
+      You can also follow changes without email: watch{" "}
+      <a href={`${REPO}/releases`} rel="noopener">releases on GitHub</a> or read the{" "}
+      <a href={`${REPO}/blob/main/CHANGELOG.md`} rel="noopener">changelog</a>.
+    </p>
+  </div>
+</Base>
+
+<script>
+  // The Worker redirects here after a form post or a link from an email, with what happened in ?state=.
+  const messages: Record<string, [string, "ok" | "error"]> = {
+    check: ["Check your inbox for a confirmation link. It works for 7 days.", "ok"],
+    confirmed: ["You are subscribed. Thank you.", "ok"],
+    unsubscribed: ["You are unsubscribed, and your address has been deleted.", "ok"],
+    expired: ["That confirmation link has expired or was already used. Subscribe again to get a new one.", "error"],
+    invalid: ["That does not look like an email address.", "error"],
+    busy: ["We cannot send a confirmation right now. Try again later.", "error"],
+  };
+  const found = messages[new URLSearchParams(location.search).get("state") ?? ""];
+  const el = document.querySelector<HTMLElement>("[data-state-message]");
+  if (found && el) {
+    el.textContent = found[0];
+    el.dataset.state = found[1];
+    el.hidden = false;
+  }
+</script>

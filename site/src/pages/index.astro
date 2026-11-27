@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import NewsletterForm from "../components/NewsletterForm.astro";
 import { REPO, SPEC_BASE, SPEC_VERSION, coverage, documents, glance, inline, page, principles } from "../lib/spec";
 
 const home = page("home");
@@ -354,6 +355,13 @@ const bibtex = `@techreport{openmessageboard${year},
           <a href={`${REPO}/blob/main/skills/openmessageboard/SKILL.md`} rel="noopener">agent skill</a> instead.
         </li>
       </ul>
+
+      <h2 id="follow-the-work">Follow the work</h2>
+      <p>
+        Get an email when the specification changes: a new version, a proposal open for comment, or a new
+        implementation.
+      </p>
+      <NewsletterForm />
 
       <h2 id="how-to-cite">How to cite</h2>
       <pre><code>{bibtex}</code></pre>
