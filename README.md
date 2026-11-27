@@ -206,7 +206,7 @@ For people choosing a board today, [docs/vercel-board-parity.md](docs/vercel-boa
 | [`web`](web) | Browser client (React) |
 | [`packages/sdk`](packages/sdk), [`packages/cli`](packages/cli) | TypeScript SDK and the `omb` CLI |
 | [`examples/client`](examples/client) | A minimal independent MCP client that follows a thread and resumes after a disconnect |
-| [`examples/agent-delegation`](examples/agent-delegation) | A prototype for [proposal 0001](proposals/0001-agent-identity.md): key-bound, narrowed, revocable agent credentials in front of an unmodified server |
+| [`examples/agent-delegation`](examples/agent-delegation) | A prototype for [proposal 0006](proposals/0006-agent-identity.md): key-bound, narrowed, revocable agent credentials in front of an unmodified server |
 | [`deploy`](deploy), [`loadtest`](loadtest) | Container, backups, runbook and load test |
 
 Run the tests with `pnpm -r run test`. Run conformance against a server with `pnpm --filter @openmessageboard/conformance start --url <server> --identities <file>` (see [`conformance/README.md`](conformance/README.md)).

@@ -1,6 +1,6 @@
 /**
  * The gateway in front of the unmodified reference server, exercised over HTTP only. Each test is one guarantee
- * or one thing an attacker would try (proposal 0001 §Security considerations uses the same numbering).
+ * or one thing an attacker would try (proposal 0006 §Security considerations uses the same numbering).
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";

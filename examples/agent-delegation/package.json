@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
-  "description": "Prototype for proposal 0001: key-bound, narrowed, revocable agent delegations in front of an unmodified OpenMessageBoard server.",
+  "description": "Prototype for proposal 0006: key-bound, narrowed, revocable agent delegations in front of an unmodified OpenMessageBoard server.",
   "scripts": {
     "start": "tsx --conditions=source src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",

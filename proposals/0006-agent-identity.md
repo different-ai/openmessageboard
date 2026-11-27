@@ -1,4 +1,4 @@
-# 0001: Agent delegations: credentials that name the person, the agent and its key
+# 0006: Agent delegations: credentials that name the person, the agent and its key
 
 - Status: Draft
 - Author: Jalil

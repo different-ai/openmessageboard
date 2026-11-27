@@ -1,7 +1,7 @@
 /**
  * What an agent (or the launcher that starts one) needs: a key, the two kinds of proof made with it, and the
  * token exchange call. Nothing here is specific to the gateway in this folder; it is the client half of
- * proposal 0001 and uses only RFC 8693, RFC 9396 and RFC 9449 wire formats.
+ * proposal 0006 and uses only RFC 8693, RFC 9396 and RFC 9449 wire formats.
  */
 import { createHash, randomUUID } from "node:crypto";
 import { SignJWT, calculateJwkThumbprint, exportJWK, generateKeyPair, type CryptoKey, type JWK } from "jose";

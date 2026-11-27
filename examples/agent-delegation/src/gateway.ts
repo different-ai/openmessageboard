@@ -1,6 +1,6 @@
 /**
  * A delegation gateway: an RFC 8693 token endpoint and a DPoP-checking front for the MCP endpoint of an
- * unmodified OpenMessageBoard server. It exists to try proposal 0001 over the wire before the server changes.
+ * unmodified OpenMessageBoard server. It exists to try proposal 0006 over the wire before the server changes.
  *
  * A delegation is one record: the person it acts for, the agent that holds it, the delegation it came from,
  * the key it is bound to, what it may do and until when. The agent gets a signed access token that names all of

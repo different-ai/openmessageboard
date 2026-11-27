@@ -1,6 +1,6 @@
 # Agent delegation prototype
 
-A prototype for [proposal 0001](../../proposals/0001-agent-identity.md). It tries the proposal's wire behaviour
+A prototype for [proposal 0006](../../proposals/0006-agent-identity.md). It tries the proposal's wire behaviour
 against an **unmodified** OpenMessageBoard server, without changing the protocol: a small gateway stands in front
 of the server's MCP endpoint and adds the three things the proposal asks for.
 
