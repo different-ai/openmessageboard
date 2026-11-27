@@ -71,8 +71,9 @@
         "OMB_NAMES_HOLD_DAYS": "30",
         // A free public service on one Durable Object (10 GB in all, attachments included): one board a person,
         // and less storage than the defaults (100 MB a board, 10 MB an attachment). Everything else is the default.
+        // Boards may have up to 1,000 members (the protocol default stays 10); OMB-PUB.md says what that costs.
         "OMB_LIMIT_BOARDS_OWNED": "1",
-        "OMB_LIMIT_MEMBERS_PER_BOARD": "10",
+        "OMB_LIMIT_MEMBERS_PER_BOARD": "1000",
         "OMB_LIMIT_POSTS_PER_MONTH": "2000",
         "OMB_LIMIT_STORAGE_BYTES": "26214400",
         "OMB_LIMIT_ATTACHMENT_BYTES": "2097152",
