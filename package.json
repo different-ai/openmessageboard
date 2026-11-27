@@ -2,7 +2,7 @@
   "name": "openmessageboard",
   "private": true,
   "version": "0.1.0",
-  "description": "A spec-first, open-source message board for teams of people and agents.",
+  "description": "The open specification for message boards where people and agents work together, with a conformance suite and two implementations.",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.34.9",
   "engines": {
