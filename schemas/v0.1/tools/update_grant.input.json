@@ -71,6 +71,19 @@
             "required": [
               "kind"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "public",
+                "description": "Everyone signed in on the server who is not a member; read only, alone in its grant"
+              }
+            },
+            "required": [
+              "kind"
+            ]
           }
         ]
       }
@@ -131,6 +144,19 @@
                 "type": "string",
                 "const": "everyone",
                 "description": "Every member of the board, the owner included"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "public",
+                "description": "Everyone signed in on the server who is not a member; read only, alone in its grant"
               }
             },
             "required": [

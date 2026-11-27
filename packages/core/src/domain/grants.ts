@@ -143,6 +143,62 @@ function levelFor(g: ParsedGrant, s: Subject): Level | null {
   return best;
 }
 
+// ---------- the public ----------
+
+/** A grant that names the public: everyone signed in who is not a member (11 §Public access). */
+export const isPublicGrant = (g: ParsedGrant): boolean => g.principals.some((p) => p.kind === "public");
+
+/**
+ * What public grants give at a channel (or pattern): among the public grants whose pattern covers it, the most
+ * specific pattern decides, as for members, so `read` at `*` with nothing at `internal/` opens everything else.
+ * Never more than `read`, whatever a stored grant says.
+ */
+export function publicDecision(grants: ParsedGrant[], target: string): { pattern: string | null; grantIds: string[]; mask: number } {
+  let bestSpec = -1;
+  let out: { pattern: string | null; grantIds: string[]; mask: number } = { pattern: null, grantIds: [], mask: 0 };
+  for (const g of grants) {
+    if (!isPublicGrant(g)) continue;
+    for (const [pattern, mask] of g.can) {
+      if (!covers(pattern, target)) continue;
+      const spec = specificity(pattern);
+      if (spec > bestSpec) {
+        bestSpec = spec;
+        out = { pattern, grantIds: [g.row.id], mask };
+      } else if (spec === bestSpec) {
+        if (!out.grantIds.includes(g.row.id)) out.grantIds.push(g.row.id);
+        out.mask |= mask;
+      }
+    }
+  }
+  return { ...out, mask: out.mask & BIT.read };
+}
+
+export const publicMask = (grants: ParsedGrant[], target: string): number => publicDecision(grants, target).mask;
+
+/** Whether a public grant gives `read` at some pattern: the board is public. */
+export const hasPublicRead = (grants: ParsedGrant[]): boolean => grants.some((g) => isPublicGrant(g) && g.can.some(([, mask]) => (mask & BIT.read) !== 0));
+
+/**
+ * Whether `principal`, who is not counted as a member here, may read the board's public channels.
+ * - The server offers public access, the board is not disabled and has a public grant that gives `read`.
+ * - A scoped token reaches only its boards.
+ * - A person may. An agent or a profile may only when its person saved the board: a board address in a message
+ *   must not pull an agent onto a board its person never chose, for the reason agents cannot redeem invites.
+ * - A disabled principal, or the agent of one, may not.
+ */
+export function isPublicReader(ctx: AppContext, boardId: string, principal: AccessPrincipal, grants?: ParsedGrant[]): boolean {
+  if (!ctx.config.publicAccess || !boardInScope(principal, boardId)) return false;
+  if (principal.kind !== "human" && principal.kind !== "agent") return false;
+  const board = ctx.db.prepare("SELECT disabled_at FROM boards WHERE id = ?").get(boardId) as { disabled_at: string | null } | undefined;
+  if (!board || board.disabled_at) return false;
+  if (!hasPublicRead(grants ?? loadGrants(ctx, boardId))) return false;
+  const enabled = (id: string) => (ctx.db.prepare("SELECT disabled_at FROM principals WHERE id = ?").get(id) as { disabled_at: string | null } | undefined)?.disabled_at === null;
+  if (!enabled(principal.id)) return false;
+  if (principal.kind === "human") return true;
+  if (!principal.ownerId || !enabled(principal.ownerId)) return false;
+  return ctx.db.prepare("SELECT 1 FROM saved_boards WHERE principal_id = ? AND board_id = ?").get(principal.ownerId, boardId) !== undefined;
+}
+
 export interface Decision {
   pattern: string | null;
   level: Level | null;
@@ -201,6 +257,8 @@ export class ChannelAccess {
     readonly grants: ParsedGrant[],
     /** A scoped token's permissions; everything else is masked out. */
     private readonly tokenMask: number = ALL_PERMISSIONS,
+    /** Not a member: reads only what public grants open (11 §Public access). Only `loadReader` sets it. */
+    readonly publicReader: boolean = false,
   ) {}
 
   /**
@@ -226,6 +284,19 @@ export class ChannelAccess {
     return new ChannelAccess(boardId, subject, person, grants ?? loadGrants(ctx, boardId), tokenMask);
   }
 
+  /**
+   * `load`, and for a principal who is not a member, what public grants let it read. Only the read paths the
+   * specification opens to the public call this (11 §Public access); everything else calls `load`, where a
+   * principal who is not a member can do nothing.
+   */
+  static loadReader(ctx: AppContext, boardId: string, principal: AccessPrincipal, grants?: ParsedGrant[]): ChannelAccess {
+    const access = ChannelAccess.load(ctx, boardId, principal, grants);
+    if (access.isMember) return access;
+    const all = grants ?? loadGrants(ctx, boardId);
+    if (!isPublicReader(ctx, boardId, principal, all)) return access;
+    return new ChannelAccess(boardId, null, null, all, ALL_PERMISSIONS, true);
+  }
+
   /** Builds access for a known role without reading the membership (used for synthetic members). */
   static forRole(boardId: string, role: Role, grants: ParsedGrant[], id = ""): ChannelAccess {
     return new ChannelAccess(boardId, { id, kind: "human", role, ownerId: null }, null, grants);
@@ -242,13 +313,15 @@ export class ChannelAccess {
 
   /** Permission mask at a channel path, a subtree pattern (`a/`) or `*`. */
   mask(target: string): number {
-    if (!this.subject) return 0;
+    if (!this.subject) return this.publicReader ? publicMask(this.grants, target) : 0;
     const key = this.uniform ? "*" : target;
     let m = this.cache.get(key);
     if (m === undefined) {
       m = decide(this.grants, this.subject, target).granted & ROLE_CAP[this.subject.role];
       if (this.person) m &= decide(this.grants, this.person, target).granted & ROLE_CAP[this.person.role];
       m &= this.tokenMask;
+      // A member is never worse off than the public: what anyone signed in may read, a member may read.
+      m |= publicMask(this.grants, target);
       this.cache.set(key, m);
     }
     return m;
@@ -268,8 +341,10 @@ export class ChannelAccess {
 
   /** Like readableChannels, for channels where the principal has every one of `perms`. */
   allowedChannels(ctx: AppContext, ...perms: Permission[]): string[] | null {
-    if (!this.subject) return [];
+    if (!this.subject && !this.publicReader) return [];
     const ok = (target: string) => perms.every((p) => this.can(target, p));
+    // The public gets an explicit list, never "every channel", so a thread whose channel has no row stays hidden.
+    if (this.publicReader) return (ctx.db.prepare("SELECT path FROM channels WHERE board_id = ?").all(this.boardId) as { path: string }[]).map((r) => r.path).filter(ok);
     if (this.uniform) return ok("*") ? null : [];
     const paths = (ctx.db.prepare("SELECT path FROM channels WHERE board_id = ?").all(this.boardId) as { path: string }[]).map((r) => r.path);
     const allowed = paths.filter(ok);

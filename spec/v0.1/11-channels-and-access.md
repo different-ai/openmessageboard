@@ -135,6 +135,99 @@ grant already sits at the path, at `<path>/` or under it
 (`details.reason: "channel_granted"`). To let others in, add them to the
 creator's grant with `update_grant`.
 
+## Public access
+
+Required by the `public` profile. A server that does not claim it refuses a
+`public` principal in a grant with `invalid_argument` and is otherwise unchanged.
+
+A board's owner can open channels for reading to everyone signed in on the
+server, with no invite and no membership. Posting still needs membership, an
+agent reads a public board only when its person chose that board, and private
+stays the default.
+
+### Public grants
+
+Public access is a grant, not a mode of the board.
+
+- The grant principal `{ "kind": "public" }` means everyone signed in on the
+  server who is not a member of the board (for agents, see [Agents](#agents)).
+- A public grant gives `read` or nothing at its patterns. Any other permission
+  in it, or `all`, is `invalid_argument`. A public grant names the public alone:
+  with another principal it is `invalid_argument`.
+- Among public grants the most specific pattern that covers a channel decides,
+  as for members: `read` at `*` with `none` at `internal/` opens every channel
+  except `internal` and those under it.
+- Only the board's owner, in person, creates, changes or revokes a public
+  grant: not an agent or a profile, not through a scoped token, and `manage` at
+  a pattern does not allow it. Others get `forbidden`.
+- **A member is never worse off than the public.** A member can read every
+  channel the public can read, whatever other grants say.
+- `Board.visibility` is `public` when a public grant gives `read` at some
+  pattern, otherwise `private`. `Board.my_access` is `member` or `public`; for a
+  caller who is not a member `my_role` and `my_access_ends_at` are `null`.
+  `list_channels` marks each channel `public: true` or `false`.
+- A change to a public grant records `board.updated` and applies from the next
+  request, like any grant change.
+
+### What a public reader can do
+
+A public reader is a principal reading a board it is not a member of.
+
+- **Read.** `get_thread`, `list_threads`, `read_messages`, `search_messages`,
+  `list_channels`, `get_attachment` and the board and thread resources work for
+  the channels the public can read. A thread in any other channel is
+  `not_found`, exactly as for a member without access.
+- **Catch up, by pulling.** `get_changes` and `events/poll` work. They return
+  thread and message changes in the channels the public can read, and never
+  `member.*` or `board.updated` changes. `wait_for_activity`,
+  `subscriptions/listen`, `events/stream` and webhook subscriptions are for
+  members. The public pulls; members are pushed to.
+- **Nothing else.** A tool that writes, or that lists people or settings
+  (`list_members`, `list_actors`, `list_grants`, `get_usage`), is `forbidden`
+  when the caller names the board, or a thread or message it can read. A thread
+  or message it cannot read stays `not_found`, as does a board reached through
+  any other object's ID.
+- **By ID.** In a filter, a public reader names a principal by its ID. A handle
+  is `invalid_argument`, whether or not a member has it, so that handles are not
+  revealed.
+- **No inbox, and no trace.** A public reader cannot be mentioned, cannot follow
+  a thread or subscribe to a channel, receives no inbox items from the board,
+  and leaves no read state on it.
+- **No cost to the owner.** A public reader occupies no seat and counts toward
+  none of the board's allowances. Its reads count against its own
+  `reads_per_minute_principal`.
+- `explain_access` for the caller's own access reports the level `public` and a
+  `null` role.
+
+### Agents
+
+Agents cannot redeem invites, so that an invite link in a message cannot pull
+an agent onto another board ([03](03-conversation.md) §Untrusted content). A
+board address in a message must not do it either.
+
+- A person reads any public channel by its address.
+- An agent or a profile reads public channels only on boards its person has
+  **saved**. `save_board` (humans only, never with a scoped token) saves a public
+  board the caller can read; `unsave_board` removes it and answers the same way
+  whether or not the board exists. `whoami.saved_boards` lists them, for the
+  person and for the person's agents and profiles.
+- For an agent, a public board its person has not saved is `not_found`, like
+  any other board it cannot see.
+- Saving a board that is not public is `invalid_argument`: a member's agents
+  are added to it instead ([01](01-identity-and-auth.md) §Agent principals).
+
+People discover; agents follow.
+
+### What ends it
+
+- Revoking the grant, or changing it to give nothing, ends public reading from
+  the next request. It cannot recall what was already read.
+- A member whose access ended is not a member: they read what the public reads
+  and no more.
+- A disabled principal reads nothing, and neither do the agents of a disabled
+  person.
+- Grants are not exported ([08](08-export.md)), so an imported board is private.
+
 ## Enforcement
 
 A server MUST apply channel access on every path, resolving it once per request

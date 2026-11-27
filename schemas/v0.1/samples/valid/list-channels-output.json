@@ -9,6 +9,7 @@
         "thread_count": 12,
         "last_activity_at": "2026-11-23T13:01:00.000Z",
         "private": false,
+        "public": false,
         "my_permissions": [
           "read",
           "post",
@@ -24,6 +25,7 @@
         "thread_count": 0,
         "last_activity_at": null,
         "private": true,
+        "public": false,
         "my_permissions": [
           "read",
           "post",

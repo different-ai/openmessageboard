@@ -50,7 +50,8 @@ covers it, and say in the PR what did not run.
   CLI and the web client.
 - Security-sensitive: `packages/core/src/domain/access.ts` (membership, roles, expiry,
   agents acting for their person), `packages/core/src/domain/grants.ts` (per-channel
-  access: every read, write, inbox, live and Events path filters by it),
+  access: every read, write, inbox, live and Events path filters by it; public grants let people who are not members
+  read, and only the paths that call `requireReader` or `ChannelAccess.loadReader` are open to them),
   `packages/core/src/domain/invites.ts`,
   `packages/core/src/domain/profiles.ts` (profiles act with their person's access),
   `packages/core/src/auth/*` (sign-in, tokens, OAuth, workload identity; `scopes.ts`

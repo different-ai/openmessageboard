@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { OmbError } from "../errors.js";
 import { decrypt, encrypt, newId, sha256 } from "../ids.js";
-import { activeMembership, actorFromPrincipal, getBoardRow, getPrincipal, nowIso, requireMember } from "../domain/access.js";
+import { activeMembership, actorFromPrincipal, getBoardRow, getPrincipal, nowIso, requireMember, requireReader } from "../domain/access.js";
 import { boardInScope } from "../auth/scopes.js";
 import { decodeCursor, encodeCursor } from "../domain/cursors.js";
 import { presentChanges } from "../domain/changes.js";
@@ -93,15 +93,27 @@ export function currentSeq(ctx: AppContext, scope: { kind: "b" | "i"; id: string
     : (ctx.db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM events").get() as { s: number }).s;
 }
 
-export function authorize(ctx: AppContext, actor: Actor, name: EventName, args: { board_id?: string; thread_id?: string }) {
+/**
+ * Whether the caller may use an event on a board. Polling is open to someone reading through a public grant
+ * (`allowPublic`): the public pulls. Streams and webhook subscriptions are for members, who are pushed to
+ * (11 §Public access).
+ */
+export function authorize(ctx: AppContext, actor: Actor, name: EventName, args: { board_id?: string; thread_id?: string }, opts: { allowPublic?: boolean } = {}) {
   try {
-    if (args.board_id) requireMember(ctx, actor, args.board_id);
+    if (args.board_id) {
+      if (opts.allowPublic) requireReader(ctx, actor, args.board_id);
+      else requireMember(ctx, actor, args.board_id);
+    }
     if (args.thread_id) {
       const t = ctx.db.prepare("SELECT board_id, channel FROM threads WHERE id = ?").get(args.thread_id) as { board_id: string; channel: string } | undefined;
-      if (!t || t.board_id !== args.board_id || !ChannelAccess.load(ctx, t.board_id, actor).can(t.channel, "read")) throw new OmbError("not_found", "Thread not found");
+      const access = t && (opts.allowPublic ? ChannelAccess.loadReader(ctx, t.board_id, actor) : ChannelAccess.load(ctx, t.board_id, actor));
+      if (!t || t.board_id !== args.board_id || !access!.can(t.channel, "read")) throw new OmbError("not_found", "Thread not found");
     }
   } catch (e) {
-    if (e instanceof OmbError) throw new EventsError(EVENT_ERRORS.Forbidden, "Forbidden", { code: e.code === "access_ended" ? "access_ended" : "not_found", reason: e.message });
+    if (e instanceof OmbError) {
+      const code = e.code === "access_ended" || e.code === "forbidden" ? e.code : "not_found";
+      throw new EventsError(EVENT_ERRORS.Forbidden, "Forbidden", { code, reason: e.message });
+    }
     throw e;
   }
   if (name !== "inbox.item_created" && !args.board_id) throw new EventsError(-32602, "board_id is required");
@@ -152,7 +164,8 @@ export function occurrencesAfter(
   }
   const boardId = args.board_id!;
   const board = getBoardRow(ctx, boardId);
-  const access = ChannelAccess.load(ctx, boardId, actor);
+  // Reader access: `authorize` and the delivery workers decide who gets this far (members, or the public when polling).
+  const access = ChannelAccess.loadReader(ctx, boardId, actor);
   const visible = (channel: string | undefined) => !!channel && access.can(channel, "read") && (!args.channel || channelMatches(args.channel, channel));
   const types = name === "board.message_created" ? ["message.created", "thread.created"] : ["thread.created", "thread.updated"];
   const params: unknown[] = [boardId, afterSeq, ...types];
@@ -232,7 +245,8 @@ export function pollEvents(ctx: AppContext, actor: Actor, raw: unknown) {
   if (!p.success) throw new EventsError(-32602, "Invalid params");
   const args = parseArgs(p.data.name, p.data.arguments);
   const name = p.data.name as EventName;
-  authorize(ctx, actor, name, args);
+  // The one Events method open to someone reading through a public grant: the public pulls (11 §Public access).
+  authorize(ctx, actor, name, args, { allowPublic: true });
   const scope = cursorScope(name, actor, args);
   const { seq, truncated } = decodeEventCursor(ctx, p.data.cursor, scope);
   const minTime = p.data.maxAgeMs ? new Date(ctx.now().getTime() - p.data.maxAgeMs).toISOString() : undefined;

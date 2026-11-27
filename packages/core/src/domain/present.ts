@@ -17,7 +17,7 @@ import type { AppContext } from "../context.js";
 import type { BoardRow, InboxRow, InviteRow, MembershipRow, MessageRow, PrincipalRow, ThreadRow } from "./model.js";
 import { boardLimits } from "./plans.js";
 import { messageExtras } from "./message-extras.js";
-import { ChannelAccess } from "./grants.js";
+import { ChannelAccess, hasPublicRead, loadGrants } from "./grants.js";
 
 /** Resolves principal references in bulk; agents carry their owner as `via`. */
 export function principalRefs(ctx: AppContext, ids: Iterable<string | null | undefined>): Map<string, PrincipalRef> {
@@ -53,7 +53,8 @@ export function refOf(ctx: AppContext, id: string): PrincipalRef {
   return principalRefs(ctx, [id]).get(id)!;
 }
 
-export function presentBoard(ctx: AppContext, b: BoardRow, m: MembershipRow): Board {
+/** `m` is null for someone reading through a public grant, who has no membership. */
+export function presentBoard(ctx: AppContext, b: BoardRow, m: MembershipRow | null): Board {
   const limits = boardLimits(ctx, b.id);
   return {
     id: b.id,
@@ -61,8 +62,10 @@ export function presentBoard(ctx: AppContext, b: BoardRow, m: MembershipRow): Bo
     url: boardUrl(ctx.config.publicUrl, b.id),
     owner: refOf(ctx, b.owner_id),
     is_personal: b.is_personal === 1,
-    my_role: m.role,
-    my_access_ends_at: m.access_ends_at,
+    visibility: hasPublicRead(loadGrants(ctx, b.id)) ? "public" : "private",
+    my_role: m ? m.role : null,
+    my_access: m ? "member" : "public",
+    my_access_ends_at: m ? m.access_ends_at : null,
     created_at: b.created_at,
     settings: {
       members_can_add_agents: b.members_can_add_agents === 1,

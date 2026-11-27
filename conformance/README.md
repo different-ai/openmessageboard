@@ -32,7 +32,7 @@ cd ../..
 # 3. Run the suite.
 conformance/node_modules/.bin/tsx --conditions=source conformance/src/cli.ts \
   --url http://localhost:8787 --identities conformance/identities.json \
-  --profiles core,live,events,tasks,automation,import
+  --profiles core,live,events,tasks,automation,import,public
 ```
 
 A full run takes about five minutes with the default burst limits, mostly
@@ -66,7 +66,7 @@ with `subdomain` as a second member, and write a few threads on the outsider's o
 |---|---|
 | `--url <url>` | Server base URL. Defaults to `server` in the identities file. |
 | `--identities <file>` | Identities file (below). Required. |
-| `--profiles <list>` | Profiles to test. Default `core,live,events,tasks,automation,import`. Also `sync`, `workload`. |
+| `--profiles <list>` | Profiles to test. Default `core,live,events,tasks,automation,import,public`. Also `sync`, `workload`. |
 | `--only <ids>` | Comma-separated case ids, prefixes (`core.invite`) or substrings. |
 | `--force-profiles` | Run profiles the server does not claim in discovery (otherwise skipped). |
 | `--json` | Machine-readable report on stdout (progress goes to stderr). |

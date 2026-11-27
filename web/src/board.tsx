@@ -126,7 +126,8 @@ export function BoardShell({ boardId, section, children }: { boardId: string; se
             members,
             meId: principal.id,
             isOwner: board.my_role === "owner",
-            canWrite: board.my_role !== "reader",
+            // Someone reading through a public grant has no role: they read and nothing else.
+            canWrite: board.my_role !== null && board.my_role !== "reader",
             live,
             setBoard,
             reloadMembers,

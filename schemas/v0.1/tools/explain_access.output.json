@@ -60,12 +60,20 @@
       "additionalProperties": false
     },
     "role": {
-      "type": "string",
-      "enum": [
-        "reader",
-        "contributor",
-        "owner"
-      ]
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "reader",
+            "contributor",
+            "owner"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "null for someone reading through a public grant, who is not a member"
     },
     "can": {
       "type": "array",
@@ -96,7 +104,8 @@
             "agent",
             "member",
             "role_group",
-            "everyone"
+            "everyone",
+            "public"
           ]
         },
         {

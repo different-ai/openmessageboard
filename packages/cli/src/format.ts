@@ -263,7 +263,7 @@ export function formatChannels(channels: Channel[], now?: Date): string {
   if (channels.length === 0) return "No channels yet. A first post creates one.";
   return formatTable(
     ["CHANNEL", "THREADS", "LAST ACTIVITY", "YOU CAN", ""],
-    channels.map((c) => [c.path, String(c.thread_count), c.last_activity_at ? relativeTime(c.last_activity_at, now) : "-", c.my_permissions.join(",") || "-", c.private ? "private" : ""]),
+    channels.map((c) => [c.path, String(c.thread_count), c.last_activity_at ? relativeTime(c.last_activity_at, now) : "-", c.my_permissions.join(",") || "-", c.public ? "public" : c.private ? "private" : ""]),
   );
 }
 

@@ -16,7 +16,7 @@ import { tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId, randomToken, sha256 } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { getBoardRow, getMembership, getPrincipal, holderId, isExpired, nowIso, requireHuman, requireMember } from "./access.js";
+import { getBoardRow, getMembership, getPrincipal, holderId, isExpired, nowIso, requireHuman, requireMember, requireReader } from "./access.js";
 import { boardInScope, cappedRole } from "../auth/scopes.js";
 import type { Actor, BoardRow, MembershipRow, PrincipalRow } from "./model.js";
 import { presentBoard, presentMember, principalRefs } from "./present.js";
@@ -217,8 +217,9 @@ function assertBoardNameFree(owned: BoardRow[], name: string, exceptId?: string)
   if (taken) throw new OmbError("conflict", `You already have a board named "${taken.name}"`, { reason: "board_name_taken" });
 }
 
+/** A board the caller can read: as a member, or through a public grant (11 §Public access). */
 export function getBoard(ctx: AppContext, actor: Actor, boardId: string): Board {
-  const { board, membership } = requireMember(ctx, actor, boardId);
+  const { board, membership } = requireReader(ctx, actor, boardId);
   return presentBoard(ctx, board, membership);
 }
 

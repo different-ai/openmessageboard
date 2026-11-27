@@ -19,10 +19,10 @@ import { tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, getPrincipal, nowIso, requireMember } from "./access.js";
+import { activeMembership, getPrincipal, nowIso, requireMember, requireReader } from "./access.js";
 import { requireScope } from "../auth/scopes.js";
 import { recordEvent } from "./boards.js";
-import { ChannelAccess, ROLE_CAP, decide, maskOf, parseGrant, permsOf, type GrantRow, type ParsedGrant } from "./grants.js";
+import { ChannelAccess, ROLE_CAP, decide, isPublicGrant, maskOf, parseGrant, permsOf, publicDecision, publicMask, type GrantRow, type ParsedGrant } from "./grants.js";
 import type { Actor } from "./model.js";
 import { principalRefs, refOf } from "./present.js";
 
@@ -75,6 +75,7 @@ function presentChannels(ctx: AppContext, boardId: string, rows: ChannelRow[], a
     thread_count: stats.get(r.path)?.n ?? 0,
     last_activity_at: stats.get(r.path)?.last ?? null,
     private: !reader.can(r.path, "read") && !contributor.can(r.path, "read"),
+    public: publicMask(access.grants, r.path) !== 0,
     my_permissions: permsOf(access.mask(r.path)),
     created_at: r.created_at,
   }));
@@ -82,8 +83,8 @@ function presentChannels(ctx: AppContext, boardId: string, rows: ChannelRow[], a
 
 /** Channels the caller can read, sorted by path. */
 export function listChannels(ctx: AppContext, actor: Actor, boardId: string): { channels: Channel[] } {
-  requireMember(ctx, actor, boardId);
-  const access = ChannelAccess.load(ctx, boardId, actor);
+  // Open to the public: the channels a public grant covers, and nothing else (11 §Public access).
+  const access = requireReader(ctx, actor, boardId).channels;
   const rows = (ctx.db.prepare("SELECT board_id, path, created_at FROM channels WHERE board_id = ? ORDER BY path").all(boardId) as ChannelRow[]).filter((r) =>
     access.can(r.path, "read"),
   );
@@ -134,6 +135,26 @@ function normalizeCan(can: GrantCanInput): Map<string, number> {
 }
 
 const principalKey = (p: GrantPrincipal) => (p.kind === "member" ? `member:${p.principal_id}` : p.kind);
+
+const READ_ONLY_MASK = maskOf(["read"]);
+
+/** Whether the caller is the board's owner in person: not an agent or a profile, and not through a scoped token. */
+const isOwnerInPerson = (actor: Actor, access: ChannelAccess): boolean => isOwner(access) && actor.kind === "human" && !actor.scope;
+
+/**
+ * The rules for a grant that names the public (11 §Public access): the server offers public access, the grant
+ * names the public alone, it gives `read` or nothing, and only the board's owner, in person, makes or changes it.
+ * Opening a board to people who are not members changes who can learn that it exists, so `manage` is not enough.
+ */
+function assertPublicGrant(ctx: AppContext, actor: Actor, access: ChannelAccess, principals: GrantPrincipal[], can: Iterable<[string, number]>): void {
+  if (!principals.some((p) => p.kind === "public")) return;
+  if (!ctx.config.publicAccess) throw invalid("This server does not offer public access", { reason: "public_not_offered" });
+  if (!isOwnerInPerson(actor, access)) throw forbidden("Only the board's owner, in person, can open it to the public");
+  if (principals.length !== 1) throw invalid("A public grant names the public alone; give members a grant of their own");
+  for (const [pattern, mask] of can) {
+    if ((mask & ~READ_ONLY_MASK) !== 0) throw invalid(`A public grant gives read or nothing; at ${pattern} it names ${permsOf(mask & ~READ_ONLY_MASK).join(", ")}`);
+  }
+}
 
 function normalizePrincipals(ctx: AppContext, boardId: string, list: GrantPrincipal[]): GrantPrincipal[] {
   const seen = new Map<string, GrantPrincipal>();
@@ -205,6 +226,7 @@ export function createGrant(ctx: AppContext, actor: Actor, boardId: string, inpu
     if (input.principals.length === 0) throw invalid("A grant needs at least one principal");
     const principals = normalizePrincipals(ctx, boardId, input.principals);
     assertCanManage(access, can.keys(), can);
+    assertPublicGrant(ctx, actor, access, principals, can);
     const row = insertGrant(ctx, boardId, actor.id, principals, can);
     grantsChanged(ctx, emit, boardId, actor.id);
     return { grant: presentGrants(ctx, [parseGrant(row)])[0]! };
@@ -227,6 +249,7 @@ export function updateGrant(
     const current = parseGrant(row);
     const currentPatterns = current.can.map(([p]) => p);
     if (!canManageAll(access, currentPatterns)) throw notFound("Grant");
+    if (isPublicGrant(current) && !isOwnerInPerson(actor, access)) throw forbidden("Only the board's owner, in person, can change a public grant");
     const can = input.can ? normalizeCan(input.can) : null;
     if (can) assertCanManage(access, can.keys(), can);
     const removing = new Set((input.remove ?? []).map(principalKey));
@@ -234,6 +257,7 @@ export function updateGrant(
     const principals = input.add?.length ? normalizePrincipals(ctx, row.board_id, [...kept, ...input.add]) : kept;
     if (principals.length === 0) throw invalid("A grant needs at least one principal; revoke it instead");
     if (principals.length > MAX_GRANT_PRINCIPALS) throw invalid(`A grant can name up to ${MAX_GRANT_PRINCIPALS} principals`);
+    assertPublicGrant(ctx, actor, access, principals, can ?? current.can);
     ctx.db
       .prepare("UPDATE grants SET principals = ?, can = ?, updated_at = ? WHERE id = ?")
       .run(JSON.stringify(principals), can ? canJson(can) : row.can, nowIso(ctx), row.id);
@@ -250,7 +274,9 @@ export function revokeGrant(ctx: AppContext, actor: Actor, grantId: string): { g
     if (!row) throw notFound("Grant");
     requireMember(ctx, actor, row.board_id, "reader", "Grant");
     const access = ChannelAccess.load(ctx, row.board_id, actor);
-    if (!canManageAll(access, parseGrant(row).can.map(([p]) => p))) throw notFound("Grant");
+    const current = parseGrant(row);
+    if (!canManageAll(access, current.can.map(([p]) => p))) throw notFound("Grant");
+    if (isPublicGrant(current) && !isOwnerInPerson(actor, access)) throw forbidden("Only the board's owner, in person, can revoke a public grant");
     ctx.db.prepare("DELETE FROM grants WHERE id = ?").run(row.id);
     grantsChanged(ctx, emit, row.board_id, actor.id);
     return { grant_id: row.id, revoked: true };
@@ -305,8 +331,26 @@ export function createChannel(ctx: AppContext, actor: Actor, boardId: string, in
 
 export function explainAccess(ctx: AppContext, actor: Actor, boardId: string, channel: string, principalId?: string): AccessExplanation {
   const path = normalizeChannel(channel);
-  requireMember(ctx, actor, boardId);
-  const mine = ChannelAccess.load(ctx, boardId, actor);
+  // Someone reading through a public grant may ask about their own access (11 §Public access).
+  const reader = requireReader(ctx, actor, boardId);
+  if (reader.membership === null) {
+    if (principalId && principalId !== actor.id) throw forbidden("Explaining someone else's access needs membership and manage at *");
+    const d = publicDecision(reader.channels.grants, path);
+    return {
+      board_id: boardId,
+      channel: path,
+      principal: refOf(ctx, actor.id),
+      role: null,
+      can: permsOf(d.mask),
+      pattern: d.pattern,
+      level: d.pattern === null ? null : "public",
+      grant_ids: d.grantIds,
+      granted: permsOf(d.mask),
+      role_cap: permsOf(READ_ONLY_MASK),
+      person_cap: null,
+    };
+  }
+  const mine = reader.channels;
   let access = mine;
   let target = actor.id;
   if (principalId && principalId !== actor.id) {

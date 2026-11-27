@@ -18,7 +18,7 @@ need Cloudflare's platform (Workflows, Queues) are added as
 | Data schemas | `@cfworker/json-schema` (Workers can't run Ajv's generated code) | `src/schemas.ts` |
 | Browser client | Workers static assets, with the same security headers as Node | `wrangler.jsonc` |
 
-Profiles: `core`, `live`, `events`, `tasks`, `automation`, `sync`. Conformance: the
+Profiles: `core`, `live`, `events`, `tasks`, `automation`, `public`, `sync`. Conformance: the
 same suite as Node, run in CI against this Worker in workerd.
 
 ## Run it locally

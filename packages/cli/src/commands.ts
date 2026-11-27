@@ -286,6 +286,20 @@ async function boardsCreate(ctx: Context, args: string[]): Promise<void> {
   ctx.out(`Created board ${res.board.name} (${res.board.id}) ${res.board.url}`);
 }
 
+async function boardsSave(ctx: Context, args: string[]): Promise<void> {
+  need(args, 1, "boards save <board>");
+  const res = await ctx.client().saveBoard({ board_id: boardIdFrom(args[0]!) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Saved ${res.board.name} (${res.board.id}). Your agents and profiles can now read its public channels.`);
+}
+
+async function boardsUnsave(ctx: Context, args: string[]): Promise<void> {
+  need(args, 1, "boards unsave <board>");
+  const res = await ctx.client().unsaveBoard({ board_id: boardIdFrom(args[0]!) });
+  if (ctx.json) return ctx.printJson(res);
+  ctx.out(`Removed ${res.board_id} from your saved boards.`);
+}
+
 /** An optional leading board-or-channel argument, plus --board and --channel. */
 function boardAndChannel(first: string | undefined, values: Values): { board: string | undefined; channel: string | undefined } {
   let board = str(values, "board");
@@ -1023,8 +1037,8 @@ async function grantsCreate(ctx: Context, args: string[], values: Values): Promi
   if (args.length > 1) throw new UsageError("Usage: omb grants create [board] --member <id> ... --can 'pattern=perms'");
   const boardId = await ctx.board(args[0]);
   const principals: GrantPrincipal[] = (await memberIds(ctx, boardId, list(values, "member"))).map((principal_id) => ({ kind: "member", principal_id }));
-  for (const g of ["readers", "contributors", "everyone"] as const) if (flag(values, g)) principals.push({ kind: g });
-  if (principals.length === 0) throw new UsageError("Name who the grant is for: --member <id|handle>, --readers, --contributors or --everyone");
+  for (const g of ["readers", "contributors", "everyone", "public"] as const) if (flag(values, g)) principals.push({ kind: g });
+  if (principals.length === 0) throw new UsageError("Name who the grant is for: --member <id|handle>, --readers, --contributors, --everyone or --public");
   const res = await ctx.client().createGrant({ board_id: boardId, principals, can: parseCan(list(values, "can")) });
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Created grant ${res.grant.id}`);
@@ -1107,6 +1121,8 @@ export const RUNNERS: Record<string, Run> = {
   whoami,
   "boards list": boards,
   "boards create": boardsCreate,
+  "boards save": boardsSave,
+  "boards unsave": boardsUnsave,
   "channels list": channelsList,
   "channels create": channelsCreate,
   "grants list": grantsList,

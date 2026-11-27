@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  BOARD_ACCESS,
+  BOARD_VISIBILITIES,
   INBOX_KINDS,
   SUBSCRIPTION_LEVELS,
   INVITE_AUDIENCES,
@@ -41,7 +43,9 @@ export const Board = z.object({
   url: z.string(),
   owner: PrincipalRef,
   is_personal: z.boolean(),
-  my_role: z.enum(ROLES),
+  visibility: z.enum(BOARD_VISIBILITIES).default("private").describe("public when a public grant lets people who are not members read some channel"),
+  my_role: z.enum(ROLES).nullable().describe("null when you are reading through a public grant and are not a member"),
+  my_access: z.enum(BOARD_ACCESS).default("member").describe("member, or public when you read through a public grant"),
   my_access_ends_at: isoTime.nullable(),
   created_at: isoTime,
   settings: BoardSettings,

@@ -3,7 +3,7 @@ import type { AppContext } from "../context.js";
 import { read } from "../context.js";
 import { OmbError, invalid } from "../errors.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, getMembership, nowIso, requireMember, requireThread } from "./access.js";
+import { activeMembership, getMembership, nowIso, requireMember, requireReader, requireThread } from "./access.js";
 import { boardInScope } from "../auth/scopes.js";
 import { decodeCursor, decodePage, encodeCursor, encodePage } from "./cursors.js";
 import type { Actor, EventRow, InboxRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
@@ -88,7 +88,9 @@ export function boardChanges(
   filter: ChangeFilters = {},
 ): ChangesPage {
   return read(ctx, () => {
-    requireMember(ctx, actor, boardId);
+    // Members, and the public for what a public grant covers. The callers that are for members only
+    // (waitForActivity, the browser stream) check membership before they get here.
+    const reader = requireReader(ctx, actor, boardId);
     const n = Math.min(Math.max(limit, 1), 100);
     if (cursor === undefined || cursor === "") return { changes: [], cursor: encodeCursor("b", boardId, maxSeq(ctx)), has_more: false };
     const { s } = decodeCursor(cursor, "b", boardId);
@@ -113,8 +115,11 @@ export function boardChanges(
     // No filters: every change the caller can read.
     const params: unknown[] = [boardId, s];
     let sql = "SELECT e.* FROM events e LEFT JOIN threads t ON t.id = e.thread_id WHERE e.board_id = ? AND e.seq > ?";
-    const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
-    if (readable !== null) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${readableSql("t.channel", readable, params)}))`;
+    const readable = reader.channels.readableChannels(ctx);
+    // The public sees thread and message changes in public channels only: who joined, left or changed role, and
+    // changes to the board itself, are for members (11 §Public access).
+    if (reader.membership === null) sql += ` AND t.id IS NOT NULL${readableSql("t.channel", readable ?? [], params)}`;
+    else if (readable !== null) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${readableSql("t.channel", readable, params)}))`;
     sql += " ORDER BY e.seq LIMIT ?";
     params.push(n + 1);
     const rows = ctx.db.prepare(sql).all(...params) as EventRow[];
@@ -188,7 +193,8 @@ export function getChanges(
   if (!input.board_id) throw invalid("Pass board_id or inbox: true");
   const boardId = input.board_id;
   return read(ctx, () => {
-    requireMember(ctx, actor, boardId);
+    // Open to the public: catching up by cursor is the one way someone who is not a member follows a board.
+    requireReader(ctx, actor, boardId);
     const q = boardQuery(ctx, actor, boardId, input);
     return boardChanges(ctx, actor, boardId, q.cursor, input.limit, undefined, undefined, q.filter);
   });

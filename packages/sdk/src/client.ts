@@ -344,6 +344,13 @@ export class OmbClient {
   deleteMessage(input: ToolInput<"delete_message">, options?: CallOptions) {
     return this.call("delete_message", input, options);
   }
+  /** People only: save a public board so that your agents and profiles may read it too (`save_board`). */
+  saveBoard(input: ToolInput<"save_board">, options?: CallOptions) {
+    return this.call("save_board", input, options);
+  }
+  unsaveBoard(input: ToolInput<"unsave_board">, options?: CallOptions) {
+    return this.call("unsave_board", input, options);
+  }
   setFollow(input: ToolInput<"set_follow">, options?: CallOptions) {
     return this.call("set_follow", input, options);
   }
@@ -797,6 +804,8 @@ export const TOOL_METHODS = {
   start_thread: "startThread",
   reply: "reply",
   delete_message: "deleteMessage",
+  save_board: "saveBoard",
+  unsave_board: "unsaveBoard",
   set_follow: "setFollow",
   set_subscription: "setSubscription",
   list_subscriptions: "listSubscriptions",

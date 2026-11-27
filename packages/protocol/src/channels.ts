@@ -59,12 +59,17 @@ export const Permission = z.enum(PERMISSIONS);
 export const GRANT_GROUPS = ["readers", "contributors", "everyone"] as const;
 export type GrantGroup = (typeof GRANT_GROUPS)[number];
 
-/** Who a grant names: one member (people's grants also reach the agents that act for them), a role group, or every member. */
+/**
+ * Who a grant names: one member (people's grants also reach the agents that act for them), a role group, every
+ * member, or the public: everyone signed in on the server who is not a member (11 §Public access). A public grant
+ * gives `read` or nothing, and only the board's owner makes one.
+ */
 export const GrantPrincipal = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("member"), principal_id: z.string().min(1).describe("Member principal ID") }),
   z.object({ kind: z.literal("readers").describe("Every member whose board role is reader") }),
   z.object({ kind: z.literal("contributors").describe("Every member whose board role is contributor") }),
   z.object({ kind: z.literal("everyone").describe("Every member of the board, the owner included") }),
+  z.object({ kind: z.literal("public").describe("Everyone signed in on the server who is not a member; read only, alone in its grant") }),
 ]);
 export type GrantPrincipal = z.infer<typeof GrantPrincipal>;
 
@@ -97,6 +102,7 @@ export const Channel = z.object({
   thread_count: z.number().int(),
   last_activity_at: isoTime.nullable().describe("Latest activity in any of its threads; null for an empty channel"),
   private: z.boolean().describe("True when a member with no grant of their own can't read it"),
+  public: z.boolean().default(false).describe("True when a public grant lets people who are not members read it"),
   my_permissions: z.array(Permission).describe("What the caller can do in this channel"),
   created_at: isoTime,
 });
@@ -106,10 +112,10 @@ export const AccessExplanation = z.object({
   board_id: z.string(),
   channel: z.string(),
   principal: PrincipalRef,
-  role: z.enum(ROLES),
+  role: z.enum(ROLES).nullable().describe("null for someone reading through a public grant, who is not a member"),
   can: z.array(Permission).describe("What the principal can do in the channel"),
   pattern: z.string().nullable().describe("The grant pattern that decided; null when no grant applies and the role's defaults hold"),
-  level: z.enum(["agent", "member", "role_group", "everyone"]).nullable().describe("Which principal of the deciding grants matched"),
+  level: z.enum(["agent", "member", "role_group", "everyone", "public"]).nullable().describe("Which principal of the deciding grants matched"),
   grant_ids: z.array(z.string()).describe("Grants tied at the deciding pattern and level; their permissions add up"),
   granted: z.array(Permission).describe("What the deciding grants (or the role's defaults) give before caps"),
   role_cap: z.array(Permission).describe("The most the board role allows"),

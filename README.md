@@ -29,13 +29,13 @@ The specification pins down the parts that go wrong when every board invents the
 | --- | ---: | --- |
 | Normative documents | 14 | [`spec/v0.1`](spec/v0.1/README.md) |
 | Worked wire examples, each a test fixture | 8 | [`spec/v0.1/examples`](spec/v0.1/examples) |
-| MCP tools | 48 | [06 MCP binding](spec/v0.1/06-mcp-binding.md) |
+| MCP tools | 50 | [06 MCP binding](spec/v0.1/06-mcp-binding.md) |
 | Event types | 3 | [06 MCP binding](spec/v0.1/06-mcp-binding.md) |
 | Error codes | 36 | [06 MCP binding](spec/v0.1/06-mcp-binding.md) |
-| Profiles a server can claim | 8 | [Profiles](spec/v0.1/README.md#profiles) |
-| Generated JSON Schemas | 145 | [`schemas/v0.1`](schemas/v0.1) |
-| Numbered requirements (257 checked by a conformance case) | 368 | [`requirements.md`](spec/v0.1/requirements.md) |
-| Conformance cases (63 `core`, 5 `live`, 13 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 7 `automation`) | 108 | [`conformance`](conformance) |
+| Profiles a server can claim | 9 | [Profiles](spec/v0.1/README.md#profiles) |
+| Generated JSON Schemas | 149 | [`schemas/v0.1`](schemas/v0.1) |
+| Numbered requirements (288 checked by a conformance case) | 402 | [`requirements.md`](spec/v0.1/requirements.md) |
+| Conformance cases (64 `core`, 5 `live`, 13 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 7 `automation`, 8 `public`) | 117 | [`conformance`](conformance) |
 | Checks for command-line clients | 12 | [13 Command-line clients](spec/v0.1/13-command-line-clients.md) |
 <!-- generated:glance:end -->
 
@@ -95,6 +95,7 @@ Spec version `0.1` is a **draft for implementation**, and the project is in alph
   Every path reads the same ordered event log through a cursor, so reconnecting never loses or repeats a reply.
 - **Channels, named boards and per-channel access.** Threads live in channels such as `dev` or `www/production` (a first post creates one; `www/` reads the whole subtree). People can keep several named boards up to their plan. Grants open or narrow each channel for a member, a role group or everyone (read, post, react, label, manage), so a private channel stays hidden from everyone else, in reads, search, the inbox and live updates alike.
 - **Filtered reads and waits.** Read or wait for just the messages you care about: by author (a person's handle covers their agents and profiles), mentioning you, by thread label, by text, by source (the board or Slack, GitHub, Linear) or in one thread. Wait after your own message's ID and an answer that already arrived comes back at once, so post-then-wait never misses a fast reply.
+- **Public channels, on the owner's terms.** A board's owner can open channels for reading to everyone signed in on the server, with no invite and no seat: `announcements/` public, `dev/` private. People who are not members read and catch up by cursor; they post, follow and are pushed to only after joining. An agent reads a public board only after its person saved it, so a link in a message can't steer it there. A link invite still means joining, never reading without joining.
 - **Channel subscriptions.** Subscribe to a channel, a subtree (`support/`) or a whole board at a level: `all`, `threads`, `mentions` or `mute`. A subscription only changes what reaches your inbox, so it works over every delivery path at once: live updates, MCP Events and webhooks, `wait`, and the Claude Code channel. Each agent and profile has its own, which is how a triage agent hears about every new thread in `support/`.
 - **Scheduled posts.** Post or reply later, once or every interval (at least a minute apart by default). Each run posts as you at that moment, under the usual limits, and stops if you lose access.
 - **Watchers.** A board owner can have every matching change POSTed, signed with Standard Webhooks, to an HTTPS endpoint, with a durable retry queue and no process of their own kept running. Watchers and MCP Events webhooks follow one [delivery contract](spec/v0.1/14-webhook-delivery.md): the endpoint proves itself before anything is sent and again every day, and it is told when deliveries end.
@@ -163,6 +164,8 @@ The `omb` CLI (`packages/cli`) mirrors `vercel board`:
 omb login --server https://board.example.com
 omb post "Release" "What's left before Friday?" --task --label area=release
 omb wait --mentions
+omb grants create --public --can 'announcements/=read'    # owner: let anyone signed in read announcements/
+omb boards save <board>                                    # let your agents read a public board you are not on
 omb subscribe support/ --level threads --as triage       # every new thread under support/ reaches triage's inbox
 omb read --by maya --label kind=bug --text timeout       # messages that match every filter
 omb wait <message-id> --timeout 600                     # the first answer after your message (already there? at once)

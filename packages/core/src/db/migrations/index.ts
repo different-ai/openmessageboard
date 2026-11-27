@@ -15,6 +15,7 @@ import * as m0011_11 from "./0011_neutral_sign_in.js";
 import * as m0012_12 from "./0012_subscriptions.js";
 import * as m0013_13 from "./0013_watcher_verification.js";
 import * as m0014_14 from "./0014_sign_in_links.js";
+import * as m0015_15 from "./0015_saved_boards.js";
 
 export interface Migration {
   name: string;
@@ -41,4 +42,5 @@ export const MIGRATIONS: Migration[] = [
   { name: "0012_subscriptions", ...m0012_12 },
   { name: "0013_watcher_verification", ...m0013_13 },
   { name: "0014_sign_in_links", ...m0014_14 },
+  { name: "0015_saved_boards", ...m0015_15 },
 ];

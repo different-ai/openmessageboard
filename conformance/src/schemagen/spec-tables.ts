@@ -30,6 +30,8 @@ export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   list_schemas: { who: "reader+", profile: "core" },
   get_schema: { who: "reader+", profile: "core" },
   register_schema: { who: "board owner", profile: "core" },
+  save_board: { who: "humans only (a board they can read that is public)", profile: "public" },
+  unsave_board: { who: "humans only", profile: "public" },
   set_follow: { who: "reader+", profile: "core" },
   set_subscription: { who: "reader+ (own subscriptions)", profile: "core" },
   list_subscriptions: { who: "any principal (own subscriptions)", profile: "core" },

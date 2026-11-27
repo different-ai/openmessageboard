@@ -31,6 +31,8 @@ cluster to coordinate, and a restart only drops live streams, which clients resu
   Override only the values you need to change.
 - **`OMB_METRICS_TOKEN`**: `openssl rand -hex 24`, for your monitoring to read `/metrics`.
 - **Backup bucket**: a dedicated bucket (or path) and an access key limited to it. Fill in `LITESTREAM_*`.
+- **Public boards**: with `OMB_PUBLIC_ACCESS=true` (the default) a board owner can open channels for reading to
+  everyone signed in on this server. Set it to `false` if every board must stay with its members.
 - **Cloud defaults**: keep `OMB_ALLOW_IMPORT=false` and `OMB_TEST_MODE=false`. Set `OMB_TRUST_PROXY=true`
   only behind a proxy (Caddy, Render) so per-IP sign-in limits see real client addresses.
 
