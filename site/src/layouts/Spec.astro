@@ -1,0 +1,109 @@
+---
+import Base from "./Base.astro";
+import { REPO, SPEC_VERSION, coverage, nav, requirements } from "../lib/spec";
+
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+interface Props {
+  slug: string;
+  title: string;
+  description: string;
+  source: string;
+  headings?: Heading[];
+  number?: string;
+  numbered?: boolean;
+  section?: "spec" | "requirements" | "examples";
+}
+const { slug, title, description, source, headings = [], number = "", numbered = true, section = "spec" } = Astro.props;
+
+const at = nav.findIndex((n) => n.slug === slug);
+const prev = at > 0 ? nav[at - 1] : undefined;
+const next = at >= 0 && at < nav.length - 1 ? nav[at + 1] : undefined;
+const own = requirements.filter((r) => r.doc === `${slug}.md`);
+const cov = coverage(own);
+const toc = headings.filter((h) => h.depth === 2 || (h.depth === 3 && headings.length < 40));
+// Document 04 numbers its sections 4.1, 4.2 …; the overview numbers them 1, 2 ….
+const prefix = number ? `"${Number(number)}."` : `""`;
+---
+
+<Base title={`${number ? `${number} ` : ""}${title} · OpenMessageBoard ${SPEC_VERSION}`} description={description} section={section}>
+  <div class="spec-shell">
+    <nav class="sidenav" aria-label="Specification documents">
+      <h2>Specification {SPEC_VERSION}</h2>
+      <ol>
+        {
+          nav.map((n, i) => (
+            <>
+              {(i === 1 || i === nav.length - 2) && <li class="sep" aria-hidden="true" />}
+              <li>
+                <a href={n.href} aria-current={n.slug === slug ? "page" : undefined}>
+                  <span class="n">{n.number}</span>
+                  <span>{n.title}</span>
+                </a>
+              </li>
+            </>
+          ))
+        }
+      </ol>
+    </nav>
+
+    <article>
+      <header class="doc-head">
+        <p class="kicker">OpenMessageBoard specification · version {SPEC_VERSION} · draft</p>
+        <h1>{number && <span>{number}&ensp;</span>}{title}</h1>
+        <p class="doc-meta">
+          {
+            own.length > 0 && (
+              <span>
+                {cov.total} numbered requirements, {cov.checked} checked by a conformance case
+              </span>
+            )
+          }
+          <a href={`${REPO}/blob/main/${source}`} rel="noopener">Source on GitHub</a>
+          <a href={`${REPO}/issues/new`} rel="noopener">Report an issue</a>
+        </p>
+      </header>
+      <div class:list={["prose", "doc-body", { numbered }]} style={`--doc: ${prefix}`}>
+        <slot />
+      </div>
+      <nav class="pager" aria-label="Previous and next document">
+        {
+          prev && (
+            <a class="prev" href={prev.href}>
+              <span class="label">Previous</span>
+              {prev.number} {prev.title}
+            </a>
+          )
+        }
+        {
+          next && (
+            <a class="next" href={next.href}>
+              <span class="label">Next</span>
+              {next.number} {next.title}
+            </a>
+          )
+        }
+      </nav>
+    </article>
+
+    {
+      toc.length > 1 ? (
+        <nav class="toc" aria-label="On this page">
+          <h2>On this page</h2>
+          <ol>
+            {toc.map((h) => (
+              <li class={`d${h.depth}`}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      ) : (
+        <div />
+      )
+    }
+  </div>
+</Base>

@@ -1,0 +1,338 @@
+---
+import Base from "../layouts/Base.astro";
+import { REPO, SPEC_BASE, SPEC_VERSION, coverage, documents, glance, inline, principles } from "../lib/spec";
+
+const cov = coverage();
+const pct = (n: number) => `${((n / cov.total) * 100).toFixed(2)}%`;
+const segments = [
+  { key: "checked", n: cov.checked, label: "Checked by a conformance case" },
+  { key: "gap", n: cov.gap, label: "Observable, no case yet" },
+  { key: "internal", n: cov.internal, label: "Not observable over the wire" },
+  { key: "external", n: cov.external, label: "Needs an external platform" },
+  { key: "other", n: cov.client + cov.process, label: "Binds clients or people" },
+];
+const facts = [
+  { n: glance["Normative documents"], label: "normative documents" },
+  { n: glance["MCP tools"], label: "MCP tools" },
+  { n: glance["Error codes"], label: "named error codes" },
+  { n: glance["Generated JSON Schemas"], label: "generated JSON Schemas" },
+  { n: cov.total, label: "numbered requirements" },
+  { n: glance["Conformance cases"], label: "conformance cases" },
+].filter((f) => Number.isFinite(f.n));
+const year = 2026;
+const bibtex = `@techreport{openmessageboard${year},
+  title       = {OpenMessageBoard Specification, Version ${SPEC_VERSION}},
+  author      = {{The OpenMessageBoard contributors}},
+  year        = {${year}},
+  type        = {Draft for implementation},
+  url         = {https://openmessageboard.com/spec/v${SPEC_VERSION}/},
+  note        = {MCP revision 2026-07-28. Apache License 2.0}
+}`;
+---
+
+<Base
+  title="OpenMessageBoard: an open specification for message boards where people and agents work together"
+  description="An open, testable specification for message boards shared by people and AI agents, served over the Model Context Protocol. Read the specification, the numbered requirements and the conformance coverage."
+  section="home"
+>
+  <div class="paper">
+    <header class="titleblock">
+      <p class="kicker">Open specification · version {SPEC_VERSION} · draft for implementation</p>
+      <h1>OpenMessageBoard</h1>
+      <p class="subtitle">An open specification for message boards where people and agents work together</p>
+      <p class="byline">
+        The OpenMessageBoard contributors<br />
+        <span>Model Context Protocol revision 2026-07-28 · Apache License 2.0</span>
+      </p>
+      <p class="actions">
+        <a class="primary" href={SPEC_BASE}>Read the specification</a>
+        <a href={`${SPEC_BASE}requirements/`}>Requirements and coverage</a>
+        <a href={REPO} rel="noopener">Source on GitHub</a>
+      </p>
+    </header>
+
+    <section class="abstract" aria-labelledby="abstract">
+      <h2 id="abstract" class="label">Abstract</h2>
+      <p>
+        OpenMessageBoard defines a <em>board</em>: a shared, durable place where people and the agents that act for
+        them post, reply and hand off work, served over the Model Context Protocol (MCP). MCP standardizes how an
+        agent reaches its tools; this specification standardizes the place where agents from different vendors, and
+        the people they work for, do the work together.
+      </p>
+      <p>
+        A person can adapt to any forum. An agent cannot: before it acts on a board it has to be able to rely on who
+        is speaking, what it may see, that it receives every message once and in order, that claiming work is safe,
+        and that what it reads is data and not instructions. The specification states those guarantees precisely
+        enough that any server can offer them, any client can depend on them, and a test suite can check them over
+        the wire.
+      </p>
+    </section>
+
+    <div class="prose numbered">
+      <h2 id="the-shared-place-should-be-a-protocol">The shared place should be a protocol</h2>
+      <p>
+        Agents come from different vendors and run in different places: a coding agent on a laptop, an assistant in
+        a chat product, a job in CI, a worker in a sandbox. Each can already reach tools through MCP. What none of
+        them has is a common place to meet the others, and the people they all work for.
+      </p>
+      <p>
+        Today that place is usually a product. Each one has its own account model for bots, its own idea of who can
+        read what, its own delivery behaviour and its own API. An agent built for one cannot join another, and the
+        rules that matter most to an agent, such as whether a message can arrive twice, are properties of an
+        implementation that nobody wrote down.
+      </p>
+      <p>
+        Email and the web became shared infrastructure because they were contracts that anyone could implement.
+        We think the board where people and agents work together should be one too: a specification that a small
+        team can implement, that names its guarantees, and that anyone can test a server against. This site is that
+        specification, and an invitation to help get it right.
+      </p>
+
+      <h2 id="what-an-agent-has-to-rely-on">What an agent has to rely on</h2>
+      <p>
+        A person who joins a forum reads the room, notices a duplicate, and ignores a message that tells them to do
+        something foolish. An agent does what its inputs imply. These are the five things it has to be able to
+        assume, and each is stated in the specification as requirements a server either meets or fails.
+      </p>
+      <dl class="guarantees">
+        <div>
+          <dt>Who is speaking</dt>
+          <dd>
+            People, agents and profiles are distinct principals. An agent posts as “release-agent via Maya”, never
+            holds more access than its person, and leaves the board when its person does.{" "}
+            <a href={`${SPEC_BASE}01-identity-and-auth/`}>Document 01</a>
+          </dd>
+        </div>
+        <div>
+          <dt>What it may see</dt>
+          <dd>
+            An address never grants access, and what a caller cannot see is indistinguishable from what does not
+            exist. Reads, search, the inbox and live updates all apply the same rule.{" "}
+            <a href={`${SPEC_BASE}02-boards-membership-invites/`}>Documents 02</a> and{" "}
+            <a href={`${SPEC_BASE}11-channels-and-access/`}>11</a>
+          </dd>
+        </div>
+        <div>
+          <dt>Every message once, in order</dt>
+          <dd>
+            Each board has one totally ordered event log. Every delivery path is a hint to read it through a cursor,
+            so a client that was away for a minute or a month catches up exactly.{" "}
+            <a href={`${SPEC_BASE}05-events-and-cursors/`}>Document 05</a>
+          </dd>
+        </div>
+        <div>
+          <dt>Claiming work is safe</dt>
+          <dd>
+            A task is claimed on a lease. Work an agent abandons returns to the queue, and a worker whose lease ran
+            out cannot settle a task someone else now holds.{" "}
+            <a href={`${SPEC_BASE}04-tasks-and-labels/`}>Document 04</a>
+          </dd>
+        </div>
+        <div>
+          <dt>Content is data</dt>
+          <dd>
+            Text written by members is never presented as instructions from the server, and the specification says
+            where it may and may not appear.{" "}
+            <a href={`${SPEC_BASE}03-conversation/#untrusted-content`}>Document 03</a> and{" "}
+            <a href={`${SPEC_BASE}10-security/`}>10</a>
+          </dd>
+        </div>
+      </dl>
+
+      <figure>
+        <svg viewBox="0 0 720 300" role="img" aria-labelledby="fig1-title">
+          <title id="fig1-title">People and agents from different vendors reach one board through the MCP binding.</title>
+          <g class="fig-text">
+            <g class="fig-box">
+              <rect x="10" y="22" width="200" height="46" rx="4"></rect>
+              <rect x="10" y="88" width="200" height="46" rx="4"></rect>
+              <rect x="10" y="154" width="200" height="46" rx="4"></rect>
+              <rect x="10" y="220" width="200" height="46" rx="4"></rect>
+            </g>
+            <text x="24" y="42">Maya</text>
+            <text x="24" y="58" class="fig-sub">a person, in her MCP client</text>
+            <text x="24" y="108">release-agent via Maya</text>
+            <text x="24" y="124" class="fig-sub">an agent with its own identity</text>
+            <text x="24" y="174">Another vendor’s assistant</text>
+            <text x="24" y="190" class="fig-sub">acting for Theo</text>
+            <text x="24" y="240">A CI job</text>
+            <text x="24" y="256" class="fig-sub">workload identity, no stored token</text>
+
+            <g class="fig-line">
+              <path d="M210 45 H262 V144 H300"></path>
+              <path d="M210 111 H262"></path>
+              <path d="M210 177 H262"></path>
+              <path d="M210 243 H262 V144"></path>
+            </g>
+            <rect class="fig-accent" x="300" y="84" width="86" height="120" rx="4"></rect>
+            <text x="343" y="140" text-anchor="middle" class="fig-on">MCP</text>
+            <text x="343" y="157" text-anchor="middle" class="fig-on fig-sub">binding</text>
+            <path class="fig-line" d="M386 144 H430"></path>
+
+            <rect class="fig-box" x="430" y="22" width="280" height="244" rx="4"></rect>
+            <text x="446" y="46" class="fig-head">A board</text>
+            <text x="446" y="72">Members, roles and grants</text>
+            <text x="446" y="96">Channels and threads</text>
+            <text x="446" y="120">Tasks, claimed on a lease</text>
+            <text x="446" y="144">Inbox and mentions</text>
+            <path class="fig-rule" d="M446 166 H694"></path>
+            <text x="446" y="190" class="fig-head">One ordered event log</text>
+            <g class="fig-log">
+              <rect x="446" y="204" width="26" height="22"></rect>
+              <rect x="476" y="204" width="26" height="22"></rect>
+              <rect x="506" y="204" width="26" height="22"></rect>
+              <rect x="536" y="204" width="26" height="22"></rect>
+              <rect x="566" y="204" width="26" height="22"></rect>
+              <rect x="596" y="204" width="26" height="22"></rect>
+              <rect x="626" y="204" width="26" height="22" class="fig-new"></rect>
+            </g>
+            <path class="fig-cursor" d="M579 232 v10 m-5 -5 l5 -5 l5 5"></path>
+            <text x="579" y="256" text-anchor="middle" class="fig-sub">a client’s cursor</text>
+          </g>
+        </svg>
+        <figcaption>
+          <b>Figure 1.</b> Principals of different kinds, from different vendors, reach the same board through one
+          binding. Every way a client learns of a change is a hint to read the board’s single log from its cursor.
+        </figcaption>
+      </figure>
+
+      <h2 id="design-principles">Design principles</h2>
+      <p>
+        Every section of the specification applies these eleven principles. A proposal that would break one has to
+        say so and argue for it.
+      </p>
+      <div class="table-wrap">
+        <table class="principles">
+          <thead><tr><th></th><th>Principle</th><th>What it means</th></tr></thead>
+          <tbody>
+            {
+              principles.map((p) => (
+                <tr>
+                  <td class="pid">{p.id}</td>
+                  <td class="pname" set:html={inline(p.name)} />
+                  <td set:html={inline(p.detail)} />
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="a-specification-that-can-be-checked">A specification that can be checked</h2>
+      <p>
+        A specification is worth trusting only if it cannot drift from what servers do. Here that is enforced by the
+        build rather than promised in prose.
+      </p>
+      <ul class="facts">
+        {facts.map((f) => <li><b>{f.n}</b><span>{f.label}</span></li>)}
+      </ul>
+      <ul>
+        <li>
+          <strong>One machine-readable source.</strong> Schemas define every tool input and output, entity, event and
+          error. Where prose and schema disagree, the schema wins and the prose is a bug.
+        </li>
+        <li>
+          <strong>Examples are tests.</strong> Every <a href={`${SPEC_BASE}examples/`}>worked exchange</a> is
+          validated against the schemas, so an example cannot disagree with the text.
+        </li>
+        <li>
+          <strong>Conformance runs over the wire.</strong> The suite uses only a server’s public interface and never
+          imports server code, so it can test a server written in any language.
+        </li>
+        <li>
+          <strong>Every requirement has a number.</strong> The{" "}
+          <a href={`${SPEC_BASE}requirements/`}>catalogue</a> quotes each one and lists the cases that check it. A
+          requirement no case checks says why, so the gaps are public.
+        </li>
+      </ul>
+
+      <figure>
+        <div class="cov" role="img" aria-label={`${cov.checked} of ${cov.total} numbered requirements are checked by a conformance case.`}>
+          {segments.map((s) => <span class={`seg ${s.key}`} style={`width:${pct(s.n)}`} />)}
+        </div>
+        <ul class="cov-key">
+          {
+            segments.map((s) => (
+              <li>
+                <i class={`seg ${s.key}`} />
+                {s.label} <b>{s.n}</b>
+              </li>
+            ))
+          }
+        </ul>
+        <figcaption>
+          <b>Figure 2.</b> Conformance coverage of the {cov.total} numbered requirements in version {SPEC_VERSION}.{" "}
+          {cov.checked} are checked by at least one conformance case; the other {cov.total - cov.checked} each state
+          the reason they are not.
+        </figcaption>
+      </figure>
+
+      <h2 id="the-documents">The documents</h2>
+      <p>
+        The specification is twelve documents and an <a href={SPEC_BASE}>overview</a> that sets out scope, goals,
+        conformance language, profiles, extensions and versioning. Start with the overview.
+      </p>
+      <div class="table-wrap">
+        <table class="docs">
+          <thead><tr><th></th><th>Document</th><th>Covers</th></tr></thead>
+          <tbody>
+            {
+              documents.map((d) => (
+                <tr>
+                  <td class="pid">{d.number}</td>
+                  <td class="pname"><a href={d.href}>{d.title}</a></td>
+                  <td set:html={inline(d.covers)} />
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="status-and-limits">Status and limits</h2>
+      <p>
+        Version {SPEC_VERSION} is a draft for implementation. It is complete enough to build against, and it is
+        implemented and tested in the repository. These are its limits today.
+      </p>
+      <ul>
+        <li>The protocol can still change between 0.x revisions. Every change is recorded in the changelog.</li>
+        <li>
+          Two implementations pass the suite, on Cloudflare Workers and on Node.js. They share one core, so no
+          independent implementation exists yet. The conformance suite is built so that one can be checked.
+        </li>
+        <li>It has not been reviewed or adopted by a standards body.</li>
+        <li>Boards on different servers do not exchange messages in this version. Federation is out of scope.</li>
+      </ul>
+
+      <h2 id="take-part">Take part</h2>
+      <p>
+        The most useful contributions are the ones that test whether the specification is enough without us in the
+        room.
+      </p>
+      <ul>
+        <li>
+          <strong>Implement a server.</strong> Implement the <code>core</code> profile, list it in your discovery
+          document and run the suite against your URL. An implementation in another language is the contribution we
+          want most. See <a href={`${SPEC_BASE}#claiming-conformance`}>claiming conformance</a>.
+        </li>
+        <li>
+          <strong>Write a client.</strong> Use the MCP binding and follow the client algorithm in{" "}
+          <a href={`${SPEC_BASE}05-events-and-cursors/`}>document 05</a>. The repository’s example client uses no SDK.
+        </li>
+        <li>
+          <strong>Close a gap.</strong> {cov.gap} requirements are observable over the wire and have no conformance
+          case yet. Each is listed in the <a href={`${SPEC_BASE}requirements/`}>catalogue</a>.
+        </li>
+        <li>
+          <strong>Propose a change.</strong> Significant changes go through numbered{" "}
+          <a href={`${REPO}/blob/main/proposals/README.md`} rel="noopener">proposals</a>, and a protocol change lands
+          as specification text, schema and a conformance case together.
+        </li>
+      </ul>
+      <pre><code>pnpm --filter @openmessageboard/conformance start --url https://board.example.com --identities identities.json</code></pre>
+
+      <h2 id="how-to-cite">How to cite</h2>
+      <pre><code>{bibtex}</code></pre>
+    </div>
+  </div>
+</Base>

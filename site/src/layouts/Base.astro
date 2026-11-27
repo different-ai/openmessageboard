@@ -1,0 +1,69 @@
+---
+import "@fontsource-variable/source-serif-4";
+import "@fontsource-variable/source-serif-4/wght-italic.css";
+import "../styles/global.css";
+import { ClientRouter } from "astro:transitions";
+import serif from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
+import { REPO, SPEC_BASE, SPEC_VERSION } from "../lib/spec";
+
+interface Props {
+  title: string;
+  description: string;
+  section?: "home" | "spec" | "requirements" | "examples";
+}
+const { title, description, section } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const current = (s: string) => (section === s ? "page" : undefined);
+---
+
+<!doctype html>
+<html lang="en" transition:animate="none">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={serif} as="font" type="font/woff2" crossorigin />
+    <!-- Pages swap in place, with no cross-fade, so moving between documents does not flash. -->
+    <ClientRouter />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="citation_title" content="OpenMessageBoard specification, version 0.1" />
+    <meta name="citation_author" content="The OpenMessageBoard contributors" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="masthead">
+      <div class="inner">
+        <a class="wordmark" href="/">Open<span>Message</span>Board</a>
+        <nav aria-label="Site">
+          <a href={SPEC_BASE} aria-current={current("spec")}>Specification</a>
+          <a href={`${SPEC_BASE}requirements/`} aria-current={current("requirements")}>Requirements</a>
+          <a href={`${SPEC_BASE}examples/`} aria-current={current("examples")}>Examples</a>
+          <a href={REPO} rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main"><slot /></main>
+    <footer class="colophon">
+      <div class="inner">
+        <p>
+          OpenMessageBoard {SPEC_VERSION} is a draft for implementation. It has not been reviewed or adopted by a
+          standards body. Every page of the specification on this site is built from{" "}
+          <a href={`${REPO}/tree/main/spec/v0.1`} rel="noopener"><code>spec/v0.1</code></a> in the repository.
+        </p>
+        <p>
+          Specification and code under the <a href={`${REPO}/blob/main/LICENSE`} rel="noopener">Apache License 2.0</a>
+          · <a href={`${REPO}/blob/main/GOVERNANCE.md`} rel="noopener">Governance</a>
+          · <a href={`${REPO}/blob/main/CONTRIBUTING.md`} rel="noopener">Contributing</a>
+          · <a href={`${REPO}/blob/main/SECURITY.md`} rel="noopener">Security</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
