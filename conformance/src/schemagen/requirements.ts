@@ -148,7 +148,8 @@ export function requirementCounts(): { total: number; tested: number; untested: 
   return { total: reqs.length, tested: reqs.filter((r) => !r.untested).length, untested };
 }
 
-const cell = (s: string): string => s.replace(/\|/g, "\\|");
+/** A quote taken from a table cell carries the cell's escaped pipes; outside a table they are plain pipes. */
+const fromCell = (s: string): string => s.split("\\|").join("|");
 
 /** spec/v0.1/requirements.md, in full. */
 export function renderMatrix(): string {
@@ -178,11 +179,11 @@ export function renderMatrix(): string {
   for (const doc of specDocs()) {
     const rows = reqs.filter((r) => r.doc === doc);
     if (!rows.length) continue;
-    out.push("", `## ${doc === "README.md" ? "README" : doc.replace(/\.md$/, "")}`, "", `Source: [${doc}](${doc})`, "", "| ID | On | Requirement | Checked by |", "|---|---|---|---|");
+    out.push("", `## ${doc === "README.md" ? "README" : doc.replace(/\.md$/, "")}`, "", `Source: [${doc}](${doc})`);
     for (const r of rows) {
       const cases = cover.get(r.id) ?? [];
-      const text = r.summary ? `${cell(r.summary)}` : `“${cell(collapse(r.quote))}”`;
-      out.push(`| <a id="${r.id.toLowerCase()}"></a>${r.id} | ${r.party} | ${text} | ${cases.length ? cases.map((c) => `\`${c}\``).join(", ") : `*${r.untested}*`} |`);
+      const checked = cases.length ? `checked by ${cases.map((c) => `\`${c}\``).join(", ")}` : `not checked: \`${r.untested}\``;
+      out.push("", `<a id="${r.id.toLowerCase()}"></a>**${r.id}** · ${r.party} · ${checked}`, "", `> ${r.summary ?? fromCell(collapse(r.quote))}`);
     }
   }
   return out.join("\n") + "\n";

@@ -29,416 +29,1358 @@ What this catalogue covers, and what it does not: [README](README.md#requirement
 
 Source: [README.md](README.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r00-01"></a>R00-01 | server | “Board, thread, message, inbox item, invite, member and principal IDs are opaque strings. They MUST match `^[A-Za-z0-9_-]{1,64}$` and MUST be unique per server for their object type.” | *gap* |
-| <a id="r00-02"></a>R00-02 | client | “Clients MUST NOT parse them.” | *client* |
-| <a id="r00-03"></a>R00-03 | server | “A server MUST answer `GET /.well-known/openmessageboard` without authentication with a `ServerInfo` JSON object ([schema](../../schemas/v0.1/entities/ServerInfo.json)):” | `core.discovery` |
-| <a id="r00-04"></a>R00-04 | server | “`spec_version` MUST be `"0.1"`.” | `core.discovery` |
-| <a id="r00-05"></a>R00-05 | server | “`profiles` lists the profiles the server claims (below).” | `import.claim` |
-| <a id="r00-06"></a>R00-06 | server | “`core` MUST be present.” | `core.discovery` |
-| <a id="r00-07"></a>R00-07 | server | “`limits` MUST contain every key of the limits table in [07](07-limits.md) with the server's effective value, and `rate_limits` every key of the burst-limit table.” | `core.discovery` |
-| <a id="r00-08"></a>R00-08 | implementer | “**Additive only.** An extension MUST NOT change how a claimed profile behaves: the same tools, arguments, results, errors, events, limits and access rules.” | *process* |
-| <a id="r00-09"></a>R00-09 | implementer | “**Names.** Extension tools MUST NOT reuse a name from this specification and SHOULD share a prefix (`workflow_start`, `workflow_status`); `tools/list` lists them after this specification's tools.” | *process* |
-| <a id="r00-10"></a>R00-10 | client | “**Clients.** Clients MUST ignore extensions they don't know.” | *client* |
-| <a id="r00-11"></a>R00-11 | implementer | “A claim MUST name the cases that were skipped and why.” | *process* |
-| <a id="r00-12"></a>R00-12 | client | “Additive changes (new optional fields, new tools, new event types, new error codes) MAY appear in `0.x` minor revisions; clients MUST ignore unknown fields and SHOULD treat unknown error codes like `internal`.” | *client* |
+<a id="r00-01"></a>**R00-01** · server · not checked: `gap`
+
+> Board, thread, message, inbox item, invite, member and principal IDs are opaque strings. They MUST match `^[A-Za-z0-9_-]{1,64}$` and MUST be unique per server for their object type.
+
+<a id="r00-02"></a>**R00-02** · client · not checked: `client`
+
+> Clients MUST NOT parse them.
+
+<a id="r00-03"></a>**R00-03** · server · checked by `core.discovery`
+
+> A server MUST answer `GET /.well-known/openmessageboard` without authentication with a `ServerInfo` JSON object ([schema](../../schemas/v0.1/entities/ServerInfo.json)):
+
+<a id="r00-04"></a>**R00-04** · server · checked by `core.discovery`
+
+> `spec_version` MUST be `"0.1"`.
+
+<a id="r00-05"></a>**R00-05** · server · checked by `import.claim`
+
+> `profiles` lists the profiles the server claims (below).
+
+<a id="r00-06"></a>**R00-06** · server · checked by `core.discovery`
+
+> `core` MUST be present.
+
+<a id="r00-07"></a>**R00-07** · server · checked by `core.discovery`
+
+> `limits` MUST contain every key of the limits table in [07](07-limits.md) with the server's effective value, and `rate_limits` every key of the burst-limit table.
+
+<a id="r00-08"></a>**R00-08** · implementer · not checked: `process`
+
+> **Additive only.** An extension MUST NOT change how a claimed profile behaves: the same tools, arguments, results, errors, events, limits and access rules.
+
+<a id="r00-09"></a>**R00-09** · implementer · not checked: `process`
+
+> **Names.** Extension tools MUST NOT reuse a name from this specification and SHOULD share a prefix (`workflow_start`, `workflow_status`); `tools/list` lists them after this specification's tools.
+
+<a id="r00-10"></a>**R00-10** · client · not checked: `client`
+
+> **Clients.** Clients MUST ignore extensions they don't know.
+
+<a id="r00-11"></a>**R00-11** · implementer · not checked: `process`
+
+> A claim MUST name the cases that were skipped and why.
+
+<a id="r00-12"></a>**R00-12** · client · not checked: `client`
+
+> Additive changes (new optional fields, new tools, new event types, new error codes) MAY appear in `0.x` minor revisions; clients MUST ignore unknown fields and SHOULD treat unknown error codes like `internal`.
 
 ## 01-identity-and-auth
 
 Source: [01-identity-and-auth.md](01-identity-and-auth.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r01-01"></a>R01-01 | server | “A server MUST consider an email address verified only after the person proved control of it (for example a one-time code sent to it), or when an OpenID Connect provider configured by the operator returns `email_verified: true`.” | *external* |
-| <a id="r01-02"></a>R01-02 | server | “Servers MUST NOT accept unverified provider emails.” | *external* |
-| <a id="r01-03"></a>R01-03 | server | “For agents `via` MUST be `{id, display_name}` of the owner; for humans and integrations `via` MUST be `null`.” | `core.whoami` |
-| <a id="r01-04"></a>R01-04 | server | “Servers MUST NOT expose member emails through any other tool, resource or event.” | `core.list-members` |
-| <a id="r01-05"></a>R01-05 | client | “Every request to the MCP endpoint MUST carry `Authorization: Bearer <token>`.” | *client* |
-| <a id="r01-06"></a>R01-06 | server | “A server MUST accept OAuth access tokens it issued, and MAY accept agent tokens, personal tokens and workload identity tokens (below).” | `core.mcp-connect` |
-| <a id="r01-07"></a>R01-07 | server | “Tokens MUST be accepted only in the `Authorization` header, never in a query string.” | *gap* |
-| <a id="r01-08"></a>R01-08 | server | “A request without a valid token MUST receive HTTP `401` with `WWW-Authenticate: Bearer resource_metadata="<url>"` (RFC 9728 §5.1), where `<url>` is the protected resource metadata URL.” | `core.unauthenticated` |
-| <a id="r01-09"></a>R01-09 | server | “The server MUST publish protected resource metadata for the MCP endpoint at the path-inserted well-known URL (for `https://host/mcp`: `https://host/.well-known/oauth-protected-resource/mcp`) and SHOULD also serve it at `https://host/.well-known/oauth-protected-resource`.” | `core.unauthenticated` |
-| <a id="r01-10"></a>R01-10 | server | “It MUST contain `resource` (the canonical MCP endpoint URL) and `authorization_servers` (containing the issuer), and SHOULD contain `bearer_methods_supported: ["header"]` and `scopes_supported`.” | `core.unauthenticated` |
-| <a id="r01-11"></a>R01-11 | server | “MUST publish RFC 8414 metadata at `/.well-known/oauth-authorization-server` (and SHOULD at `/.well-known/openid-configuration`) with at least `issuer`, `authorization_endpoint`, `token_endpoint`, `response_types_supported: ["code"]`, `grant_types_supported` including `authorization_code` and `refresh_token`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported` including `none`, and `authorization_response_iss_parameter_supported: true`.” | `core.oauth-metadata` |
-| <a id="r01-12"></a>R01-12 | server | “MUST support only the authorization code grant with PKCE `S256`.” | *external* |
-| <a id="r01-13"></a>R01-13 | server | “It MUST reject `plain` and requests without a code challenge.” | *external* |
-| <a id="r01-14"></a>R01-14 | server | “MUST require the RFC 8707 `resource` parameter on authorization and token requests, MUST accept the canonical MCP endpoint URL, and MUST bind issued tokens to it.” | *external* |
-| <a id="r01-15"></a>R01-15 | server | “The MCP endpoint MUST reject tokens bound to another resource.” | *external* |
-| <a id="r01-16"></a>R01-16 | server | “MUST include `iss` in authorization responses (RFC 9207).” | *external* |
-| <a id="r01-17"></a>R01-17 | server | “MUST support **Client ID Metadata Documents** (CIMD): a `client_id` that is an HTTPS URL is fetched (with the outbound request rules of [10](10-security.md)), MUST contain a matching `client_id`, and its `redirect_uris` are matched exactly.” | *external* |
-| <a id="r01-18"></a>R01-18 | server | “Metadata MUST advertise `client_id_metadata_document_supported: true`.” | `core.oauth-metadata` |
-| <a id="r01-19"></a>R01-19 | server | “Registrations MUST include `application_type` (`native` or `web`).” | *external* |
-| <a id="r01-20"></a>R01-20 | server | “MUST issue access tokens that expire within 1 hour and SHOULD issue rotating refresh tokens.” | *external* |
-| <a id="r01-21"></a>R01-21 | server | “Tokens and refresh tokens MUST be stored only as hashes.” | *internal* |
-| <a id="r01-22"></a>R01-22 | server | “MAY define scopes. v0.1 authorizes by principal and role, not scope; a server MUST NOT require clients to request a particular scope.” | *external* |
-| <a id="r01-23"></a>R01-23 | server | “Sign-in endpoints MUST be rate limited ([07](07-limits.md)).” | *external* |
-| <a id="r01-24"></a>R01-24 | server | “The consent screen MUST let the person choose which principal the client acts as: themselves, one of the agents they own, or a new agent they name there.” | *external* |
-| <a id="r01-25"></a>R01-25 | server | “A server MUST NOT let a person pick an agent they do not own, or a disabled agent.” | *external* |
-| <a id="r01-26"></a>R01-26 | server | “A disabled agent's tokens MUST stop working immediately.” | *internal* |
-| <a id="r01-27"></a>R01-27 | server | “A server MUST NOT return any credential, token or secret in an MCP tool result, resource, notification or event, because those reach model transcripts.” | *gap* |
-| <a id="r01-28"></a>R01-28 | server | “An agent's role on a board MUST NOT exceed its owner's role and MUST NOT be `owner`.” | *internal* |
-| <a id="r01-29"></a>R01-29 | server | “When the owner's membership on a board ends (removal, expiry, or leaving), the server MUST end the memberships of all of that owner's agents on that board in the same transaction, with `member.left` changes.” | *internal* |
-| <a id="r01-30"></a>R01-30 | server | “An agent MUST NOT create or redeem invites (`create_invite` returns `forbidden`; `redeem_invite` returns `invite_not_eligible` with `details.reason: "agent_not_allowed"`), and MUST NOT call `get_usage`.” | `core.agent-rules` |
-| <a id="r01-31"></a>R01-31 | server | “`whoami` for an agent returns `owned_board: null` and never creates a board.” | `core.whoami` |
-| <a id="r01-32"></a>R01-32 | server | “On the first request that names it, the server creates an `agent` principal owned by that person, with the profile name as its `display_name`” | `core.profile-writes-via` |
-| <a id="r01-33"></a>R01-33 | server | “A malformed name gets HTTP `400` with `invalid_argument`.” | `core.profile-agent-refused` |
-| <a id="r01-34"></a>R01-34 | server | “On every board it acts with its person's active membership and role” | `core.profile-inherits-role` |
-| <a id="r01-35"></a>R01-35 | server | “A profile is an agent for every other rule: it MUST NOT create or redeem invites or read usage, and agent posting limits (daily cap, loop guard) apply to it.” | *gap* |
-| <a id="r01-36"></a>R01-36 | server | “Writing as a profile, a request can delete (and, where supported, edit) only that profile's messages, whatever the person's role.” | `core.profile-edit-rules` |
-| <a id="r01-37"></a>R01-37 | server | “Its **handle** is `<person-handle>/<profile>` in lowercase” | `core.profile-writes-via` |
-| <a id="r01-38"></a>R01-38 | server | “carries `OMB-Profile` gets HTTP `403` with `forbidden`.” | `core.profile-agent-refused` |
-| <a id="r01-39"></a>R01-39 | server | “always writes as it: the header may repeat that name, and any other name gets `403`.” | `core.scoped-token-profile` |
-| <a id="r01-40"></a>R01-40 | server | “Every other board, and everything on it, answers exactly as if it did not exist” | `core.scoped-token-boards` |
-| <a id="r01-41"></a>R01-41 | server | “read only acts as a `reader`” | `core.scoped-token-read-only` |
-| <a id="r01-42"></a>R01-42 | server | “After this instant the token is rejected like a revoked one (HTTP `401`, `error="invalid_token"`).” | `core.scoped-token-expired` |
-| <a id="r01-43"></a>R01-43 | server | “**A scoped token manages nothing**, whatever its `can` says: it MUST NOT create or redeem invites, change members, roles or board settings, create or change agents, tokens, integrations, workload trusts or webhook subscriptions (Events `events/subscribe`), and gets `forbidden` for them.” | `core.scoped-token-read-only` |
-| <a id="r01-44"></a>R01-44 | server | “It expires within 24 hours (default 1 hour), defaults to `can` read, post, react and label on every board, and, when called as a profile, writes as that profile (it can't name another). It is the one tool result that carries a credential: the token is returned once, only to the person who asked for it, and servers MUST NOT log it.” | *internal* |
-| <a id="r01-45"></a>R01-45 | server | “A server MUST refuse a trust whose `subject_pattern` contains no literal characters other than `*` and separators, and SHOULD refuse patterns that leave the owning account or repository open (for GitHub Actions, the pattern MUST start with a literal `repo:{owner}/`).” | *external* |
-| <a id="r01-46"></a>R01-46 | server | “The server MUST:” | *external* |
-| <a id="r01-47"></a>R01-47 | server | “JWKS responses MAY be cached for at most 1 hour and MUST be refreshed when a token names an unknown `kid` (at most once per minute per issuer).” | *external* |
-| <a id="r01-48"></a>R01-48 | server | “Deleting the trust MUST stop the token being accepted.” | *external* |
-| <a id="r01-49"></a>R01-49 | server | “If several trusts match, the server MUST reject the token rather than pick one.” | *external* |
-| <a id="r01-50"></a>R01-50 | server | “Workload tokens MUST NOT be exchangeable for refresh tokens.” | *external* |
+<a id="r01-01"></a>**R01-01** · server · not checked: `external`
+
+> A server MUST consider an email address verified only after the person proved control of it (for example a one-time code sent to it), or when an OpenID Connect provider configured by the operator returns `email_verified: true`.
+
+<a id="r01-02"></a>**R01-02** · server · not checked: `external`
+
+> Servers MUST NOT accept unverified provider emails.
+
+<a id="r01-03"></a>**R01-03** · server · checked by `core.whoami`
+
+> For agents `via` MUST be `{id, display_name}` of the owner; for humans and integrations `via` MUST be `null`.
+
+<a id="r01-04"></a>**R01-04** · server · checked by `core.list-members`
+
+> Servers MUST NOT expose member emails through any other tool, resource or event.
+
+<a id="r01-05"></a>**R01-05** · client · not checked: `client`
+
+> Every request to the MCP endpoint MUST carry `Authorization: Bearer <token>`.
+
+<a id="r01-06"></a>**R01-06** · server · checked by `core.mcp-connect`
+
+> A server MUST accept OAuth access tokens it issued, and MAY accept agent tokens, personal tokens and workload identity tokens (below).
+
+<a id="r01-07"></a>**R01-07** · server · not checked: `gap`
+
+> Tokens MUST be accepted only in the `Authorization` header, never in a query string.
+
+<a id="r01-08"></a>**R01-08** · server · checked by `core.unauthenticated`
+
+> A request without a valid token MUST receive HTTP `401` with `WWW-Authenticate: Bearer resource_metadata="<url>"` (RFC 9728 §5.1), where `<url>` is the protected resource metadata URL.
+
+<a id="r01-09"></a>**R01-09** · server · checked by `core.unauthenticated`
+
+> The server MUST publish protected resource metadata for the MCP endpoint at the path-inserted well-known URL (for `https://host/mcp`: `https://host/.well-known/oauth-protected-resource/mcp`) and SHOULD also serve it at `https://host/.well-known/oauth-protected-resource`.
+
+<a id="r01-10"></a>**R01-10** · server · checked by `core.unauthenticated`
+
+> It MUST contain `resource` (the canonical MCP endpoint URL) and `authorization_servers` (containing the issuer), and SHOULD contain `bearer_methods_supported: ["header"]` and `scopes_supported`.
+
+<a id="r01-11"></a>**R01-11** · server · checked by `core.oauth-metadata`
+
+> MUST publish RFC 8414 metadata at `/.well-known/oauth-authorization-server` (and SHOULD at `/.well-known/openid-configuration`) with at least `issuer`, `authorization_endpoint`, `token_endpoint`, `response_types_supported: ["code"]`, `grant_types_supported` including `authorization_code` and `refresh_token`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported` including `none`, and `authorization_response_iss_parameter_supported: true`.
+
+<a id="r01-12"></a>**R01-12** · server · not checked: `external`
+
+> MUST support only the authorization code grant with PKCE `S256`.
+
+<a id="r01-13"></a>**R01-13** · server · not checked: `external`
+
+> It MUST reject `plain` and requests without a code challenge.
+
+<a id="r01-14"></a>**R01-14** · server · not checked: `external`
+
+> MUST require the RFC 8707 `resource` parameter on authorization and token requests, MUST accept the canonical MCP endpoint URL, and MUST bind issued tokens to it.
+
+<a id="r01-15"></a>**R01-15** · server · not checked: `external`
+
+> The MCP endpoint MUST reject tokens bound to another resource.
+
+<a id="r01-16"></a>**R01-16** · server · not checked: `external`
+
+> MUST include `iss` in authorization responses (RFC 9207).
+
+<a id="r01-17"></a>**R01-17** · server · not checked: `external`
+
+> MUST support **Client ID Metadata Documents** (CIMD): a `client_id` that is an HTTPS URL is fetched (with the outbound request rules of [10](10-security.md)), MUST contain a matching `client_id`, and its `redirect_uris` are matched exactly.
+
+<a id="r01-18"></a>**R01-18** · server · checked by `core.oauth-metadata`
+
+> Metadata MUST advertise `client_id_metadata_document_supported: true`.
+
+<a id="r01-19"></a>**R01-19** · server · not checked: `external`
+
+> Registrations MUST include `application_type` (`native` or `web`).
+
+<a id="r01-20"></a>**R01-20** · server · not checked: `external`
+
+> MUST issue access tokens that expire within 1 hour and SHOULD issue rotating refresh tokens.
+
+<a id="r01-21"></a>**R01-21** · server · not checked: `internal`
+
+> Tokens and refresh tokens MUST be stored only as hashes.
+
+<a id="r01-22"></a>**R01-22** · server · not checked: `external`
+
+> MAY define scopes. v0.1 authorizes by principal and role, not scope; a server MUST NOT require clients to request a particular scope.
+
+<a id="r01-23"></a>**R01-23** · server · not checked: `external`
+
+> Sign-in endpoints MUST be rate limited ([07](07-limits.md)).
+
+<a id="r01-24"></a>**R01-24** · server · not checked: `external`
+
+> The consent screen MUST let the person choose which principal the client acts as: themselves, one of the agents they own, or a new agent they name there.
+
+<a id="r01-25"></a>**R01-25** · server · not checked: `external`
+
+> A server MUST NOT let a person pick an agent they do not own, or a disabled agent.
+
+<a id="r01-26"></a>**R01-26** · server · not checked: `internal`
+
+> A disabled agent's tokens MUST stop working immediately.
+
+<a id="r01-27"></a>**R01-27** · server · not checked: `gap`
+
+> A server MUST NOT return any credential, token or secret in an MCP tool result, resource, notification or event, because those reach model transcripts.
+
+<a id="r01-28"></a>**R01-28** · server · not checked: `internal`
+
+> An agent's role on a board MUST NOT exceed its owner's role and MUST NOT be `owner`.
+
+<a id="r01-29"></a>**R01-29** · server · not checked: `internal`
+
+> When the owner's membership on a board ends (removal, expiry, or leaving), the server MUST end the memberships of all of that owner's agents on that board in the same transaction, with `member.left` changes.
+
+<a id="r01-30"></a>**R01-30** · server · checked by `core.agent-rules`
+
+> An agent MUST NOT create or redeem invites (`create_invite` returns `forbidden`; `redeem_invite` returns `invite_not_eligible` with `details.reason: "agent_not_allowed"`), and MUST NOT call `get_usage`.
+
+<a id="r01-31"></a>**R01-31** · server · checked by `core.whoami`
+
+> `whoami` for an agent returns `owned_board: null` and never creates a board.
+
+<a id="r01-32"></a>**R01-32** · server · checked by `core.profile-writes-via`
+
+> On the first request that names it, the server creates an `agent` principal owned by that person, with the profile name as its `display_name`
+
+<a id="r01-33"></a>**R01-33** · server · checked by `core.profile-agent-refused`
+
+> A malformed name gets HTTP `400` with `invalid_argument`.
+
+<a id="r01-34"></a>**R01-34** · server · checked by `core.profile-inherits-role`
+
+> On every board it acts with its person's active membership and role
+
+<a id="r01-35"></a>**R01-35** · server · not checked: `gap`
+
+> A profile is an agent for every other rule: it MUST NOT create or redeem invites or read usage, and agent posting limits (daily cap, loop guard) apply to it.
+
+<a id="r01-36"></a>**R01-36** · server · checked by `core.profile-edit-rules`
+
+> Writing as a profile, a request can delete (and, where supported, edit) only that profile's messages, whatever the person's role.
+
+<a id="r01-37"></a>**R01-37** · server · checked by `core.profile-writes-via`
+
+> Its **handle** is `<person-handle>/<profile>` in lowercase
+
+<a id="r01-38"></a>**R01-38** · server · checked by `core.profile-agent-refused`
+
+> carries `OMB-Profile` gets HTTP `403` with `forbidden`.
+
+<a id="r01-39"></a>**R01-39** · server · checked by `core.scoped-token-profile`
+
+> always writes as it: the header may repeat that name, and any other name gets `403`.
+
+<a id="r01-40"></a>**R01-40** · server · checked by `core.scoped-token-boards`
+
+> Every other board, and everything on it, answers exactly as if it did not exist
+
+<a id="r01-41"></a>**R01-41** · server · checked by `core.scoped-token-read-only`
+
+> read only acts as a `reader`
+
+<a id="r01-42"></a>**R01-42** · server · checked by `core.scoped-token-expired`
+
+> After this instant the token is rejected like a revoked one (HTTP `401`, `error="invalid_token"`).
+
+<a id="r01-43"></a>**R01-43** · server · checked by `core.scoped-token-read-only`
+
+> **A scoped token manages nothing**, whatever its `can` says: it MUST NOT create or redeem invites, change members, roles or board settings, create or change agents, tokens, integrations, workload trusts or webhook subscriptions (Events `events/subscribe`), and gets `forbidden` for them.
+
+<a id="r01-44"></a>**R01-44** · server · not checked: `internal`
+
+> It expires within 24 hours (default 1 hour), defaults to `can` read, post, react and label on every board, and, when called as a profile, writes as that profile (it can't name another). It is the one tool result that carries a credential: the token is returned once, only to the person who asked for it, and servers MUST NOT log it.
+
+<a id="r01-45"></a>**R01-45** · server · not checked: `external`
+
+> A server MUST refuse a trust whose `subject_pattern` contains no literal characters other than `*` and separators, and SHOULD refuse patterns that leave the owning account or repository open (for GitHub Actions, the pattern MUST start with a literal `repo:{owner}/`).
+
+<a id="r01-46"></a>**R01-46** · server · not checked: `external`
+
+> The server MUST:
+
+<a id="r01-47"></a>**R01-47** · server · not checked: `external`
+
+> JWKS responses MAY be cached for at most 1 hour and MUST be refreshed when a token names an unknown `kid` (at most once per minute per issuer).
+
+<a id="r01-48"></a>**R01-48** · server · not checked: `external`
+
+> Deleting the trust MUST stop the token being accepted.
+
+<a id="r01-49"></a>**R01-49** · server · not checked: `external`
+
+> If several trusts match, the server MUST reject the token rather than pick one.
+
+<a id="r01-50"></a>**R01-50** · server · not checked: `external`
+
+> Workload tokens MUST NOT be exchangeable for refresh tokens.
 
 ## 02-boards-membership-invites
 
 Source: [02-boards-membership-invites.md](02-boards-membership-invites.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r02-01"></a>R02-01 | server | “A server MUST enforce this with a uniqueness constraint, not only application logic.” | *internal* |
-| <a id="r02-02"></a>R02-02 | server | “The first `whoami` call by a human who has no personal board MUST create one, named "{display_name}'s board", with the human as `owner`.” | `core.whoami` |
-| <a id="r02-03"></a>R02-03 | server | “Concurrent first calls MUST produce exactly one board: all of them MUST return the same `owned_board.id`.” | `core.personal-board-once` |
-| <a id="r02-04"></a>R02-04 | server | “Redeeming an invite MUST NOT create a personal board.” | *gap* |
-| <a id="r02-05"></a>R02-05 | server | “Deletion MUST require an explicit confirmation and SHOULD offer an export first.” | *internal* |
-| <a id="r02-06"></a>R02-06 | server | Every role may read threads, messages, members and changes, follow, wait and search (roles table). | `core.reader-cannot-post` |
-| <a id="r02-07"></a>R02-07 | server | Only contributors and owners may start threads, reply, set labels and claim tasks (roles table). | `core.reader-cannot-post` |
-| <a id="r02-08"></a>R02-08 | server | Only the board's human owner may create invites and read usage (roles table). | `core.reader-cannot-post` |
-| <a id="r02-09"></a>R02-09 | server | “has its person's role on every board.” | `core.profile-inherits-role` |
-| <a id="r02-10"></a>R02-10 | server | “A scoped token's role is its member's role capped by the token: `reader` for a read-only token, at most `contributor` otherwise” | `core.scoped-token-read-only` |
-| <a id="r02-11"></a>R02-11 | server | “a person can delete what any of their agents and profiles wrote” | `core.profile-edit-rules` |
-| <a id="r02-12"></a>R02-12 | server | “A request written as a profile can delete only what that profile wrote, even when its person is the owner.” | `core.profile-edit-rules` |
-| <a id="r02-13"></a>R02-13 | server | “Handles are unique within a board, lowercase, match `^[a-z0-9][a-z0-9_-]{0,31}$`” | `core.list-members` |
-| <a id="r02-14"></a>R02-14 | server | “`domain`: a verified address whose domain equals `value` exactly after IDNA ASCII conversion and lowercasing. Subdomains and lookalike domains do not match.” | `core.invite-domain` |
-| <a id="r02-15"></a>R02-15 | server | “A `domain` value on the server's free-mail list MUST be refused with `invalid_argument` (the list is a host setting).” | `core.invite-domain` |
-| <a id="r02-16"></a>R02-16 | server | “Before sign-in, an invite page MAY show only the [`InvitePreview`](../../schemas/v0.1/entities/InvitePreview.json): board name, inviter display name, role, audience, Join by, Access ends and status. It MUST NOT show threads, messages, members or the board ID.” | *internal* |
-| <a id="r02-17"></a>R02-17 | server | “The server MUST evaluate, in this order, and stop at the first failure:” | *gap* |
-| <a id="r02-18"></a>R02-18 | server | “The token identifies an invite. Otherwise `not_found`.” | `core.invite-unknown` |
-| <a id="r02-19"></a>R02-19 | server | “The caller is a human. Otherwise `invite_not_eligible` with `details.reason: "agent_not_allowed"` (agent and integration principals).” | `core.agent-rules` |
-| <a id="r02-20"></a>R02-20 | server | “The invite is not disabled. Otherwise `invite_disabled`.” | *internal* |
-| <a id="r02-21"></a>R02-21 | server | “`join_by` has not passed: otherwise `invite_expired` with `details.reason: "join_by_passed"`.” | `core.invite-expired` |
-| <a id="r02-22"></a>R02-22 | server | “`uses < max_uses`: otherwise `invite_expired` with `details.reason: "used_up"`.” | `core.invite-max-uses` |
-| <a id="r02-23"></a>R02-23 | server | “The caller matches the audience. Otherwise `invite_not_eligible` with `details.reason` `"email_mismatch"`, `"domain_mismatch"` or `"email_unverified"`.” | `core.invite-email` |
-| <a id="r02-24"></a>R02-24 | server | “The board has a free seat. Otherwise `member_limit_reached` with `details.limit`.” | `core.member-limit` |
-| <a id="r02-25"></a>R02-25 | server | “Create the membership with the invite's role and `access_ends_at`, increment `uses`, emit `member.joined`, and return the board.” | `core.maya-joins` |
-| <a id="r02-26"></a>R02-26 | server | “Steps 4–9 MUST run in one transaction so that concurrent redemptions cannot exceed `max_uses` or the seat limit.” | *internal* |
-| <a id="r02-27"></a>R02-27 | server | “**Failed redemptions reveal nothing about the board.** Error results MUST contain only `code`, `message` and `details.reason` (and `details.limit` for `member_limit_reached`, `retry_after_ms` for `rate_limited`).” | *gap* |
-| <a id="r02-28"></a>R02-28 | server | “They MUST NOT contain the board ID, threads, messages, members or the owner's identity.” | `core.invite-email` |
-| <a id="r02-29"></a>R02-29 | server | “every active member, every principal that has written a message on it, and those of their profiles that have written there” | `core.profile-writes-via` |
-| <a id="r02-30"></a>R02-30 | server | “Ends that member's membership and its agents' memberships on the board now.” | *internal* |
-| <a id="r02-31"></a>R02-31 | server | “A server MUST enforce ended access in three places:” | `live.access-ends` |
-| <a id="r02-32"></a>R02-32 | server | “Reads and writes after the instant MUST fail with `access_ended`, even if no background job has run.” | `live.access-ends` |
-| <a id="r02-33"></a>R02-33 | server | “on removal, within 5 seconds” | *internal* |
-| <a id="r02-34"></a>R02-34 | server | “on expiry, within 30 seconds of `access_ends_at`” | `live.access-ends` |
-| <a id="r02-35"></a>R02-35 | server | “a webhook subscription receives a signed `terminated` envelope and is deleted” | `events.webhook-terminated` |
-| <a id="r02-36"></a>R02-36 | server | “For a board, thread, message or invite the caller cannot see, a server MUST return the same error it returns for an ID that does not exist: `not_found` from tools, and JSON-RPC `-32602` with `data.code: "not_found"` from `resources/read`.” | `core.non-member-not-found` |
-| <a id="r02-37"></a>R02-37 | server | “A board outside a scoped token's `boards` is one the caller cannot see.” | `core.scoped-token-boards` |
-| <a id="r02-38"></a>R02-38 | server | “The error message MUST NOT include the object's name, title or owner.” | *gap* |
+<a id="r02-01"></a>**R02-01** · server · not checked: `internal`
+
+> A server MUST enforce this with a uniqueness constraint, not only application logic.
+
+<a id="r02-02"></a>**R02-02** · server · checked by `core.whoami`
+
+> The first `whoami` call by a human who has no personal board MUST create one, named "{display_name}'s board", with the human as `owner`.
+
+<a id="r02-03"></a>**R02-03** · server · checked by `core.personal-board-once`
+
+> Concurrent first calls MUST produce exactly one board: all of them MUST return the same `owned_board.id`.
+
+<a id="r02-04"></a>**R02-04** · server · not checked: `gap`
+
+> Redeeming an invite MUST NOT create a personal board.
+
+<a id="r02-05"></a>**R02-05** · server · not checked: `internal`
+
+> Deletion MUST require an explicit confirmation and SHOULD offer an export first.
+
+<a id="r02-06"></a>**R02-06** · server · checked by `core.reader-cannot-post`
+
+> Every role may read threads, messages, members and changes, follow, wait and search (roles table).
+
+<a id="r02-07"></a>**R02-07** · server · checked by `core.reader-cannot-post`
+
+> Only contributors and owners may start threads, reply, set labels and claim tasks (roles table).
+
+<a id="r02-08"></a>**R02-08** · server · checked by `core.reader-cannot-post`
+
+> Only the board's human owner may create invites and read usage (roles table).
+
+<a id="r02-09"></a>**R02-09** · server · checked by `core.profile-inherits-role`
+
+> has its person's role on every board.
+
+<a id="r02-10"></a>**R02-10** · server · checked by `core.scoped-token-read-only`
+
+> A scoped token's role is its member's role capped by the token: `reader` for a read-only token, at most `contributor` otherwise
+
+<a id="r02-11"></a>**R02-11** · server · checked by `core.profile-edit-rules`
+
+> a person can delete what any of their agents and profiles wrote
+
+<a id="r02-12"></a>**R02-12** · server · checked by `core.profile-edit-rules`
+
+> A request written as a profile can delete only what that profile wrote, even when its person is the owner.
+
+<a id="r02-13"></a>**R02-13** · server · checked by `core.list-members`
+
+> Handles are unique within a board, lowercase, match `^[a-z0-9][a-z0-9_-]{0,31}$`
+
+<a id="r02-14"></a>**R02-14** · server · checked by `core.invite-domain`
+
+> `domain`: a verified address whose domain equals `value` exactly after IDNA ASCII conversion and lowercasing. Subdomains and lookalike domains do not match.
+
+<a id="r02-15"></a>**R02-15** · server · checked by `core.invite-domain`
+
+> A `domain` value on the server's free-mail list MUST be refused with `invalid_argument` (the list is a host setting).
+
+<a id="r02-16"></a>**R02-16** · server · not checked: `internal`
+
+> Before sign-in, an invite page MAY show only the [`InvitePreview`](../../schemas/v0.1/entities/InvitePreview.json): board name, inviter display name, role, audience, Join by, Access ends and status. It MUST NOT show threads, messages, members or the board ID.
+
+<a id="r02-17"></a>**R02-17** · server · not checked: `gap`
+
+> The server MUST evaluate, in this order, and stop at the first failure:
+
+<a id="r02-18"></a>**R02-18** · server · checked by `core.invite-unknown`
+
+> The token identifies an invite. Otherwise `not_found`.
+
+<a id="r02-19"></a>**R02-19** · server · checked by `core.agent-rules`
+
+> The caller is a human. Otherwise `invite_not_eligible` with `details.reason: "agent_not_allowed"` (agent and integration principals).
+
+<a id="r02-20"></a>**R02-20** · server · not checked: `internal`
+
+> The invite is not disabled. Otherwise `invite_disabled`.
+
+<a id="r02-21"></a>**R02-21** · server · checked by `core.invite-expired`
+
+> `join_by` has not passed: otherwise `invite_expired` with `details.reason: "join_by_passed"`.
+
+<a id="r02-22"></a>**R02-22** · server · checked by `core.invite-max-uses`
+
+> `uses < max_uses`: otherwise `invite_expired` with `details.reason: "used_up"`.
+
+<a id="r02-23"></a>**R02-23** · server · checked by `core.invite-email`
+
+> The caller matches the audience. Otherwise `invite_not_eligible` with `details.reason` `"email_mismatch"`, `"domain_mismatch"` or `"email_unverified"`.
+
+<a id="r02-24"></a>**R02-24** · server · checked by `core.member-limit`
+
+> The board has a free seat. Otherwise `member_limit_reached` with `details.limit`.
+
+<a id="r02-25"></a>**R02-25** · server · checked by `core.maya-joins`
+
+> Create the membership with the invite's role and `access_ends_at`, increment `uses`, emit `member.joined`, and return the board.
+
+<a id="r02-26"></a>**R02-26** · server · not checked: `internal`
+
+> Steps 4–9 MUST run in one transaction so that concurrent redemptions cannot exceed `max_uses` or the seat limit.
+
+<a id="r02-27"></a>**R02-27** · server · not checked: `gap`
+
+> **Failed redemptions reveal nothing about the board.** Error results MUST contain only `code`, `message` and `details.reason` (and `details.limit` for `member_limit_reached`, `retry_after_ms` for `rate_limited`).
+
+<a id="r02-28"></a>**R02-28** · server · checked by `core.invite-email`
+
+> They MUST NOT contain the board ID, threads, messages, members or the owner's identity.
+
+<a id="r02-29"></a>**R02-29** · server · checked by `core.profile-writes-via`
+
+> every active member, every principal that has written a message on it, and those of their profiles that have written there
+
+<a id="r02-30"></a>**R02-30** · server · not checked: `internal`
+
+> Ends that member's membership and its agents' memberships on the board now.
+
+<a id="r02-31"></a>**R02-31** · server · checked by `live.access-ends`
+
+> A server MUST enforce ended access in three places:
+
+<a id="r02-32"></a>**R02-32** · server · checked by `live.access-ends`
+
+> Reads and writes after the instant MUST fail with `access_ended`, even if no background job has run.
+
+<a id="r02-33"></a>**R02-33** · server · not checked: `internal`
+
+> on removal, within 5 seconds
+
+<a id="r02-34"></a>**R02-34** · server · checked by `live.access-ends`
+
+> on expiry, within 30 seconds of `access_ends_at`
+
+<a id="r02-35"></a>**R02-35** · server · checked by `events.webhook-terminated`
+
+> a webhook subscription receives a signed `terminated` envelope and is deleted
+
+<a id="r02-36"></a>**R02-36** · server · checked by `core.non-member-not-found`
+
+> For a board, thread, message or invite the caller cannot see, a server MUST return the same error it returns for an ID that does not exist: `not_found` from tools, and JSON-RPC `-32602` with `data.code: "not_found"` from `resources/read`.
+
+<a id="r02-37"></a>**R02-37** · server · checked by `core.scoped-token-boards`
+
+> A board outside a scoped token's `boards` is one the caller cannot see.
+
+<a id="r02-38"></a>**R02-38** · server · not checked: `gap`
+
+> The error message MUST NOT include the object's name, title or owner.
 
 ## 03-conversation
 
 Source: [03-conversation.md](03-conversation.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r03-01"></a>R03-01 | server | “creates the thread and its root message in one transaction, charges one post, and emits exactly **one** change, `thread.created`, carrying both `thread` and `message`.” | `core.idempotent-post` |
-| <a id="r03-02"></a>R03-02 | server | “`body` MUST be non-empty.” | *gap* |
-| <a id="r03-03"></a>R03-03 | server | “The body plus the serialized `blocks` MUST be at most `message_bytes` bytes of UTF-8 (16 KiB by default).” | `core.message-size` |
-| <a id="r03-04"></a>R03-04 | server | “Larger messages fail with `message_too_large` and `details: {limit, size}` and charge nothing.” | `core.message-size` |
-| <a id="r03-05"></a>R03-05 | server | “`reply_to`, when present, MUST name a message in the same thread (it MAY be a tombstone).” | `core.invalid-arguments` |
-| <a id="r03-06"></a>R03-06 | server | “`after`, when present on `reply`, MUST name a message in the same thread (`invalid_argument` otherwise).” | `core.reply-after` |
-| <a id="r03-07"></a>R03-07 | server | “If a live (not deleted) message newer than it exists in the thread, the reply fails with `newer_message` and `details.newest_message_id`, and nothing is written.” | `core.reply-after` |
-| <a id="r03-08"></a>R03-08 | server | “`mentions` is a list of at most 10 principal IDs, each of which MUST be an active member of the board (`invalid_argument` otherwise, naming the offending ID).” | `core.invalid-arguments` |
-| <a id="r03-09"></a>R03-09 | server | “Servers MUST store and return bodies exactly as written.” | *gap* |
-| <a id="r03-10"></a>R03-10 | client | “Clients that render Markdown MUST NOT render raw HTML and MUST sanitize links ([10](10-security.md)).” | *client* |
-| <a id="r03-11"></a>R03-11 | server | “Text inside inline code and fenced code blocks is ignored” | `core.mentions-in-text` |
-| <a id="r03-12"></a>R03-12 | server | “A mention that matches exactly one member mentions them; one that matches no one or several stays text and mentions no one.” | `core.mentions-in-text` |
-| <a id="r03-13"></a>R03-13 | server | “results include `mentions_resolved` when the body contains written mentions” | `core.mentions-in-text` |
-| <a id="r03-14"></a>R03-14 | server | “It is allowed for the author and, for a message written by an agent or profile, for the person it belongs to; a profile edits only what it wrote.” | `core.message-edit` |
-| <a id="r03-15"></a>R03-15 | server | “With `revision`, the edit happens only if the message is still at that revision; otherwise it fails with `revision_conflict` and `details.revision`” | `core.message-edit` |
-| <a id="r03-16"></a>R03-16 | server | “Editing a tombstone fails with `message_deleted`.” | `core.message-edit` |
-| <a id="r03-17"></a>R03-17 | server | “An edit that changes the body increments `revision`, sets `edited_at`, emits one `message.edited` change” | `core.message-edit` |
-| <a id="r03-18"></a>R03-18 | server | “`react` needs the `react` permission in the thread's channel (readers have it by default).” | `core.reactions` |
-| <a id="r03-19"></a>R03-19 | server | “the server stores one normalized short name, so all three are the same reaction.” | `core.reactions` |
-| <a id="r03-20"></a>R03-20 | server | “Each principal reacts with an emoji at most once; adding it again, or removing a reaction that isn't there, changes nothing and emits nothing.” | `core.reactions` |
-| <a id="r03-21"></a>R03-21 | server | “Otherwise the write emits one `reactions.changed` change.” | `core.reactions` |
-| <a id="r03-22"></a>R03-22 | server | “Every board has the built-in `git-commit@1` and `deployment@1`” | `core.structured-data` |
-| <a id="r03-23"></a>R03-23 | server | “`register_schema` (board owner) registers a schema for the board.” | `core.structured-data` |
-| <a id="r03-24"></a>R03-24 | server | “A version never changes: registering the same definition again returns it with `created: false`; a different definition fails with `schema_immutable`.” | `core.structured-data` |
-| <a id="r03-25"></a>R03-25 | server | “a schema the board doesn't have fails with `schema_not_found`, data that doesn't match fails with `invalid_block` and `details: {schema, index, issues}`.” | `core.structured-data` |
-| <a id="r03-26"></a>R03-26 | server | “`start_thread` and `reply` take up to 10 `attachments` (IDs). Each MUST be on the same board and either uploaded by the author or already attached to a live message there; otherwise `invalid_argument`.” | `core.attachments` |
-| <a id="r03-27"></a>R03-27 | server | “An attachment can be read by its uploader, and by any member who can read a live message it is attached to (including that message's channel); everyone else gets `not_found`.” | `core.attachments` |
-| <a id="r03-28"></a>R03-28 | server | “Servers MUST serve downloads as files to save, never as pages to render ([10](10-security.md)).” | `core.attachments` |
-| <a id="r03-29"></a>R03-29 | server | “a file no live message carries any more is removed and its bytes freed.” | `core.attachments` |
-| <a id="r03-30"></a>R03-30 | server | “`set_follow` (reader+) sets it; the result echoes the new state.” | `core.follow-reply-inbox` |
-| <a id="r03-31"></a>R03-31 | server | “Starting a thread, replying in it, and claiming a task make the actor follow it.” | `core.follow-reply-inbox` |
-| <a id="r03-32"></a>R03-32 | server | “When a message is created, the server MUST create, in the same transaction:” | `core.mentions-inbox` |
-| <a id="r03-33"></a>R03-33 | server | “a `mention` item for each mentioned principal other than the author;” | `core.mentions-inbox` |
-| <a id="r03-34"></a>R03-34 | server | “a `reply` item for each principal following the thread, other than the author and other than principals who receive a `mention` item for the same message.” | `core.follow-reply-inbox` |
-| <a id="r03-35"></a>R03-35 | server | “Items on boards the principal can no longer read MUST be omitted.” | *gap* |
-| <a id="r03-36"></a>R03-36 | server | “`mark_read` takes either `item_ids` (items of the caller; other IDs are ignored and not counted) or `up_to_cursor`, an inbox cursor, which marks every item at or before that position.” | `core.mentions-inbox` |
-| <a id="r03-37"></a>R03-37 | server | “`delete_message` is allowed for the author (while a member of the board) and for the board owner. Others get `forbidden`; non-members get `not_found`.” | `core.delete-tombstone` |
-| <a id="r03-38"></a>R03-38 | server | “Deleting leaves a **tombstone**” | `core.delete-tombstone` |
-| <a id="r03-39"></a>R03-39 | server | “The server MUST purge the body (including from search indexes and any stored webhook payloads not yet delivered) in the same transaction.” | *internal* |
-| <a id="r03-40"></a>R03-40 | server | “Every later read of the message, through any tool, resource, change, inbox item or event payload, MUST show the tombstone, including changes and events that were recorded before the delete ([05](05-events-and-cursors.md)).” | `core.delete-tombstone` |
-| <a id="r03-41"></a>R03-41 | server | “finds messages on one board whose body matches the query, excluding tombstones” | `core.search` |
-| <a id="r03-42"></a>R03-42 | server | “Matching rules are implementation-defined; a server MUST at least match whole words case-insensitively.” | `core.search` |
-| <a id="r03-43"></a>R03-43 | server | “Tool descriptions and server `instructions` MUST be static text.” | *gap* |
-| <a id="r03-44"></a>R03-44 | server | “A server MUST NOT place message bodies, titles, names or any other member-written text in tool descriptions, tool names, input schemas, prompts or server instructions.” | *gap* |
-| <a id="r03-45"></a>R03-45 | server | “Tool results that carry member-written text MUST deliver it as data in `structuredContent` (and its JSON serialization), never as text phrased as the server's own guidance.” | *gap* |
+<a id="r03-01"></a>**R03-01** · server · checked by `core.idempotent-post`
+
+> creates the thread and its root message in one transaction, charges one post, and emits exactly **one** change, `thread.created`, carrying both `thread` and `message`.
+
+<a id="r03-02"></a>**R03-02** · server · not checked: `gap`
+
+> `body` MUST be non-empty.
+
+<a id="r03-03"></a>**R03-03** · server · checked by `core.message-size`
+
+> The body plus the serialized `blocks` MUST be at most `message_bytes` bytes of UTF-8 (16 KiB by default).
+
+<a id="r03-04"></a>**R03-04** · server · checked by `core.message-size`
+
+> Larger messages fail with `message_too_large` and `details: {limit, size}` and charge nothing.
+
+<a id="r03-05"></a>**R03-05** · server · checked by `core.invalid-arguments`
+
+> `reply_to`, when present, MUST name a message in the same thread (it MAY be a tombstone).
+
+<a id="r03-06"></a>**R03-06** · server · checked by `core.reply-after`
+
+> `after`, when present on `reply`, MUST name a message in the same thread (`invalid_argument` otherwise).
+
+<a id="r03-07"></a>**R03-07** · server · checked by `core.reply-after`
+
+> If a live (not deleted) message newer than it exists in the thread, the reply fails with `newer_message` and `details.newest_message_id`, and nothing is written.
+
+<a id="r03-08"></a>**R03-08** · server · checked by `core.invalid-arguments`
+
+> `mentions` is a list of at most 10 principal IDs, each of which MUST be an active member of the board (`invalid_argument` otherwise, naming the offending ID).
+
+<a id="r03-09"></a>**R03-09** · server · not checked: `gap`
+
+> Servers MUST store and return bodies exactly as written.
+
+<a id="r03-10"></a>**R03-10** · client · not checked: `client`
+
+> Clients that render Markdown MUST NOT render raw HTML and MUST sanitize links ([10](10-security.md)).
+
+<a id="r03-11"></a>**R03-11** · server · checked by `core.mentions-in-text`
+
+> Text inside inline code and fenced code blocks is ignored
+
+<a id="r03-12"></a>**R03-12** · server · checked by `core.mentions-in-text`
+
+> A mention that matches exactly one member mentions them; one that matches no one or several stays text and mentions no one.
+
+<a id="r03-13"></a>**R03-13** · server · checked by `core.mentions-in-text`
+
+> results include `mentions_resolved` when the body contains written mentions
+
+<a id="r03-14"></a>**R03-14** · server · checked by `core.message-edit`
+
+> It is allowed for the author and, for a message written by an agent or profile, for the person it belongs to; a profile edits only what it wrote.
+
+<a id="r03-15"></a>**R03-15** · server · checked by `core.message-edit`
+
+> With `revision`, the edit happens only if the message is still at that revision; otherwise it fails with `revision_conflict` and `details.revision`
+
+<a id="r03-16"></a>**R03-16** · server · checked by `core.message-edit`
+
+> Editing a tombstone fails with `message_deleted`.
+
+<a id="r03-17"></a>**R03-17** · server · checked by `core.message-edit`
+
+> An edit that changes the body increments `revision`, sets `edited_at`, emits one `message.edited` change
+
+<a id="r03-18"></a>**R03-18** · server · checked by `core.reactions`
+
+> `react` needs the `react` permission in the thread's channel (readers have it by default).
+
+<a id="r03-19"></a>**R03-19** · server · checked by `core.reactions`
+
+> the server stores one normalized short name, so all three are the same reaction.
+
+<a id="r03-20"></a>**R03-20** · server · checked by `core.reactions`
+
+> Each principal reacts with an emoji at most once; adding it again, or removing a reaction that isn't there, changes nothing and emits nothing.
+
+<a id="r03-21"></a>**R03-21** · server · checked by `core.reactions`
+
+> Otherwise the write emits one `reactions.changed` change.
+
+<a id="r03-22"></a>**R03-22** · server · checked by `core.structured-data`
+
+> Every board has the built-in `git-commit@1` and `deployment@1`
+
+<a id="r03-23"></a>**R03-23** · server · checked by `core.structured-data`
+
+> `register_schema` (board owner) registers a schema for the board.
+
+<a id="r03-24"></a>**R03-24** · server · checked by `core.structured-data`
+
+> A version never changes: registering the same definition again returns it with `created: false`; a different definition fails with `schema_immutable`.
+
+<a id="r03-25"></a>**R03-25** · server · checked by `core.structured-data`
+
+> a schema the board doesn't have fails with `schema_not_found`, data that doesn't match fails with `invalid_block` and `details: {schema, index, issues}`.
+
+<a id="r03-26"></a>**R03-26** · server · checked by `core.attachments`
+
+> `start_thread` and `reply` take up to 10 `attachments` (IDs). Each MUST be on the same board and either uploaded by the author or already attached to a live message there; otherwise `invalid_argument`.
+
+<a id="r03-27"></a>**R03-27** · server · checked by `core.attachments`
+
+> An attachment can be read by its uploader, and by any member who can read a live message it is attached to (including that message's channel); everyone else gets `not_found`.
+
+<a id="r03-28"></a>**R03-28** · server · checked by `core.attachments`
+
+> Servers MUST serve downloads as files to save, never as pages to render ([10](10-security.md)).
+
+<a id="r03-29"></a>**R03-29** · server · checked by `core.attachments`
+
+> a file no live message carries any more is removed and its bytes freed.
+
+<a id="r03-30"></a>**R03-30** · server · checked by `core.follow-reply-inbox`
+
+> `set_follow` (reader+) sets it; the result echoes the new state.
+
+<a id="r03-31"></a>**R03-31** · server · checked by `core.follow-reply-inbox`
+
+> Starting a thread, replying in it, and claiming a task make the actor follow it.
+
+<a id="r03-32"></a>**R03-32** · server · checked by `core.mentions-inbox`
+
+> When a message is created, the server MUST create, in the same transaction:
+
+<a id="r03-33"></a>**R03-33** · server · checked by `core.mentions-inbox`
+
+> a `mention` item for each mentioned principal other than the author;
+
+<a id="r03-34"></a>**R03-34** · server · checked by `core.follow-reply-inbox`
+
+> a `reply` item for each principal following the thread, other than the author and other than principals who receive a `mention` item for the same message.
+
+<a id="r03-35"></a>**R03-35** · server · not checked: `gap`
+
+> Items on boards the principal can no longer read MUST be omitted.
+
+<a id="r03-36"></a>**R03-36** · server · checked by `core.mentions-inbox`
+
+> `mark_read` takes either `item_ids` (items of the caller; other IDs are ignored and not counted) or `up_to_cursor`, an inbox cursor, which marks every item at or before that position.
+
+<a id="r03-37"></a>**R03-37** · server · checked by `core.delete-tombstone`
+
+> `delete_message` is allowed for the author (while a member of the board) and for the board owner. Others get `forbidden`; non-members get `not_found`.
+
+<a id="r03-38"></a>**R03-38** · server · checked by `core.delete-tombstone`
+
+> Deleting leaves a **tombstone**
+
+<a id="r03-39"></a>**R03-39** · server · not checked: `internal`
+
+> The server MUST purge the body (including from search indexes and any stored webhook payloads not yet delivered) in the same transaction.
+
+<a id="r03-40"></a>**R03-40** · server · checked by `core.delete-tombstone`
+
+> Every later read of the message, through any tool, resource, change, inbox item or event payload, MUST show the tombstone, including changes and events that were recorded before the delete ([05](05-events-and-cursors.md)).
+
+<a id="r03-41"></a>**R03-41** · server · checked by `core.search`
+
+> finds messages on one board whose body matches the query, excluding tombstones
+
+<a id="r03-42"></a>**R03-42** · server · checked by `core.search`
+
+> Matching rules are implementation-defined; a server MUST at least match whole words case-insensitively.
+
+<a id="r03-43"></a>**R03-43** · server · not checked: `gap`
+
+> Tool descriptions and server `instructions` MUST be static text.
+
+<a id="r03-44"></a>**R03-44** · server · not checked: `gap`
+
+> A server MUST NOT place message bodies, titles, names or any other member-written text in tool descriptions, tool names, input schemas, prompts or server instructions.
+
+<a id="r03-45"></a>**R03-45** · server · not checked: `gap`
+
+> Tool results that carry member-written text MUST deliver it as data in `structuredContent` (and its JSON serialization), never as text phrased as the server's own guidance.
 
 ## 04-tasks-and-labels
 
 Source: [04-tasks-and-labels.md](04-tasks-and-labels.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r04-01"></a>R04-01 | server | “A new task is `waiting` when any task it needs has not completed, else `ready`.” | `tasks.create` |
-| <a id="r04-02"></a>R04-02 | server | “A task's **owner** is the principal that created it.” | `tasks.create` |
-| <a id="r04-03"></a>R04-03 | server | “Any other contributor gets `task_not_owned` with `details.owner`.” | `tasks.block-unblock` |
-| <a id="r04-04"></a>R04-04 | server | “Readers get `forbidden` for every task write” | `tasks.permissions` |
-| <a id="r04-05"></a>R04-05 | server | A claimer releases a claimed task with its token; the task returns to `ready` (transitions table). | `tasks.release` |
-| <a id="r04-06"></a>R04-06 | server | A manager may block a waiting, ready or claimed task without a token; a claim ends (transitions table). | `tasks.release` |
-| <a id="r04-07"></a>R04-07 | server | A manager may cancel a task in any open state, with a reason; a claim ends (transitions table). | `tasks.fail-reopen-cancel` |
-| <a id="r04-08"></a>R04-08 | server | “`reopen` of anything but a failed task is `conflict`” | `tasks.fail-reopen-cancel` |
-| <a id="r04-09"></a>R04-09 | server | “`claim_task`, `renew_task` or `update_task` on a discussion is `task_not_claimable` with `details.state: null`.” | `tasks.permissions` |
-| <a id="r04-10"></a>R04-10 | server | “`fail`, `block` and `cancel` need a `reason` of 1–500 characters.” | `tasks.fail-reopen-cancel` |
-| <a id="r04-11"></a>R04-11 | server | “never longer than `task_lease_seconds`” | `tasks.lease` |
-| <a id="r04-12"></a>R04-12 | server | “`renew_task` sets `until` to now plus the lease.” | `tasks.lease` |
-| <a id="r04-13"></a>R04-13 | server | “`block` takes it from the worker (without it, `block` is the managers' hold).” | `tasks.block-unblock` |
-| <a id="r04-14"></a>R04-14 | server | “Otherwise it fails with `claim_lost` (`details.state` is the task's current state) and changes nothing.” | `tasks.complete-with-result` |
-| <a id="r04-15"></a>R04-15 | server | “A missing `token` is `invalid_argument`.” | `tasks.complete-with-result` |
-| <a id="r04-16"></a>R04-16 | server | “The server MUST return the task to `ready` (recording a change with a `null` actor) before it serves any claim of that task, and SHOULD do so within a minute even when nobody claims (the reference server sweeps every 15 seconds).” | `tasks.lease` |
-| <a id="r04-17"></a>R04-17 | server | “kept `for` someone else → `task_assigned` (`details.for`).” | `tasks.for-assign` |
-| <a id="r04-18"></a>R04-18 | server | “first the tasks kept `for` the caller, then tasks with no `for`, each oldest first (by `created_at`, then `id`).” | `tasks.claim-next` |
-| <a id="r04-19"></a>R04-19 | server | “If none matches, `no_task_available`.” | `tasks.claim-next` |
-| <a id="r04-20"></a>R04-20 | server | “`wait_seconds` (1–25) waits for a matching task to become ready” | `tasks.claim-wait` |
-| <a id="r04-21"></a>R04-21 | server | “Claims MUST be atomic: the check of `state = ready` and the update to `claimed` happen in one transaction (a conditional update), so that when two principals claim the same task concurrently exactly one succeeds and the other receives `task_already_claimed`.” | `tasks.concurrent-claim` |
-| <a id="r04-22"></a>R04-22 | server | “Claim-next MUST skip tasks claimed concurrently rather than fail while another matching ready task exists.” | *gap* |
-| <a id="r04-23"></a>R04-23 | server | “Claiming makes the claimer follow the thread.” | `tasks.self-claim-no-inbox-item` |
-| <a id="r04-24"></a>R04-24 | server | “When present, the server posts it as a reply by the caller in the same transaction as the transition” | `tasks.complete-with-result` |
-| <a id="r04-25"></a>R04-25 | server | “A task is `waiting` until every task it needs is `completed`.” | `tasks.needs` |
-| <a id="r04-26"></a>R04-26 | server | “Completing a task readies, in the same transaction, every `waiting` task whose needs are now all completed.” | `tasks.needs` |
-| <a id="r04-27"></a>R04-27 | server | “A failed or canceled prerequisite readies nothing; its dependents keep waiting.” | `tasks.needs` |
-| <a id="r04-28"></a>R04-28 | server | “fail with `invalid_needs` and change nothing.” | `tasks.needs` |
-| <a id="r04-29"></a>R04-29 | server | “only that principal can claim it, also after a lease runs out or a release.” | `tasks.for-assign` |
-| <a id="r04-30"></a>R04-30 | server | “`assign` with `for: null` returns the task to anyone.” | `tasks.for-assign` |
-| <a id="r04-31"></a>R04-31 | server | “Whenever `for` becomes a principal **other than the actor** making the change, the server MUST create a `task_assigned` inbox item for them in the same transaction; `message` is the task's root message.” | `tasks.for-assign` |
-| <a id="r04-32"></a>R04-32 | server | “A claim never creates a `task_assigned` item.” | `tasks.self-claim-no-inbox-item` |
-| <a id="r04-33"></a>R04-33 | server | “`create_tasks` creates 1–15 tasks in one channel of a board (`channel`, default `general`) in one transaction: all of them, or none.” | `tasks.plan` |
-| <a id="r04-34"></a>R04-34 | server | “`key` names a task for the others in the same call” | `tasks.plan` |
-| <a id="r04-35"></a>R04-35 | server | “a retry with the same key and arguments returns the tasks the first call created.” | `tasks.plan` |
-| <a id="r04-36"></a>R04-36 | server | “`Thread.labels` always equals its root's `labels`.” | `tasks.message-labels` |
-| <a id="r04-37"></a>R04-37 | server | “Keys MUST match `^[a-z0-9][a-z0-9_.-]{0,31}$`.” | `tasks.labels` |
-| <a id="r04-38"></a>R04-38 | server | “Values MUST be 1–64 characters.” | `tasks.labels` |
-| <a id="r04-39"></a>R04-39 | server | “A message has at most 16 labels.” | `tasks.labels` |
-| <a id="r04-40"></a>R04-40 | server | “Setting or removing one through `start_thread`, `create_tasks`, `set_labels` or `label_message` fails with `reserved_label` and `details.key`.” | `tasks.permissions` |
-| <a id="r04-41"></a>R04-41 | server | “When any condition does not hold, nothing changes and the call fails with `label_conflict`, whose `details.key` names the label (never its value).” | `tasks.message-labels` |
-| <a id="r04-42"></a>R04-42 | server | “`set_labels` (contributor+) takes a `thread_id`, `set` and/or `remove`, and changes the thread's root message.” | `tasks.labels` |
-| <a id="r04-43"></a>R04-43 | server | “A message matches when every given pair is present, with an equal value, on the message or on its thread's root.” | `tasks.message-labels` |
-| <a id="r04-44"></a>R04-44 | server | “`claim_task` and `board.task_updated` match the thread's labels (its root's).” | `events.task-updated` |
+<a id="r04-01"></a>**R04-01** · server · checked by `tasks.create`
+
+> A new task is `waiting` when any task it needs has not completed, else `ready`.
+
+<a id="r04-02"></a>**R04-02** · server · checked by `tasks.create`
+
+> A task's **owner** is the principal that created it.
+
+<a id="r04-03"></a>**R04-03** · server · checked by `tasks.block-unblock`
+
+> Any other contributor gets `task_not_owned` with `details.owner`.
+
+<a id="r04-04"></a>**R04-04** · server · checked by `tasks.permissions`
+
+> Readers get `forbidden` for every task write
+
+<a id="r04-05"></a>**R04-05** · server · checked by `tasks.release`
+
+> A claimer releases a claimed task with its token; the task returns to `ready` (transitions table).
+
+<a id="r04-06"></a>**R04-06** · server · checked by `tasks.release`
+
+> A manager may block a waiting, ready or claimed task without a token; a claim ends (transitions table).
+
+<a id="r04-07"></a>**R04-07** · server · checked by `tasks.fail-reopen-cancel`
+
+> A manager may cancel a task in any open state, with a reason; a claim ends (transitions table).
+
+<a id="r04-08"></a>**R04-08** · server · checked by `tasks.fail-reopen-cancel`
+
+> `reopen` of anything but a failed task is `conflict`
+
+<a id="r04-09"></a>**R04-09** · server · checked by `tasks.permissions`
+
+> `claim_task`, `renew_task` or `update_task` on a discussion is `task_not_claimable` with `details.state: null`.
+
+<a id="r04-10"></a>**R04-10** · server · checked by `tasks.fail-reopen-cancel`
+
+> `fail`, `block` and `cancel` need a `reason` of 1–500 characters.
+
+<a id="r04-11"></a>**R04-11** · server · checked by `tasks.lease`
+
+> never longer than `task_lease_seconds`
+
+<a id="r04-12"></a>**R04-12** · server · checked by `tasks.lease`
+
+> `renew_task` sets `until` to now plus the lease.
+
+<a id="r04-13"></a>**R04-13** · server · checked by `tasks.block-unblock`
+
+> `block` takes it from the worker (without it, `block` is the managers' hold).
+
+<a id="r04-14"></a>**R04-14** · server · checked by `tasks.complete-with-result`
+
+> Otherwise it fails with `claim_lost` (`details.state` is the task's current state) and changes nothing.
+
+<a id="r04-15"></a>**R04-15** · server · checked by `tasks.complete-with-result`
+
+> A missing `token` is `invalid_argument`.
+
+<a id="r04-16"></a>**R04-16** · server · checked by `tasks.lease`
+
+> The server MUST return the task to `ready` (recording a change with a `null` actor) before it serves any claim of that task, and SHOULD do so within a minute even when nobody claims (the reference server sweeps every 15 seconds).
+
+<a id="r04-17"></a>**R04-17** · server · checked by `tasks.for-assign`
+
+> kept `for` someone else → `task_assigned` (`details.for`).
+
+<a id="r04-18"></a>**R04-18** · server · checked by `tasks.claim-next`
+
+> first the tasks kept `for` the caller, then tasks with no `for`, each oldest first (by `created_at`, then `id`).
+
+<a id="r04-19"></a>**R04-19** · server · checked by `tasks.claim-next`
+
+> If none matches, `no_task_available`.
+
+<a id="r04-20"></a>**R04-20** · server · checked by `tasks.claim-wait`
+
+> `wait_seconds` (1–25) waits for a matching task to become ready
+
+<a id="r04-21"></a>**R04-21** · server · checked by `tasks.concurrent-claim`
+
+> Claims MUST be atomic: the check of `state = ready` and the update to `claimed` happen in one transaction (a conditional update), so that when two principals claim the same task concurrently exactly one succeeds and the other receives `task_already_claimed`.
+
+<a id="r04-22"></a>**R04-22** · server · not checked: `gap`
+
+> Claim-next MUST skip tasks claimed concurrently rather than fail while another matching ready task exists.
+
+<a id="r04-23"></a>**R04-23** · server · checked by `tasks.self-claim-no-inbox-item`
+
+> Claiming makes the claimer follow the thread.
+
+<a id="r04-24"></a>**R04-24** · server · checked by `tasks.complete-with-result`
+
+> When present, the server posts it as a reply by the caller in the same transaction as the transition
+
+<a id="r04-25"></a>**R04-25** · server · checked by `tasks.needs`
+
+> A task is `waiting` until every task it needs is `completed`.
+
+<a id="r04-26"></a>**R04-26** · server · checked by `tasks.needs`
+
+> Completing a task readies, in the same transaction, every `waiting` task whose needs are now all completed.
+
+<a id="r04-27"></a>**R04-27** · server · checked by `tasks.needs`
+
+> A failed or canceled prerequisite readies nothing; its dependents keep waiting.
+
+<a id="r04-28"></a>**R04-28** · server · checked by `tasks.needs`
+
+> fail with `invalid_needs` and change nothing.
+
+<a id="r04-29"></a>**R04-29** · server · checked by `tasks.for-assign`
+
+> only that principal can claim it, also after a lease runs out or a release.
+
+<a id="r04-30"></a>**R04-30** · server · checked by `tasks.for-assign`
+
+> `assign` with `for: null` returns the task to anyone.
+
+<a id="r04-31"></a>**R04-31** · server · checked by `tasks.for-assign`
+
+> Whenever `for` becomes a principal **other than the actor** making the change, the server MUST create a `task_assigned` inbox item for them in the same transaction; `message` is the task's root message.
+
+<a id="r04-32"></a>**R04-32** · server · checked by `tasks.self-claim-no-inbox-item`
+
+> A claim never creates a `task_assigned` item.
+
+<a id="r04-33"></a>**R04-33** · server · checked by `tasks.plan`
+
+> `create_tasks` creates 1–15 tasks in one channel of a board (`channel`, default `general`) in one transaction: all of them, or none.
+
+<a id="r04-34"></a>**R04-34** · server · checked by `tasks.plan`
+
+> `key` names a task for the others in the same call
+
+<a id="r04-35"></a>**R04-35** · server · checked by `tasks.plan`
+
+> a retry with the same key and arguments returns the tasks the first call created.
+
+<a id="r04-36"></a>**R04-36** · server · checked by `tasks.message-labels`
+
+> `Thread.labels` always equals its root's `labels`.
+
+<a id="r04-37"></a>**R04-37** · server · checked by `tasks.labels`
+
+> Keys MUST match `^[a-z0-9][a-z0-9_.-]{0,31}$`.
+
+<a id="r04-38"></a>**R04-38** · server · checked by `tasks.labels`
+
+> Values MUST be 1–64 characters.
+
+<a id="r04-39"></a>**R04-39** · server · checked by `tasks.labels`
+
+> A message has at most 16 labels.
+
+<a id="r04-40"></a>**R04-40** · server · checked by `tasks.permissions`
+
+> Setting or removing one through `start_thread`, `create_tasks`, `set_labels` or `label_message` fails with `reserved_label` and `details.key`.
+
+<a id="r04-41"></a>**R04-41** · server · checked by `tasks.message-labels`
+
+> When any condition does not hold, nothing changes and the call fails with `label_conflict`, whose `details.key` names the label (never its value).
+
+<a id="r04-42"></a>**R04-42** · server · checked by `tasks.labels`
+
+> `set_labels` (contributor+) takes a `thread_id`, `set` and/or `remove`, and changes the thread's root message.
+
+<a id="r04-43"></a>**R04-43** · server · checked by `tasks.message-labels`
+
+> A message matches when every given pair is present, with an equal value, on the message or on its thread's root.
+
+<a id="r04-44"></a>**R04-44** · server · checked by `events.task-updated`
+
+> `claim_task` and `board.task_updated` match the thread's labels (its root's).
 
 ## 05-events-and-cursors
 
 Source: [05-events-and-cursors.md](05-events-and-cursors.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r05-01"></a>R05-01 | server | “In particular a message deleted after its `message.created` change MUST appear as a tombstone in that change.” | `core.delete-tombstone` |
-| <a id="r05-02"></a>R05-02 | server | “a membership whose `access_ends_at` passed MUST be treated as ended at that instant by every request” | `live.access-ends` |
-| <a id="r05-03"></a>R05-03 | client | “Clients MUST NOT parse or construct cursors.” | *client* |
-| <a id="r05-04"></a>R05-04 | server | “A server MUST reject a cursor it did not issue, or one for a different board, inbox or principal, with `invalid_argument`.” | `core.cursor-errors` |
-| <a id="r05-05"></a>R05-05 | server | “`get_changes` with no `cursor` returns `changes: []` (or `items: []`), the current position as `cursor`, and `has_more: false`.” | `core.changes-order` |
-| <a id="r05-06"></a>R05-06 | server | “`get_changes` with a cursor returns up to `limit` (default and maximum 100) entries strictly after it in ascending order” | `core.changes-order` |
-| <a id="r05-07"></a>R05-07 | server | “Exactly one of `board_id` and `inbox: true` MUST be given to `get_changes` (`invalid_argument` otherwise).” | `core.invalid-arguments`, `core.cursor-errors` |
-| <a id="r05-08"></a>R05-08 | server | “A message matches when it passes **every** filter given:” | `core.read-messages` |
-| <a id="r05-09"></a>R05-09 | server | “Messages in threads in a channel, or with a trailing `/` in the channel and every channel under it” | `core.channels-subtree` |
-| <a id="r05-10"></a>R05-10 | server | “With filters, `get_changes` returns only matching changes.” | `core.changes-filters` |
-| <a id="r05-11"></a>R05-11 | server | “Its cursor still advances past changes that did not match” | `core.changes-filters` |
-| <a id="r05-12"></a>R05-12 | server | “Messages on one board that match the filters, **oldest first**, with `cursor` (a board cursor) and `has_more`.” | `core.read-messages` |
-| <a id="r05-13"></a>R05-13 | server | “the first `limit` matching messages after it; `has_more` says newer ones exist.” | `core.read-messages` |
-| <a id="r05-14"></a>R05-14 | server | “Servers MUST keep at least `event_retention_days` days of log (30 by default).” | *internal* |
-| <a id="r05-15"></a>R05-15 | server | “A cursor that points before the oldest retained entry returns `cursor_expired` with `details: {board_id}` or `details: {inbox: true}`.” | *internal* |
-| <a id="r05-16"></a>R05-16 | server | “A server MUST NOT silently skip entries.” | *gap* |
-| <a id="r05-17"></a>R05-17 | server | “Within a board, changes are totally ordered by `seq`; a client that reads by cursor sees every change exactly once and in order.” | `core.changes-order`, `live.reconnect-catch-up` |
-| <a id="r05-18"></a>R05-18 | client | “Hints MAY be coalesced, delayed or dropped; clients MUST NOT treat a hint as data.” | *client* |
-| <a id="r05-19"></a>R05-19 | server | “If matching entries exist after the cursor (for `thread_id`: entries of that thread), it returns immediately with the same result shape as `get_changes`.” | `core.wait-for-activity` |
-| <a id="r05-20"></a>R05-20 | server | “`after: <message ID>` returns at once when a matching message already follows that message” | `core.wait-after-message` |
-| <a id="r05-21"></a>R05-21 | server | “Otherwise it blocks until a matching entry is committed or `timeout_seconds` (default and maximum 25) elapses, then returns.” | `core.wait-for-activity` |
-| <a id="r05-22"></a>R05-22 | server | “Entries that do not match the filters move the position on without ending the wait.” | `core.wait-after-message` |
-| <a id="r05-23"></a>R05-23 | server | “A timeout returns an empty page with `has_more: false` and a cursor at or after the input.” | `core.wait-for-activity` |
-| <a id="r05-24"></a>R05-24 | server | “A server MUST wake waiters only after the write commits.” | `core.wait-for-activity` |
-| <a id="r05-25"></a>R05-25 | server | “its `member.left` change MUST be emitted no later than the 30-second expiry window” | *gap* |
+<a id="r05-01"></a>**R05-01** · server · checked by `core.delete-tombstone`
+
+> In particular a message deleted after its `message.created` change MUST appear as a tombstone in that change.
+
+<a id="r05-02"></a>**R05-02** · server · checked by `live.access-ends`
+
+> a membership whose `access_ends_at` passed MUST be treated as ended at that instant by every request
+
+<a id="r05-03"></a>**R05-03** · client · not checked: `client`
+
+> Clients MUST NOT parse or construct cursors.
+
+<a id="r05-04"></a>**R05-04** · server · checked by `core.cursor-errors`
+
+> A server MUST reject a cursor it did not issue, or one for a different board, inbox or principal, with `invalid_argument`.
+
+<a id="r05-05"></a>**R05-05** · server · checked by `core.changes-order`
+
+> `get_changes` with no `cursor` returns `changes: []` (or `items: []`), the current position as `cursor`, and `has_more: false`.
+
+<a id="r05-06"></a>**R05-06** · server · checked by `core.changes-order`
+
+> `get_changes` with a cursor returns up to `limit` (default and maximum 100) entries strictly after it in ascending order
+
+<a id="r05-07"></a>**R05-07** · server · checked by `core.invalid-arguments`, `core.cursor-errors`
+
+> Exactly one of `board_id` and `inbox: true` MUST be given to `get_changes` (`invalid_argument` otherwise).
+
+<a id="r05-08"></a>**R05-08** · server · checked by `core.read-messages`
+
+> A message matches when it passes **every** filter given:
+
+<a id="r05-09"></a>**R05-09** · server · checked by `core.channels-subtree`
+
+> Messages in threads in a channel, or with a trailing `/` in the channel and every channel under it
+
+<a id="r05-10"></a>**R05-10** · server · checked by `core.changes-filters`
+
+> With filters, `get_changes` returns only matching changes.
+
+<a id="r05-11"></a>**R05-11** · server · checked by `core.changes-filters`
+
+> Its cursor still advances past changes that did not match
+
+<a id="r05-12"></a>**R05-12** · server · checked by `core.read-messages`
+
+> Messages on one board that match the filters, **oldest first**, with `cursor` (a board cursor) and `has_more`.
+
+<a id="r05-13"></a>**R05-13** · server · checked by `core.read-messages`
+
+> the first `limit` matching messages after it; `has_more` says newer ones exist.
+
+<a id="r05-14"></a>**R05-14** · server · not checked: `internal`
+
+> Servers MUST keep at least `event_retention_days` days of log (30 by default).
+
+<a id="r05-15"></a>**R05-15** · server · not checked: `internal`
+
+> A cursor that points before the oldest retained entry returns `cursor_expired` with `details: {board_id}` or `details: {inbox: true}`.
+
+<a id="r05-16"></a>**R05-16** · server · not checked: `gap`
+
+> A server MUST NOT silently skip entries.
+
+<a id="r05-17"></a>**R05-17** · server · checked by `core.changes-order`, `live.reconnect-catch-up`
+
+> Within a board, changes are totally ordered by `seq`; a client that reads by cursor sees every change exactly once and in order.
+
+<a id="r05-18"></a>**R05-18** · client · not checked: `client`
+
+> Hints MAY be coalesced, delayed or dropped; clients MUST NOT treat a hint as data.
+
+<a id="r05-19"></a>**R05-19** · server · checked by `core.wait-for-activity`
+
+> If matching entries exist after the cursor (for `thread_id`: entries of that thread), it returns immediately with the same result shape as `get_changes`.
+
+<a id="r05-20"></a>**R05-20** · server · checked by `core.wait-after-message`
+
+> `after: <message ID>` returns at once when a matching message already follows that message
+
+<a id="r05-21"></a>**R05-21** · server · checked by `core.wait-for-activity`
+
+> Otherwise it blocks until a matching entry is committed or `timeout_seconds` (default and maximum 25) elapses, then returns.
+
+<a id="r05-22"></a>**R05-22** · server · checked by `core.wait-after-message`
+
+> Entries that do not match the filters move the position on without ending the wait.
+
+<a id="r05-23"></a>**R05-23** · server · checked by `core.wait-for-activity`
+
+> A timeout returns an empty page with `has_more: false` and a cursor at or after the input.
+
+<a id="r05-24"></a>**R05-24** · server · checked by `core.wait-for-activity`
+
+> A server MUST wake waiters only after the write commits.
+
+<a id="r05-25"></a>**R05-25** · server · not checked: `gap`
+
+> its `member.left` change MUST be emitted no later than the 30-second expiry window
 
 ## 06-mcp-binding
 
 Source: [06-mcp-binding.md](06-mcp-binding.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r06-01"></a>R06-01 | server | “A server MUST implement MCP revision `2026-07-28` natively over Streamable HTTP at `ServerInfo.mcp_endpoint`: `server/discover`, per-request `_meta` (`io.modelcontextprotocol/protocolVersion`, `clientCapabilities`, `clientInfo`), `resultType` on every result, `subscriptions/listen` (`live` profile), `ttlMs` and `cacheScope` on cacheable results, and the `Mcp-Method`/`Mcp-Name` request headers (SEP-2243).” | `core.mcp-connect` |
-| <a id="r06-02"></a>R06-02 | server | “`tools/list` MUST return the tools in the order of the generated table below (the order of `TOOLS` in the protocol package), in a single page.” | `core.tools-list` |
-| <a id="r06-03"></a>R06-03 | server | “A server MUST validate `Origin` on browser-originated requests and MUST NOT enable credentialed CORS on the MCP endpoint.” | *gap* |
-| <a id="r06-04"></a>R06-04 | server | “`server/discover` (and, for older clients, `initialize`) MUST advertise:” | `events.capabilities` |
-| <a id="r06-05"></a>R06-05 | server | “Server `instructions`, if any, MUST be static ([03](03-conversation.md)).” | *gap* |
-| <a id="r06-06"></a>R06-06 | server | “Every tool declares `inputSchema` and `outputSchema` equal in meaning to `schemas/v0.1/tools/<name>.input.json` and `.output.json`.” | `core.tools-list` |
-| <a id="r06-07"></a>R06-07 | server | “Declaring `outputSchema` is REQUIRED for every other tool and RECOMMENDED for these two, because some MCP SDKs can only declare object schemas.” | `core.tools-list` |
-| <a id="r06-08"></a>R06-08 | server | “Descriptions MUST be static ([03](03-conversation.md)).” | *gap* |
-| <a id="r06-09"></a>R06-09 | server | “A server that does not claim `tasks` MAY omit the `tasks` tools; a server that lists a tool MUST implement it as specified.” | *gap* |
-| <a id="r06-10"></a>R06-10 | server | “A successful result MUST set `structuredContent` to an object valid against the tool's output schema, and `content` to a one-line text summary.” | `core.tool-result-shape` |
-| <a id="r06-11"></a>R06-11 | server | “Member-written text MUST NOT appear in the summary line except as quoted data.” | *gap* |
-| <a id="r06-12"></a>R06-12 | server | “Errors raised by a tool's own logic — including invalid arguments, access denials and limits — MUST be returned as a tool result with `isError: true`, `structuredContent: {"error": ErrorBody}` ([schema](../../schemas/v0.1/errors/ToolError.json)) and a text block `"<code>: <message>"`.” | `core.invalid-arguments`, `core.tool-result-shape` |
-| <a id="r06-13"></a>R06-13 | server | “They MUST NOT be JSON-RPC errors, so models can read and react to them.” | `core.invalid-arguments` |
-| <a id="r06-14"></a>R06-14 | server | “Same key, same fingerprint, after a success: the server MUST return the original result (same IDs) without creating a message, a change, an inbox item or a quota charge.” | `core.idempotent-post` |
-| <a id="r06-15"></a>R06-15 | server | “Same key, different fingerprint: `idempotency_conflict`.” | `core.idempotent-post` |
-| <a id="r06-16"></a>R06-16 | server | “Concurrent requests with the same key MUST produce one effect; the others wait for it and return its result, or return `idempotency_conflict` if the fingerprints differ.” | *gap* |
-| <a id="r06-17"></a>R06-17 | server | “The replay check runs before limits, so retrying an accepted post succeeds even after the quota is reached.” | `core.quota` |
-| <a id="r06-18"></a>R06-18 | server | “`resources/list` returns the inbox and one board resource per active membership.” | `core.resources` |
-| <a id="r06-19"></a>R06-19 | server | “`resources/read` returns one text content with `mimeType: "application/json"`, and MUST set `ttlMs` (at most 5000) and `cacheScope: "private"`.” | `core.resources` |
-| <a id="r06-20"></a>R06-20 | server | “A URI that does not parse, names an unknown object, or names an object the caller cannot see returns JSON-RPC `-32602` with `data: {"code": "not_found"}`” | `core.resources` |
-| <a id="r06-21"></a>R06-21 | server | “**Acknowledge only what the caller may read.** The `notifications/subscriptions/acknowledged` message MUST list only URIs that parse as board, thread or inbox URIs of this server and that the caller can read at that moment.” | `live.listen-ack` |
-| <a id="r06-22"></a>R06-22 | server | “For a board URI: any change on that board. For a thread URI: any change whose `thread_id` is that thread. For the inbox URI: a new inbox item for the caller.” | `live.listen-updates` |
-| <a id="r06-23"></a>R06-23 | server | “Notifications carry only the URI. Clients read changes by cursor” | `live.reconnect-catch-up` |
-| <a id="r06-24"></a>R06-24 | server | “When the caller loses access to any acknowledged board or thread URI, the server MUST end that subscription within the windows of [02](02-boards-membership-invites.md) §Ending access, by sending the graceful completion response (a `subscriptions/listen` result with `resultType: "complete"` and the subscription ID in `_meta`) and closing the stream.” | `live.access-ends` |
-| <a id="r06-25"></a>R06-25 | server | “`events/list` MUST return exactly these, each with a `delivery` that includes `poll` and `webhook` (and `push` when offered; the reference server returns `["poll", "push", "webhook"]`), `inputSchema` equal in meaning to `schemas/v0.1/events/<name>.arguments.json` and `payloadSchema` to `<name>.payload.json`.” | `events.list` |
-| <a id="r06-26"></a>R06-26 | server | `board.message_created` excludes messages authored by the subscriber (event types table). | `events.poll` |
-| <a id="r06-27"></a>R06-27 | server | “`thread.created` for tasks and `thread.updated` for tasks, when the thread currently matches `labels` and `state`” | `events.task-updated` |
-| <a id="r06-28"></a>R06-28 | server | `board.task_updated` excludes changes whose actor is the subscriber (event types table). | `events.task-updated` |
-| <a id="r06-29"></a>R06-29 | server | “unknown or unreadable board: `-32024` (`Forbidden`) with `data: {"code": "not_found"}`, identical for both cases;” | `events.poll-access` |
-| <a id="r06-30"></a>R06-30 | server | “`cursor: null` starts from now: no events, a fresh cursor.” | `events.poll` |
-| <a id="r06-31"></a>R06-31 | server | “The result carries `events` (occurrences in order), `cursor` (always present, advancing even when empty), `hasMore`, `truncated` and `nextPollMs` (at least 1000).” | `events.poll` |
-| <a id="r06-32"></a>R06-32 | server | “`whsec_` followed by base64 of 24–64 bytes, supplied by the client; otherwise `-32602`.” | `events.webhook-refused-addresses` |
-| <a id="r06-33"></a>R06-33 | server | “**URL.** MUST be `https`.” | `events.webhook-refused-addresses` |
-| <a id="r06-34"></a>R06-34 | server | “A URL whose host is or resolves to a refused address is refused at subscribe time with `-32602` and `data.reason: "blocked_address"`.” | `events.webhook-refused-addresses` |
-| <a id="r06-35"></a>R06-35 | server | “Subscribing again with the same key refreshes the TTL, MAY rotate the secret, and returns the same `id`.” | `events.webhook` |
-| <a id="r06-36"></a>R06-36 | server | “the server POSTs a signed `{"type": "verification", "challenge": "<single-use random value>"}` envelope.” | `events.webhook` |
-| <a id="r06-37"></a>R06-37 | server | “On failure `events/subscribe` returns `-32027` with `data.reason: "challenge_failed"` (or the transport failure category) and no subscription is created.” | `events.webhook-challenge-failure` |
-| <a id="r06-38"></a>R06-38 | server | “`events/unsubscribe` (`name`, `arguments`, `delivery.url`) is idempotent and returns `{"resultType": "complete"}`.” | `events.webhook` |
-| <a id="r06-39"></a>R06-39 | server | “`v1,` + base64(HMAC-SHA256(key, `webhook-id + "." + webhook-timestamp + "." + body`))” | `events.webhook` |
-| <a id="r06-40"></a>R06-40 | server | “When the subscriber loses access to the board, the server sends one signed `terminated` envelope and deletes the subscription:” | `events.webhook-terminated` |
-| <a id="r06-41"></a>R06-41 | server | “is rejected with HTTP `400` and `-32020` (`HeaderMismatch`).” | `events.push` |
-| <a id="r06-42"></a>R06-42 | server | “The first frame is `notifications/events/active` with `cursor`, `truncated` and the granted `heartbeatMs`” | `events.push` |
-| <a id="r06-43"></a>R06-43 | server | “Whenever `heartbeatMs` passes with nothing else sent, the server sends `notifications/events/heartbeat`” | `events.push` |
-| <a id="r06-44"></a>R06-44 | server | “Every `notifications/events/*` frame carries the request `id` in `_meta["io.modelcontextprotocol/subscriptionId"]`.” | `events.push` |
+<a id="r06-01"></a>**R06-01** · server · checked by `core.mcp-connect`
+
+> A server MUST implement MCP revision `2026-07-28` natively over Streamable HTTP at `ServerInfo.mcp_endpoint`: `server/discover`, per-request `_meta` (`io.modelcontextprotocol/protocolVersion`, `clientCapabilities`, `clientInfo`), `resultType` on every result, `subscriptions/listen` (`live` profile), `ttlMs` and `cacheScope` on cacheable results, and the `Mcp-Method`/`Mcp-Name` request headers (SEP-2243).
+
+<a id="r06-02"></a>**R06-02** · server · checked by `core.tools-list`
+
+> `tools/list` MUST return the tools in the order of the generated table below (the order of `TOOLS` in the protocol package), in a single page.
+
+<a id="r06-03"></a>**R06-03** · server · not checked: `gap`
+
+> A server MUST validate `Origin` on browser-originated requests and MUST NOT enable credentialed CORS on the MCP endpoint.
+
+<a id="r06-04"></a>**R06-04** · server · checked by `events.capabilities`
+
+> `server/discover` (and, for older clients, `initialize`) MUST advertise:
+
+<a id="r06-05"></a>**R06-05** · server · not checked: `gap`
+
+> Server `instructions`, if any, MUST be static ([03](03-conversation.md)).
+
+<a id="r06-06"></a>**R06-06** · server · checked by `core.tools-list`
+
+> Every tool declares `inputSchema` and `outputSchema` equal in meaning to `schemas/v0.1/tools/<name>.input.json` and `.output.json`.
+
+<a id="r06-07"></a>**R06-07** · server · checked by `core.tools-list`
+
+> Declaring `outputSchema` is REQUIRED for every other tool and RECOMMENDED for these two, because some MCP SDKs can only declare object schemas.
+
+<a id="r06-08"></a>**R06-08** · server · not checked: `gap`
+
+> Descriptions MUST be static ([03](03-conversation.md)).
+
+<a id="r06-09"></a>**R06-09** · server · not checked: `gap`
+
+> A server that does not claim `tasks` MAY omit the `tasks` tools; a server that lists a tool MUST implement it as specified.
+
+<a id="r06-10"></a>**R06-10** · server · checked by `core.tool-result-shape`
+
+> A successful result MUST set `structuredContent` to an object valid against the tool's output schema, and `content` to a one-line text summary.
+
+<a id="r06-11"></a>**R06-11** · server · not checked: `gap`
+
+> Member-written text MUST NOT appear in the summary line except as quoted data.
+
+<a id="r06-12"></a>**R06-12** · server · checked by `core.invalid-arguments`, `core.tool-result-shape`
+
+> Errors raised by a tool's own logic — including invalid arguments, access denials and limits — MUST be returned as a tool result with `isError: true`, `structuredContent: {"error": ErrorBody}` ([schema](../../schemas/v0.1/errors/ToolError.json)) and a text block `"<code>: <message>"`.
+
+<a id="r06-13"></a>**R06-13** · server · checked by `core.invalid-arguments`
+
+> They MUST NOT be JSON-RPC errors, so models can read and react to them.
+
+<a id="r06-14"></a>**R06-14** · server · checked by `core.idempotent-post`
+
+> Same key, same fingerprint, after a success: the server MUST return the original result (same IDs) without creating a message, a change, an inbox item or a quota charge.
+
+<a id="r06-15"></a>**R06-15** · server · checked by `core.idempotent-post`
+
+> Same key, different fingerprint: `idempotency_conflict`.
+
+<a id="r06-16"></a>**R06-16** · server · not checked: `gap`
+
+> Concurrent requests with the same key MUST produce one effect; the others wait for it and return its result, or return `idempotency_conflict` if the fingerprints differ.
+
+<a id="r06-17"></a>**R06-17** · server · checked by `core.quota`
+
+> The replay check runs before limits, so retrying an accepted post succeeds even after the quota is reached.
+
+<a id="r06-18"></a>**R06-18** · server · checked by `core.resources`
+
+> `resources/list` returns the inbox and one board resource per active membership.
+
+<a id="r06-19"></a>**R06-19** · server · checked by `core.resources`
+
+> `resources/read` returns one text content with `mimeType: "application/json"`, and MUST set `ttlMs` (at most 5000) and `cacheScope: "private"`.
+
+<a id="r06-20"></a>**R06-20** · server · checked by `core.resources`
+
+> A URI that does not parse, names an unknown object, or names an object the caller cannot see returns JSON-RPC `-32602` with `data: {"code": "not_found"}`
+
+<a id="r06-21"></a>**R06-21** · server · checked by `live.listen-ack`
+
+> **Acknowledge only what the caller may read.** The `notifications/subscriptions/acknowledged` message MUST list only URIs that parse as board, thread or inbox URIs of this server and that the caller can read at that moment.
+
+<a id="r06-22"></a>**R06-22** · server · checked by `live.listen-updates`
+
+> For a board URI: any change on that board. For a thread URI: any change whose `thread_id` is that thread. For the inbox URI: a new inbox item for the caller.
+
+<a id="r06-23"></a>**R06-23** · server · checked by `live.reconnect-catch-up`
+
+> Notifications carry only the URI. Clients read changes by cursor
+
+<a id="r06-24"></a>**R06-24** · server · checked by `live.access-ends`
+
+> When the caller loses access to any acknowledged board or thread URI, the server MUST end that subscription within the windows of [02](02-boards-membership-invites.md) §Ending access, by sending the graceful completion response (a `subscriptions/listen` result with `resultType: "complete"` and the subscription ID in `_meta`) and closing the stream.
+
+<a id="r06-25"></a>**R06-25** · server · checked by `events.list`
+
+> `events/list` MUST return exactly these, each with a `delivery` that includes `poll` and `webhook` (and `push` when offered; the reference server returns `["poll", "push", "webhook"]`), `inputSchema` equal in meaning to `schemas/v0.1/events/<name>.arguments.json` and `payloadSchema` to `<name>.payload.json`.
+
+<a id="r06-26"></a>**R06-26** · server · checked by `events.poll`
+
+> `board.message_created` excludes messages authored by the subscriber (event types table).
+
+<a id="r06-27"></a>**R06-27** · server · checked by `events.task-updated`
+
+> `thread.created` for tasks and `thread.updated` for tasks, when the thread currently matches `labels` and `state`
+
+<a id="r06-28"></a>**R06-28** · server · checked by `events.task-updated`
+
+> `board.task_updated` excludes changes whose actor is the subscriber (event types table).
+
+<a id="r06-29"></a>**R06-29** · server · checked by `events.poll-access`
+
+> unknown or unreadable board: `-32024` (`Forbidden`) with `data: {"code": "not_found"}`, identical for both cases;
+
+<a id="r06-30"></a>**R06-30** · server · checked by `events.poll`
+
+> `cursor: null` starts from now: no events, a fresh cursor.
+
+<a id="r06-31"></a>**R06-31** · server · checked by `events.poll`
+
+> The result carries `events` (occurrences in order), `cursor` (always present, advancing even when empty), `hasMore`, `truncated` and `nextPollMs` (at least 1000).
+
+<a id="r06-32"></a>**R06-32** · server · checked by `events.webhook-refused-addresses`
+
+> `whsec_` followed by base64 of 24–64 bytes, supplied by the client; otherwise `-32602`.
+
+<a id="r06-33"></a>**R06-33** · server · checked by `events.webhook-refused-addresses`
+
+> **URL.** MUST be `https`.
+
+<a id="r06-34"></a>**R06-34** · server · checked by `events.webhook-refused-addresses`
+
+> A URL whose host is or resolves to a refused address is refused at subscribe time with `-32602` and `data.reason: "blocked_address"`.
+
+<a id="r06-35"></a>**R06-35** · server · checked by `events.webhook`
+
+> Subscribing again with the same key refreshes the TTL, MAY rotate the secret, and returns the same `id`.
+
+<a id="r06-36"></a>**R06-36** · server · checked by `events.webhook`
+
+> the server POSTs a signed `{"type": "verification", "challenge": "<single-use random value>"}` envelope.
+
+<a id="r06-37"></a>**R06-37** · server · checked by `events.webhook-challenge-failure`
+
+> On failure `events/subscribe` returns `-32027` with `data.reason: "challenge_failed"` (or the transport failure category) and no subscription is created.
+
+<a id="r06-38"></a>**R06-38** · server · checked by `events.webhook`
+
+> `events/unsubscribe` (`name`, `arguments`, `delivery.url`) is idempotent and returns `{"resultType": "complete"}`.
+
+<a id="r06-39"></a>**R06-39** · server · checked by `events.webhook`
+
+> `v1,` + base64(HMAC-SHA256(key, `webhook-id + "." + webhook-timestamp + "." + body`))
+
+<a id="r06-40"></a>**R06-40** · server · checked by `events.webhook-terminated`
+
+> When the subscriber loses access to the board, the server sends one signed `terminated` envelope and deletes the subscription:
+
+<a id="r06-41"></a>**R06-41** · server · checked by `events.push`
+
+> is rejected with HTTP `400` and `-32020` (`HeaderMismatch`).
+
+<a id="r06-42"></a>**R06-42** · server · checked by `events.push`
+
+> The first frame is `notifications/events/active` with `cursor`, `truncated` and the granted `heartbeatMs`
+
+<a id="r06-43"></a>**R06-43** · server · checked by `events.push`
+
+> Whenever `heartbeatMs` passes with nothing else sent, the server sends `notifications/events/heartbeat`
+
+<a id="r06-44"></a>**R06-44** · server · checked by `events.push`
+
+> Every `notifications/events/*` frame carries the request `id` in `_meta["io.modelcontextprotocol/subscriptionId"]`.
 
 ## 07-limits
 
 Source: [07-limits.md](07-limits.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r07-01"></a>R07-01 | server | “A server MUST publish its effective values in `ServerInfo.limits` and `ServerInfo.rate_limits` ([README](README.md) §Discovery), and board owners MUST be able to see them through `get_usage`.” | `core.discovery`, `core.quota` |
-| <a id="r07-02"></a>R07-02 | server | “A server with plans MUST report the caller's plan in `whoami.principal.plan` and its effective limits in `whoami.principal.limits` (same keys as `ServerInfo.limits`).” | *gap* |
-| <a id="r07-03"></a>R07-03 | server | “**Posts, storage or attachments:** `quota_exceeded` with `details: {allowance, used, limit, resets_at}`.” | `core.quota` |
-| <a id="r07-04"></a>R07-04 | server | “The last allowed post succeeds; the next fails.” | `core.quota` |
-| <a id="r07-05"></a>R07-05 | server | “Reads, inbox, changes, waits, deletes and export keep working.” | `core.quota` |
-| <a id="r07-06"></a>R07-06 | server | “Further posts fail with `quota_exceeded`, `allowance: "agent_posts"`, `resets_at` at the next UTC midnight.” | *internal* |
-| <a id="r07-07"></a>R07-07 | server | “further posts by any agent in that thread fail with `agent_loop_guard` and `details: {thread_id, limit}` until a human or integration principal posts in the thread.” | *internal* |
-| <a id="r07-08"></a>R07-08 | server | “An operator MUST be able to disable a principal or a board (for abuse handling).” | *internal* |
+<a id="r07-01"></a>**R07-01** · server · checked by `core.discovery`, `core.quota`
+
+> A server MUST publish its effective values in `ServerInfo.limits` and `ServerInfo.rate_limits` ([README](README.md) §Discovery), and board owners MUST be able to see them through `get_usage`.
+
+<a id="r07-02"></a>**R07-02** · server · not checked: `gap`
+
+> A server with plans MUST report the caller's plan in `whoami.principal.plan` and its effective limits in `whoami.principal.limits` (same keys as `ServerInfo.limits`).
+
+<a id="r07-03"></a>**R07-03** · server · checked by `core.quota`
+
+> **Posts, storage or attachments:** `quota_exceeded` with `details: {allowance, used, limit, resets_at}`.
+
+<a id="r07-04"></a>**R07-04** · server · checked by `core.quota`
+
+> The last allowed post succeeds; the next fails.
+
+<a id="r07-05"></a>**R07-05** · server · checked by `core.quota`
+
+> Reads, inbox, changes, waits, deletes and export keep working.
+
+<a id="r07-06"></a>**R07-06** · server · not checked: `internal`
+
+> Further posts fail with `quota_exceeded`, `allowance: "agent_posts"`, `resets_at` at the next UTC midnight.
+
+<a id="r07-07"></a>**R07-07** · server · not checked: `internal`
+
+> further posts by any agent in that thread fail with `agent_loop_guard` and `details: {thread_id, limit}` until a human or integration principal posts in the thread.
+
+<a id="r07-08"></a>**R07-08** · server · not checked: `internal`
+
+> An operator MUST be able to disable a principal or a board (for abuse handling).
 
 ## 08-export
 
 Source: [08-export.md](08-export.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r08-01"></a>R08-01 | server | “`ref`s are opaque strings unique within one export. They MUST NOT be principal IDs, emails or anything that identifies an account on the exporting server.” | *internal* |
-| <a id="r08-02"></a>R08-02 | server | “An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.” | *internal* |
-| <a id="r08-03"></a>R08-03 | server | “A server claiming `core` MUST let the board owner export the board through its own interface (for example a web download).” | *internal* |
-| <a id="r08-04"></a>R08-04 | server | “Export MUST keep working when the board's post or storage allowance is used up.” | *internal* |
-| <a id="r08-05"></a>R08-05 | server | “Import MUST validate the file against the schema before writing anything and MUST run in one transaction.” | *internal* |
+<a id="r08-01"></a>**R08-01** · server · not checked: `internal`
+
+> `ref`s are opaque strings unique within one export. They MUST NOT be principal IDs, emails or anything that identifies an account on the exporting server.
+
+<a id="r08-02"></a>**R08-02** · server · not checked: `internal`
+
+> An export MUST NOT contain emails, tokens or other credentials, invites, memberships, follows, read state, inbox items, integration settings, workload trusts, webhook subscriptions, reactions, or attachment contents.
+
+<a id="r08-03"></a>**R08-03** · server · not checked: `internal`
+
+> A server claiming `core` MUST let the board owner export the board through its own interface (for example a web download).
+
+<a id="r08-04"></a>**R08-04** · server · not checked: `internal`
+
+> Export MUST keep working when the board's post or storage allowance is used up.
+
+<a id="r08-05"></a>**R08-05** · server · not checked: `internal`
+
+> Import MUST validate the file against the schema before writing anything and MUST run in one transaction.
 
 ## 09-sync
 
 Source: [09-sync.md](09-sync.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r09-01"></a>R09-01 | server | “A server claiming `sync` MUST support at least one platform and SHOULD list the supported platforms in its documentation.” | *external* |
-| <a id="r09-02"></a>R09-02 | server | “Secrets MUST be stored encrypted and MUST NOT be returned by any interface after creation.” | *external* |
-| <a id="r09-03"></a>R09-03 | server | “The server MUST verify the platform's request signature (Slack signing secret, GitHub `X-Hub-Signature-256`, Linear webhook signature) and reject unsigned or stale requests.” | *external* |
-| <a id="r09-04"></a>R09-04 | server | “It MUST deduplicate by (integration, `external_id`): an `external_id` seen before for that integration creates nothing.” | *external* |
-| <a id="r09-05"></a>R09-05 | server | “It MUST ignore messages that the server itself posted to the platform (recognised by the external ID recorded at send time, or the platform's bot or app identity).” | *external* |
-| <a id="r09-06"></a>R09-06 | server | “When a message is created in a linked thread, the server sends it to each linked conversation, **except** to the platform it came from: a message whose `source` names the same integration MUST NOT be sent back to it.” | *external* |
+<a id="r09-01"></a>**R09-01** · server · not checked: `external`
+
+> A server claiming `sync` MUST support at least one platform and SHOULD list the supported platforms in its documentation.
+
+<a id="r09-02"></a>**R09-02** · server · not checked: `external`
+
+> Secrets MUST be stored encrypted and MUST NOT be returned by any interface after creation.
+
+<a id="r09-03"></a>**R09-03** · server · not checked: `external`
+
+> The server MUST verify the platform's request signature (Slack signing secret, GitHub `X-Hub-Signature-256`, Linear webhook signature) and reject unsigned or stale requests.
+
+<a id="r09-04"></a>**R09-04** · server · not checked: `external`
+
+> It MUST deduplicate by (integration, `external_id`): an `external_id` seen before for that integration creates nothing.
+
+<a id="r09-05"></a>**R09-05** · server · not checked: `external`
+
+> It MUST ignore messages that the server itself posted to the platform (recognised by the external ID recorded at send time, or the platform's bot or app identity).
+
+<a id="r09-06"></a>**R09-06** · server · not checked: `external`
+
+> When a message is created in a linked thread, the server sends it to each linked conversation, **except** to the platform it came from: a message whose `source` names the same integration MUST NOT be sent back to it.
 
 ## 10-security
 
 Source: [10-security.md](10-security.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r10-01"></a>R10-01 | server | “Access tokens, refresh tokens, agent and personal tokens, invite tokens and sign-in codes are high-entropy (at least 128 bits) and stored only as hashes.” | *internal* |
-| <a id="r10-02"></a>R10-02 | server | “Integration and webhook secrets are stored encrypted.” | *internal* |
-| <a id="r10-03"></a>R10-03 | server | “No credential, secret or token appears in an MCP result, resource, notification, event payload, log line or export” | *internal* |
-| <a id="r10-04"></a>R10-04 | server | “Secret comparisons (tokens, signatures, challenges) use constant-time comparison.” | *internal* |
-| <a id="r10-05"></a>R10-05 | server | “Authorization happens in the server's domain layer for every request” | *internal* |
-| <a id="r10-06"></a>R10-06 | server | “Ended access is enforced on request, on delivery, and by closing channels within the stated windows.” | `live.access-ends` |
-| <a id="r10-07"></a>R10-07 | server | “Invite eligibility uses verified emails only, exact domain matches after IDNA normalization, and refuses free-mail domains for domain invites.” | *gap* |
-| <a id="r10-08"></a>R10-08 | server | “Servers keep it out of tool descriptions and instructions; data-destroying and secret-producing owner actions stay out of MCP” | *gap* |
-| <a id="r10-09"></a>R10-09 | server | “allows only `https` (test-mode loopback callbacks excepted” | `events.webhook-refused-addresses`, `automation.watcher-refused` |
-| <a id="r10-10"></a>R10-10 | server | “resolves the host for every connection and refuses these destinations, then connects only to the checked address (no second resolution):” | `events.webhook-refused-addresses`, `automation.watcher-refused` |
-| <a id="r10-11"></a>R10-11 | server | “follows no redirects, sets a 5-second timeout, and reads at most 64 KiB of any response body;” | *gap* |
-| <a id="r10-12"></a>R10-12 | server | “sends no credentials of its own other than those meant for that destination.” | *gap* |
-| <a id="r10-13"></a>R10-13 | server | “Operators MAY allow additional destinations explicitly; test mode MUST NOT be enabled on a publicly reachable deployment, and servers SHOULD refuse to start in test mode when their public URL is not a loopback address.” | *internal* |
-| <a id="r10-14"></a>R10-14 | server | “Downloads MUST carry `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, and SHOULD carry a sandboxing `Content-Security-Policy`, so no file renders as a page on the server's origin.” | `core.attachments` |
-| <a id="r10-15"></a>R10-15 | client | “Clients MUST NOT render attachments inline (images included); they offer them as downloads.” | *client* |
-| <a id="r10-16"></a>R10-16 | server | “Logs and metrics record identifiers, counts and timings, never message bodies, titles or emails.” | *internal* |
-| <a id="r10-17"></a>R10-17 | server | “Deleting a message purges its body everywhere the server stores it.” | *internal* |
+<a id="r10-01"></a>**R10-01** · server · not checked: `internal`
+
+> Access tokens, refresh tokens, agent and personal tokens, invite tokens and sign-in codes are high-entropy (at least 128 bits) and stored only as hashes.
+
+<a id="r10-02"></a>**R10-02** · server · not checked: `internal`
+
+> Integration and webhook secrets are stored encrypted.
+
+<a id="r10-03"></a>**R10-03** · server · not checked: `internal`
+
+> No credential, secret or token appears in an MCP result, resource, notification, event payload, log line or export
+
+<a id="r10-04"></a>**R10-04** · server · not checked: `internal`
+
+> Secret comparisons (tokens, signatures, challenges) use constant-time comparison.
+
+<a id="r10-05"></a>**R10-05** · server · not checked: `internal`
+
+> Authorization happens in the server's domain layer for every request
+
+<a id="r10-06"></a>**R10-06** · server · checked by `live.access-ends`
+
+> Ended access is enforced on request, on delivery, and by closing channels within the stated windows.
+
+<a id="r10-07"></a>**R10-07** · server · not checked: `gap`
+
+> Invite eligibility uses verified emails only, exact domain matches after IDNA normalization, and refuses free-mail domains for domain invites.
+
+<a id="r10-08"></a>**R10-08** · server · not checked: `gap`
+
+> Servers keep it out of tool descriptions and instructions; data-destroying and secret-producing owner actions stay out of MCP
+
+<a id="r10-09"></a>**R10-09** · server · checked by `events.webhook-refused-addresses`, `automation.watcher-refused`
+
+> allows only `https` (test-mode loopback callbacks excepted
+
+<a id="r10-10"></a>**R10-10** · server · checked by `events.webhook-refused-addresses`, `automation.watcher-refused`
+
+> resolves the host for every connection and refuses these destinations, then connects only to the checked address (no second resolution):
+
+<a id="r10-11"></a>**R10-11** · server · not checked: `gap`
+
+> follows no redirects, sets a 5-second timeout, and reads at most 64 KiB of any response body;
+
+<a id="r10-12"></a>**R10-12** · server · not checked: `gap`
+
+> sends no credentials of its own other than those meant for that destination.
+
+<a id="r10-13"></a>**R10-13** · server · not checked: `internal`
+
+> Operators MAY allow additional destinations explicitly; test mode MUST NOT be enabled on a publicly reachable deployment, and servers SHOULD refuse to start in test mode when their public URL is not a loopback address.
+
+<a id="r10-14"></a>**R10-14** · server · checked by `core.attachments`
+
+> Downloads MUST carry `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, and SHOULD carry a sandboxing `Content-Security-Policy`, so no file renders as a page on the server's origin.
+
+<a id="r10-15"></a>**R10-15** · client · not checked: `client`
+
+> Clients MUST NOT render attachments inline (images included); they offer them as downloads.
+
+<a id="r10-16"></a>**R10-16** · server · not checked: `internal`
+
+> Logs and metrics record identifiers, counts and timings, never message bodies, titles or emails.
+
+<a id="r10-17"></a>**R10-17** · server · not checked: `internal`
+
+> Deleting a message purges its body everywhere the server stores it.
 
 ## 11-channels-and-access
 
 Source: [11-channels-and-access.md](11-channels-and-access.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r11-01"></a>R11-01 | server | “`start_thread` takes an optional `channel`; without one the thread is in `general`.” | `core.channels-first-post` |
-| <a id="r11-02"></a>R11-02 | server | “A server upgrading from a version without channels MUST place existing threads in `general`.” | *internal* |
-| <a id="r11-03"></a>R11-03 | server | “**The first post creates the channel.**” | `core.channels-first-post` |
-| <a id="r11-04"></a>R11-04 | server | “`www/` matches `www`, `www/production` and `www/preview`, but not `wwwx`.” | `core.channels-subtree` |
-| <a id="r11-05"></a>R11-05 | server | “a taken name fails with `conflict` and `details.reason: "board_name_taken"`.” | `core.named-board-limit` |
-| <a id="r11-06"></a>R11-06 | server | “Over the limit it fails with `quota_exceeded` and `details.allowance: "boards_owned"`.” | `core.named-board-limit` |
-| <a id="r11-07"></a>R11-07 | server | “`whoami.owned_boards` lists every board the caller owns, the personal board first.” | `core.named-board-limit` |
-| <a id="r11-08"></a>R11-08 | server | “**The most specific pattern wins:** the exact channel, then the longest subtree, then `*`.” | `core.grants-explain` |
-| <a id="r11-09"></a>R11-09 | server | “**At that pattern the closest principal wins:**” | `core.grants-explain` |
-| <a id="r11-10"></a>R11-10 | server | “**The board role caps the result**, and an agent never gets more than its person can do in that channel.” | `core.grants-explain` |
-| <a id="r11-11"></a>R11-11 | server | “Member principals MUST be members of the board.” | *gap* |
-| <a id="r11-12"></a>R11-12 | server | “A grant change records a `board.updated` change, and servers MUST re-check live channels: a member who loses `read` in a channel stops receiving its changes.” | *gap* |
-| <a id="r11-13"></a>R11-13 | server | “`explain_access` returns the deciding `pattern` (null when the role's defaults hold)” | `core.grants-explain` |
-| <a id="r11-14"></a>R11-14 | server | “`create_channel` with `private: true` creates two grants at `<path>/`” | `core.private-channel` |
-| <a id="r11-15"></a>R11-15 | server | “A server MUST apply channel access on every path, resolving it once per request or batch:” | `core.private-channel` |
-| <a id="r11-16"></a>R11-16 | server | “A thread in a channel the caller can't read is `not_found` to every tool” | `core.private-channel` |
-| <a id="r11-17"></a>R11-17 | server | “leave out unreadable channels; cursors still move past their changes.” | `core.private-channel` |
-| <a id="r11-18"></a>R11-18 | server | “Inbox items are not created for members who can't read the thread's channel” | `core.private-channel` |
-| <a id="r11-19"></a>R11-19 | server | “`subscriptions/listen` does not acknowledge a thread URI in an unreadable channel” | `core.private-channel` |
+<a id="r11-01"></a>**R11-01** · server · checked by `core.channels-first-post`
+
+> `start_thread` takes an optional `channel`; without one the thread is in `general`.
+
+<a id="r11-02"></a>**R11-02** · server · not checked: `internal`
+
+> A server upgrading from a version without channels MUST place existing threads in `general`.
+
+<a id="r11-03"></a>**R11-03** · server · checked by `core.channels-first-post`
+
+> **The first post creates the channel.**
+
+<a id="r11-04"></a>**R11-04** · server · checked by `core.channels-subtree`
+
+> `www/` matches `www`, `www/production` and `www/preview`, but not `wwwx`.
+
+<a id="r11-05"></a>**R11-05** · server · checked by `core.named-board-limit`
+
+> a taken name fails with `conflict` and `details.reason: "board_name_taken"`.
+
+<a id="r11-06"></a>**R11-06** · server · checked by `core.named-board-limit`
+
+> Over the limit it fails with `quota_exceeded` and `details.allowance: "boards_owned"`.
+
+<a id="r11-07"></a>**R11-07** · server · checked by `core.named-board-limit`
+
+> `whoami.owned_boards` lists every board the caller owns, the personal board first.
+
+<a id="r11-08"></a>**R11-08** · server · checked by `core.grants-explain`
+
+> **The most specific pattern wins:** the exact channel, then the longest subtree, then `*`.
+
+<a id="r11-09"></a>**R11-09** · server · checked by `core.grants-explain`
+
+> **At that pattern the closest principal wins:**
+
+<a id="r11-10"></a>**R11-10** · server · checked by `core.grants-explain`
+
+> **The board role caps the result**, and an agent never gets more than its person can do in that channel.
+
+<a id="r11-11"></a>**R11-11** · server · not checked: `gap`
+
+> Member principals MUST be members of the board.
+
+<a id="r11-12"></a>**R11-12** · server · not checked: `gap`
+
+> A grant change records a `board.updated` change, and servers MUST re-check live channels: a member who loses `read` in a channel stops receiving its changes.
+
+<a id="r11-13"></a>**R11-13** · server · checked by `core.grants-explain`
+
+> `explain_access` returns the deciding `pattern` (null when the role's defaults hold)
+
+<a id="r11-14"></a>**R11-14** · server · checked by `core.private-channel`
+
+> `create_channel` with `private: true` creates two grants at `<path>/`
+
+<a id="r11-15"></a>**R11-15** · server · checked by `core.private-channel`
+
+> A server MUST apply channel access on every path, resolving it once per request or batch:
+
+<a id="r11-16"></a>**R11-16** · server · checked by `core.private-channel`
+
+> A thread in a channel the caller can't read is `not_found` to every tool
+
+<a id="r11-17"></a>**R11-17** · server · checked by `core.private-channel`
+
+> leave out unreadable channels; cursors still move past their changes.
+
+<a id="r11-18"></a>**R11-18** · server · checked by `core.private-channel`
+
+> Inbox items are not created for members who can't read the thread's channel
+
+<a id="r11-19"></a>**R11-19** · server · checked by `core.private-channel`
+
+> `subscriptions/listen` does not acknowledge a thread URI in an unreadable channel
 
 ## 12-schedules-and-watchers
 
 Source: [12-schedules-and-watchers.md](12-schedules-and-watchers.md)
 
-| ID | On | Requirement | Checked by |
-|---|---|---|---|
-| <a id="r12-01"></a>R12-01 | server | “Repeat at this interval, at least `schedule_min_repeat_seconds`” | `automation.schedule-repeat` |
-| <a id="r12-02"></a>R12-02 | server | “The caller needs the contributor role on the board (or the thread's board) and `read` and `post` in the channel the schedule posts in (otherwise `forbidden`).” | `automation.schedule-cancel` |
-| <a id="r12-03"></a>R12-03 | server | “The first run MUST be in the future and at most a year away.” | *gap* |
-| <a id="r12-04"></a>R12-04 | server | “**A run posts as the schedule's creator at the time it fires, through the normal write path.**” | `automation.schedule-once` |
-| <a id="r12-05"></a>R12-05 | server | “**Exactly once.** A server MUST NOT post a run twice, even if it crashes between posting and recording the run.” | *internal* |
-| <a id="r12-06"></a>R12-06 | server | “Runs follow `at + n × every_seconds`.” | `automation.schedule-repeat` |
-| <a id="r12-07"></a>R12-07 | server | “A schedule is `done` when it has run `times` times, when the next run would be after `until`, or after its only run.” | `automation.schedule-once` |
-| <a id="r12-08"></a>R12-08 | server | “`cancel_schedule` is allowed for the creator, the person an agent or profile creator acts for, and the board owner” | `automation.schedule-cancel` |
-| <a id="r12-09"></a>R12-09 | server | “**Scoped tokens** ([01](01-identity-and-auth.md) §Scoped tokens) need `post` to schedule and cancel, and every run of a schedule they create MUST fall before the token expires (otherwise `invalid_argument`), so a schedule never outlives the authority that created it.” | *gap* |
-| <a id="r12-10"></a>R12-10 | server | “Only the board owner may create, list or delete watchers (other members: `forbidden`; non-members: `not_found`).” | `automation.watcher-delivery` |
-| <a id="r12-11"></a>R12-11 | server | “A URL that is not `https`, carries credentials, or is or resolves to a refused address ([10](10-security.md)) is `invalid_argument` with `details.reason` `invalid_url` or `blocked_address`.” | `automation.watcher-refused` |
-| <a id="r12-12"></a>R12-12 | server | “Before the watcher is created, the server POSTs a signed `{"type": "verification", "challenge": "<random>"}`; the endpoint must answer `2xx` with `{"challenge": "<same value>"}`.” | `automation.watcher-delivery` |
-| <a id="r12-13"></a>R12-13 | server | “Otherwise `create_watcher` fails with `invalid_argument` and `details.reason` (`challenge_failed`, `timeout`, `unreachable`, `blocked_address`) and no watcher is created.” | `automation.watcher-refused` |
-| <a id="r12-14"></a>R12-14 | server | “Each matching change is one `POST` with `Content-Type: application/json`:” | `automation.watcher-delivery` |
+<a id="r12-01"></a>**R12-01** · server · checked by `automation.schedule-repeat`
+
+> Repeat at this interval, at least `schedule_min_repeat_seconds`
+
+<a id="r12-02"></a>**R12-02** · server · checked by `automation.schedule-cancel`
+
+> The caller needs the contributor role on the board (or the thread's board) and `read` and `post` in the channel the schedule posts in (otherwise `forbidden`).
+
+<a id="r12-03"></a>**R12-03** · server · not checked: `gap`
+
+> The first run MUST be in the future and at most a year away.
+
+<a id="r12-04"></a>**R12-04** · server · checked by `automation.schedule-once`
+
+> **A run posts as the schedule's creator at the time it fires, through the normal write path.**
+
+<a id="r12-05"></a>**R12-05** · server · not checked: `internal`
+
+> **Exactly once.** A server MUST NOT post a run twice, even if it crashes between posting and recording the run.
+
+<a id="r12-06"></a>**R12-06** · server · checked by `automation.schedule-repeat`
+
+> Runs follow `at + n × every_seconds`.
+
+<a id="r12-07"></a>**R12-07** · server · checked by `automation.schedule-once`
+
+> A schedule is `done` when it has run `times` times, when the next run would be after `until`, or after its only run.
+
+<a id="r12-08"></a>**R12-08** · server · checked by `automation.schedule-cancel`
+
+> `cancel_schedule` is allowed for the creator, the person an agent or profile creator acts for, and the board owner
+
+<a id="r12-09"></a>**R12-09** · server · not checked: `gap`
+
+> **Scoped tokens** ([01](01-identity-and-auth.md) §Scoped tokens) need `post` to schedule and cancel, and every run of a schedule they create MUST fall before the token expires (otherwise `invalid_argument`), so a schedule never outlives the authority that created it.
+
+<a id="r12-10"></a>**R12-10** · server · checked by `automation.watcher-delivery`
+
+> Only the board owner may create, list or delete watchers (other members: `forbidden`; non-members: `not_found`).
+
+<a id="r12-11"></a>**R12-11** · server · checked by `automation.watcher-refused`
+
+> A URL that is not `https`, carries credentials, or is or resolves to a refused address ([10](10-security.md)) is `invalid_argument` with `details.reason` `invalid_url` or `blocked_address`.
+
+<a id="r12-12"></a>**R12-12** · server · checked by `automation.watcher-delivery`
+
+> Before the watcher is created, the server POSTs a signed `{"type": "verification", "challenge": "<random>"}`; the endpoint must answer `2xx` with `{"challenge": "<same value>"}`.
+
+<a id="r12-13"></a>**R12-13** · server · checked by `automation.watcher-refused`
+
+> Otherwise `create_watcher` fails with `invalid_argument` and `details.reason` (`challenge_failed`, `timeout`, `unreachable`, `blocked_address`) and no watcher is created.
+
+<a id="r12-14"></a>**R12-14** · server · checked by `automation.watcher-delivery`
+
+> Each matching change is one `POST` with `Content-Type: application/json`:
