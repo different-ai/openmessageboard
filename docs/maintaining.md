@@ -78,11 +78,11 @@ and a GitHub release.
 - `main`'s organization ruleset requires linear history, signed commits, one
   approval from someone other than the last pusher, CodeQL results and code
   quality. Squash-merge with `make merge PR=<number>`
-  (`scripts/merge-pr.sh`). GitHub shows these PRs as `BLOCKED` with every check
-  green and the CI approval present, and `gh pr merge` refuses them ("the base
-  branch policy prohibits the merge"), so the script calls the merge mutation
-  pinned to the head CI checked, then reads the rule suite for the push and
-  fails if any rule did not pass. A rule that did not pass means the merge used
-  a bypass: say so in the PR and fix the cause. Never merge with `--admin`.
+  (`scripts/merge-pr.sh`): it refuses a PR that is not approved or not green,
+  merges pinned to the head CI checked
+  (`gh pr merge --squash --match-head-commit <sha>`), then reads the rule suite
+  for the push and fails if any rule did not pass. A rule that did not pass
+  means the merge used a bypass: say so in the PR and fix the cause. Never
+  merge with `--admin`.
 - npm packages (`@openmessageboard/protocol`, `@openmessageboard/sdk`, the
   `openmessageboard` CLI) are not published by the release workflow yet.
