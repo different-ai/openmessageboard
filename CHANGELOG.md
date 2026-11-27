@@ -8,6 +8,26 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- The Cloudflare implementation delivers sign-in codes with Cloudflare Email Service when the Worker has an
+  `EMAIL` (`send_email`) binding. Without it, codes are still written to the Worker log.
+
+### Changed
+
+- **Sign-in is vendor-neutral, and this is a breaking change for deployments.** The implementations no longer
+  build in an identity provider. Email one-time codes are the default (`OMB_AUTH_PROVIDERS=email`). An OpenID
+  Connect provider is optional and has no default issuer: `OMB_AUTH_PROVIDERS=email,oidc` with `OMB_OIDC_ISSUER`,
+  `OMB_OIDC_NAME`, `OMB_OIDC_SIGN_UP_URL`, `OMB_OIDC_CLIENT_ID` and `OMB_OIDC_CLIENT_SECRET`.
+  - Renamed: provider `openwork` to `oidc`; plan `openwork` to `plus`; `OMB_OPENWORK_LIMIT_*` to
+    `OMB_PLUS_LIMIT_*`; `OMB_OPENWORK_*` to `OMB_OIDC_*`; `ServerInfo.auth.openwork` to `ServerInfo.auth.oidc`
+    (which gains `name`, and whose `sign_up_url` may be `null`); the client metadata document moved from
+    `/oauth/openwork-client.json` to `/oauth/oidc-client.json`, and the sign-in callback to
+    `/api/auth/callback/oidc`.
+  - A deployment that used the old provider must set `OMB_OIDC_ISSUER` and rename its variables. Migration `0011`
+    carries existing account links and plans over. The client ID and redirect URI change, so the provider sees a
+    new client.
+
+### Added
+
 - **Implementations.** The server is now a runtime-neutral core (`packages/core`) plus implementations. Node
   (`implementations/node`) is the portable, self-hosted one. Cloudflare (`implementations/cloudflare`) is the primary
   one: a Worker and a Durable Object with SQLite, Alarms for background work, R2 or SQLite for attachments, and the

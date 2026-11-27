@@ -16,7 +16,7 @@ and the commands.
 | Posting, tasks, labels, quotas | `packages/core/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*`, `tasks.*` |
 | Cursors, catch-up, waits | `packages/core/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
 | Live delivery | `packages/core/src/http/stream.ts`, `packages/core/src/mcp/listen.ts`, `packages/core/src/mcp/events.ts`, `webhook-http.ts` | `implementations/node/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |
-| Sign-in, OAuth, tokens | `packages/core/src/auth/*`, `packages/core/src/http/consent.ts` | `implementations/node/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, Sign in with OpenWork against `test/fake-openwork.ts`) |
+| Sign-in, OAuth, tokens | `packages/core/src/auth/*`, `packages/core/src/http/consent.ts` | `implementations/node/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, OpenID Connect sign-in against `test/fake-oidc.ts`) |
 | Profiles, scoped tokens, actors | `packages/core/src/domain/profiles.ts`, `packages/core/src/domain/tokens.ts`, `packages/core/src/auth/scopes.ts` (a new tool or web route must be classified there, or scoped tokens are refused it) | `implementations/node/test/profiles.test.ts`; conformance `core.profile-*`, `core.scoped-token-*` |
 | Sync | `packages/core/src/sync` | `implementations/node/test/sync.test.ts` (fake Slack, GitHub and Linear APIs) |
 | Workload identity | `implementations/node/src/features/workload.ts` | `implementations/node/test/workload.test.ts` (a fake OIDC issuer) |
@@ -39,7 +39,7 @@ one before; repeating a rung for reassurance adds nothing.
 | Conformance | Start a test-mode server and run the suite ([conformance/README.md](../conformance/README.md)); CI runs it on every PR with the settings in `.github/workflows/ci.yml` | Any change to behaviour a client can observe |
 | Real browser | Run the server, sign in, post, and watch a second principal's reply arrive live | Web client changes; sign-in pages |
 | Load | `loadtest/run.ts` against a local server ([loadtest/README.md](../loadtest/README.md)) | The fan-out path, connection limits, restarts |
-| Real platforms | A real OpenWork Cloud sign-in; a Slack, GitHub or Linear workspace; ChatGPT or an OpenWork hosted chat subscribing to events | Changes to those integrations. Not run in CI; say in the PR what ran |
+| Real platforms | Sign-in with a real identity provider; a Slack, GitHub or Linear workspace; ChatGPT or another chat app subscribing to events | Changes to those integrations. Not run in CI; say in the PR what ran |
 
 Run the server suite with `--test-concurrency=1` when you run every file at
 once. A test that leaves a server or webhook receiver open makes `node --test`
@@ -54,7 +54,7 @@ wait forever: close what you start (`t.after`), and use `freePort()` from
 | `SQLITE_AUTH` on Cloudflare | Durable Objects keep internal `_cf_*` tables that SQL may not read; schema queries that join `pragma_*` over every table touch them | `src/sqlite.ts` presents `sqlite_master` without them, and the Kysely introspector skips them |
 | A core change works on Node but not on Cloudflare | Durable Object SQLite takes positional parameters only, at most 100 per statement, and has no custom SQL functions or `BEGIN` | The adapter translates named parameters, folds long `IN (…)` lists into JSON, and maps `omb_lower` to `lower`. Run both conformance jobs. |
 | A listen stream receives updates for boards the caller can't read | The MCP SDK's built-in `subscriptions/listen` router has no notion of who is listening | `/mcp` serves listen itself (`packages/core/src/mcp/listen.ts`); keep it that way |
-| Sign in with OpenWork fails with `unable_to_get_user_info` | Better Auth treats a provider that publishes ID-token signing algorithms as OpenID and needs a verified, nonce-bound ID token | `accountSubject` in `packages/core/src/auth/auth.ts` reads the subject; the fake provider issues signed ID tokens like OpenWork Cloud |
+| OpenID Connect sign-in fails with `unable_to_get_user_info` | Better Auth treats a provider that publishes ID-token signing algorithms as OpenID and needs a verified, nonce-bound ID token | `accountSubject` in `packages/core/src/auth/auth.ts` reads the subject; the fake provider issues signed ID tokens, as real providers do |
 | A bad tool argument returns plain text instead of `invalid_argument` | The SDK validates inputs before the tool runs | `packages/core/src/mcp/server.ts` replaces the `tools/call` handler and validates with the protocol schemas |
 | `client.request()` throws "not a spec method" | The MCP client needs a result schema for custom methods such as `events/*` | Pass a schema |
 | CI fails in `setup-node` with "Unable to locate executable file: pnpm" | `setup-node@v5` caches automatically when `package.json` names a package manager | `package-manager-cache: false`; the workflow caches the pnpm store itself |

@@ -8,22 +8,22 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { loadConfig } from "../src/config.ts";
 import { startServer, type Running } from "../src/main.ts";
 import { freePort } from "./helpers.ts";
-import { startFakeOpenWork, type FakeOpenWork } from "./fake-openwork.ts";
+import { startFakeOidc, type FakeOidc } from "./fake-oidc.ts";
 
 let running: Running;
 let base: string;
-let openwork: FakeOpenWork;
+let idp: FakeOidc;
 
 before(async () => {
-  openwork = await startFakeOpenWork();
+  idp = await startFakeOidc();
   const port = await freePort();
   const config = loadConfig({
     OMB_DATA_DIR: mkdtempSync(join(tmpdir(), "omb-oauth-")),
     OMB_PORT: String(port),
     OMB_HOST: "127.0.0.1",
     OMB_TEST_MODE: "1",
-    OMB_AUTH_PROVIDERS: "openwork,email",
-    OMB_OPENWORK_ISSUER: openwork.issuer,
+    OMB_AUTH_PROVIDERS: "oidc,email",
+    OMB_OIDC_ISSUER: idp.issuer,
     OMB_PUBLIC_URL: `http://127.0.0.1:${port}`,
   });
   running = await startServer(config, { features: {} });
@@ -31,7 +31,7 @@ before(async () => {
 });
 after(async () => {
   await running.stop();
-  await openwork.close();
+  await idp.close();
 });
 
 class Jar {
@@ -203,33 +203,33 @@ test("MCP client OAuth: consent as a profile gives the person's access, shown vi
   assert.deepEqual(info.profiles, ["codex"], "the consent page offers profiles the person already has");
 });
 
-test("Sign in with OpenWork Cloud: round trip, account created, OpenWork plan limits", async () => {
+test("Sign in with an OpenID Connect provider: round trip, account created, plus plan limits", async () => {
   const info = (await (await fetch(`${base}/.well-known/openmessageboard`)).json()) as {
-    auth: { providers: string[]; openwork: { available: boolean } };
+    auth: { providers: string[]; oidc: { available: boolean; name: string } };
     plans: { id: string; limits: { members_per_board: number } }[];
   };
-  assert.deepEqual(info.auth.providers, ["openwork", "email"]);
-  assert.equal(info.auth.openwork.available, true);
-  const doc = (await (await fetch(`${base}/oauth/openwork-client.json`)).json()) as { client_id: string; redirect_uris: string[]; token_endpoint_auth_method: string };
-  assert.equal(doc.client_id, `${base}/oauth/openwork-client.json`);
-  assert.deepEqual(doc.redirect_uris, [`${base}/api/auth/callback/openwork`]);
+  assert.deepEqual(info.auth.providers, ["oidc", "email"]);
+  assert.equal(info.auth.oidc.available, true);
+  const doc = (await (await fetch(`${base}/oauth/oidc-client.json`)).json()) as { client_id: string; redirect_uris: string[]; token_endpoint_auth_method: string };
+  assert.equal(doc.client_id, `${base}/oauth/oidc-client.json`);
+  assert.deepEqual(doc.redirect_uris, [`${base}/api/auth/callback/oidc`]);
   assert.equal(doc.token_endpoint_auth_method, "none");
-  assert.equal(openwork.registrations, 1, "a local http server registers itself once");
+  assert.equal(idp.registrations, 1, "a local http server registers itself once");
 
   const jar = new Jar();
   const start = await fetch(`${base}/api/auth/sign-in/social`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: base },
-    body: JSON.stringify({ provider: "openwork", callbackURL: "/" }),
+    body: JSON.stringify({ provider: "oidc", callbackURL: "/" }),
   });
   assert.equal(start.status, 200, await start.clone().text());
   jar.take(start);
   const { url } = (await start.json()) as { url: string };
-  assert.ok(url.startsWith(openwork.issuer), url);
+  assert.ok(url.startsWith(idp.issuer), url);
   assert.match(url, /code_challenge=/);
   const authorize = await fetch(url, { redirect: "manual" });
   const callback = authorize.headers.get("location")!;
-  assert.ok(callback.startsWith(`${base}/api/auth/callback/openwork`), callback);
+  assert.ok(callback.startsWith(`${base}/api/auth/callback/oidc`), callback);
   const done = await fetch(callback, { headers: { cookie: jar.header() }, redirect: "manual" });
   assert.ok([302, 303].includes(done.status), `callback ${done.status} ${await done.clone().text()}`);
   jar.take(done);
@@ -239,8 +239,8 @@ test("Sign in with OpenWork Cloud: round trip, account created, OpenWork plan li
     principal: { email: string; plan: string; limits: { members_per_board: number } };
   };
   assert.equal(me.principal.email, "grace@example.test");
-  assert.equal(me.principal.plan, "openwork");
-  assert.equal(me.principal.limits.members_per_board, info.plans.find((p) => p.id === "openwork")!.limits.members_per_board);
+  assert.equal(me.principal.plan, "plus");
+  assert.equal(me.principal.limits.members_per_board, info.plans.find((p) => p.id === "plus")!.limits.members_per_board);
 
   // An email-only account stays on the base plan.
   const emailJar = new Jar();

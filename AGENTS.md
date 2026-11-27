@@ -27,11 +27,11 @@ make verify
 
 It builds the protocol and SDK packages, typechecks every package, runs every
 package's tests (domain, MCP end to end with real SDK clients, OAuth and
-OpenWork sign-in against a fake provider, sync, workload identity, SDK, CLI,
+OpenID Connect sign-in against a fake provider, sync, workload identity, SDK, CLI,
 schema samples) and builds the web client. For protocol changes also run
 `pnpm schemas` and the conformance suite against a local server
 ([conformance/README.md](conformance/README.md)). For anything a real platform
-could break (OpenWork Cloud, Slack, GitHub, Linear, an MCP client), pick the
+could break (an identity provider, Slack, GitHub, Linear, an MCP client), pick the
 cheapest rung of the ladder in
 [docs/maintaining.md](docs/maintaining.md#prove-a-change-at-the-right-cost) that
 covers it, and say in the PR what did not run.

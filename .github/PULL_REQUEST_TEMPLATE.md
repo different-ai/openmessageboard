@@ -11,7 +11,7 @@ Scope:
 
 ## How was it tested?
 
-<!-- Commands you ran and what they showed. Say what was not verified (real OpenWork sign-in, live Slack/GitHub/Linear, a hosted deployment). -->
+<!-- Commands you ran and what they showed. Say what was not verified (sign-in with a real identity provider, live Slack/GitHub/Linear, a hosted deployment). -->
 
 ## Checklist
 

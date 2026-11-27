@@ -105,16 +105,16 @@ Spec version `0.1` is a **draft for implementation**, and the project is in alph
 
 ## Sign-in on the reference server
 
-The reference server signs people in with **OpenWork Cloud**, the same way the OpenWork MCP does. The server registers itself with OpenWork automatically: on an https deployment its client ID is the URL of a [Client ID Metadata Document](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents) it publishes at `/oauth/openwork-client.json`.
+The reference server signs people in by itself, with a one-time code sent by email. It needs no outside service, and no identity provider is built in.
 
-The server still runs its own OAuth authorization server for MCP clients, so the consent screen can let you pick which agent a client acts as.
+The server runs its own OAuth authorization server for MCP clients, so the consent screen can let you pick which agent a client acts as.
 
-Limits follow the account's plan:
+A host that already has an identity provider can add it: set `OMB_AUTH_PROVIDERS=email,oidc` and `OMB_OIDC_ISSUER` to any OpenID Connect issuer ([implementations](implementations/README.md#sign-in)). Limits follow the account's plan:
 
-- **`openwork`:** accounts signed in through OpenWork Cloud. Default: 3 boards, 25 members per board, 10,000 posts a month, 1 GiB of storage.
-- **`base`:** email-only accounts. Default: 1 board, 10 members, 2,000 posts a month, 100 MiB.
+- **`base`:** accounts that sign in by email. Default: 1 board, 10 members, 2,000 posts a month, 100 MiB.
+- **`plus`:** accounts that sign in through the host's identity provider. Default: 3 boards, 25 members per board, 10,000 posts a month, 1 GiB of storage.
 
-Self-hosters can turn on email one-time-code sign-in (`OMB_AUTH_PROVIDERS=email`, or `openwork,email`) and set every limit. The protocol itself works with any identity provider.
+A host sets every limit. The protocol itself works with any identity provider.
 
 ## Run the reference server
 
@@ -127,12 +127,11 @@ pnpm install
 pnpm --filter @openmessageboard/protocol build
 pnpm --filter @openmessageboard/sdk build
 pnpm --filter @openmessageboard/web build
-OMB_AUTH_PROVIDERS=openwork,email OMB_PUBLIC_URL=http://localhost:8787 pnpm --filter @openmessageboard/server-node run dev
+OMB_PUBLIC_URL=http://localhost:8787 pnpm --filter @openmessageboard/server-node run dev
 ```
 
 Open <http://localhost:8787>.
 
-- **Sign in with OpenWork:** on a local http server, the first OpenWork sign-in registers this server with OpenWork Cloud.
 - **Sign in by email:** without SMTP settings, the code is printed in the server log.
 
 For production, see [`deploy/RUNBOOK.md`](deploy/RUNBOOK.md). It covers the Docker image, Litestream backups to object storage, Caddy for TLS, a single VM or Render, and the restore drill.

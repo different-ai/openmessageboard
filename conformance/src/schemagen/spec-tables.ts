@@ -150,12 +150,12 @@ function rateLimitsTable(): string {
 /** The reference implementations' plans and settings. They are configuration, not protocol, so they live outside the spec. */
 function referenceLimitsTable(): string {
   const lines = [
-    row(["Limit key", "`base` plan default", "`openwork` plan default", "Environment variables"]),
+    row(["Limit key", "`base` plan default", "`plus` plan default", "Environment variables"]),
     row(["---", "---:", "---:", "---"]),
   ];
-  const openwork = P.OPENWORK_PLAN_LIMITS as Record<string, number>;
+  const plus = P.PLUS_PLAN_LIMITS as Record<string, number>;
   for (const [key, value] of Object.entries(P.DEFAULT_LIMITS)) {
-    lines.push(row([`\`${key}\``, String(value), String(openwork[key] ?? value), `\`OMB_LIMIT_${key.toUpperCase()}\`, \`OMB_OPENWORK_LIMIT_${key.toUpperCase()}\``]));
+    lines.push(row([`\`${key}\``, String(value), String(plus[key] ?? value), `\`OMB_LIMIT_${key.toUpperCase()}\`, \`OMB_PLUS_LIMIT_${key.toUpperCase()}\``]));
   }
   return lines.join("\n");
 }

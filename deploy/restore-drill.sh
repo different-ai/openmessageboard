@@ -5,7 +5,7 @@
 # 2. Checks the restored file with SQLite's integrity check and counts what it holds.
 # 3. Boots a throwaway server on it, on its own port, on an internal Docker network with no internet
 #    access, so the restored copy can't send email, webhooks or sync messages to real people. It uses the
-#    email sign-in provider (without SMTP) because it can't reach OpenWork Cloud.
+#    email sign-in provider (without SMTP) because it has no external identity provider.
 # 4. Checks /healthz and /.well-known/openmessageboard and prints a report.
 #
 # It never mounts or reads the live data volume or directory; only the replica in object storage.

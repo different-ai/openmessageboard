@@ -14,7 +14,7 @@ export async function makeCtx(overrides: Partial<Config> = {}, limits: Partial<C
   const dir = mkdtempSync(join(tmpdir(), "omb-test-"));
   const base = loadConfig({ OMB_DATA_DIR: dir, OMB_PUBLIC_URL: "http://omb.test", OMB_TEST_MODE: "1", OMB_AUTH_PROVIDERS: "email" }, { dbPath: ":memory:", ...overrides });
   base.limits = { ...base.limits, ...limits };
-  base.plans = { base: base.limits, openwork: { ...base.plans.openwork, ...limits } };
+  base.plans = { base: base.limits, plus: { ...base.plans.plus, ...limits } };
   const db = openDatabase(":memory:");
   await migrate(db);
   return createContext(base, db, undefined, nodePlatform(dir));

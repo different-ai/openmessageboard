@@ -64,7 +64,7 @@ jobs:
           pnpm --filter @openmessageboard/web run build
           pnpm --filter @openmessageboard/server-node run build
 
-      # CI can't reach OpenWork Cloud, so the server signs people in by email code (test mode mints tokens).
+      # CI has no external identity provider, so the server signs people in by email code (test mode mints tokens).
       - name: Start server (test mode)
         env:
           OMB_TEST_MODE: "1"

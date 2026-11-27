@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { AUTH_PROVIDERS, DEFAULT_LIMITS, DEFAULT_RATE_LIMITS, OPENWORK_PLAN_LIMITS, type AuthProvider, type Limits, type Plan, type RateLimits, trimTrailingSlashes } from "@openmessageboard/protocol";
+import { AUTH_PROVIDERS, DEFAULT_LIMITS, DEFAULT_RATE_LIMITS, PLUS_PLAN_LIMITS, type AuthProvider, type Limits, type Plan, type RateLimits, trimTrailingSlashes } from "@openmessageboard/protocol";
 
 export interface Config {
   port: number;
@@ -9,12 +9,13 @@ export interface Config {
   dbPath: string;
   secret: string;
   testMode: boolean;
-  /** Base plan limits (email-only accounts). Kept as `limits` for server-wide settings such as event retention. */
+  /** Base plan limits (accounts that sign in by email). Kept as `limits` for server-wide settings such as event retention. */
   limits: Limits;
   plans: Record<Plan, Limits>;
   rateLimits: RateLimits;
   authProviders: AuthProvider[];
-  openwork: { issuer: string; clientId: string | null; clientSecret: string | null; signUpUrl: string };
+  /** The OpenID Connect provider people may sign in with, when `authProviders` includes `oidc`. */
+  oidc: { issuer: string | null; name: string; clientId: string | null; clientSecret: string | null; signUpUrl: string | null };
   freeMailDomains: Set<string>;
   smtpUrl: string | null;
   mailFrom: string;
@@ -65,20 +66,21 @@ export function loadConfig(env: Env, overrides: Partial<Config> = {}): Config {
   for (const key of Object.keys(limits) as (keyof Limits)[]) {
     limits[key] = envInt(env, `OMB_LIMIT_${key.toUpperCase()}`, limits[key]);
   }
-  const openworkLimits = { ...OPENWORK_PLAN_LIMITS } as Limits;
-  for (const key of Object.keys(openworkLimits) as (keyof Limits)[]) {
-    openworkLimits[key] = envInt(env, `OMB_OPENWORK_LIMIT_${key.toUpperCase()}`, openworkLimits[key]);
+  const plusLimits = { ...PLUS_PLAN_LIMITS } as Limits;
+  for (const key of Object.keys(plusLimits) as (keyof Limits)[]) {
+    plusLimits[key] = envInt(env, `OMB_PLUS_LIMIT_${key.toUpperCase()}`, plusLimits[key]);
   }
   if (testMode) {
     if (!env.OMB_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS) limits.schedule_min_repeat_seconds = TEST_MODE_MIN_REPEAT_SECONDS;
-    if (!env.OMB_OPENWORK_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS) openworkLimits.schedule_min_repeat_seconds = TEST_MODE_MIN_REPEAT_SECONDS;
+    if (!env.OMB_PLUS_LIMIT_SCHEDULE_MIN_REPEAT_SECONDS) plusLimits.schedule_min_repeat_seconds = TEST_MODE_MIN_REPEAT_SECONDS;
   }
-  const providers = (env.OMB_AUTH_PROVIDERS ?? "openwork")
+  const providers = (env.OMB_AUTH_PROVIDERS ?? "email")
     .split(",")
     .map((p) => p.trim().toLowerCase())
     .filter(Boolean);
   for (const p of providers) if (!(AUTH_PROVIDERS as readonly string[]).includes(p)) throw new Error(`OMB_AUTH_PROVIDERS: unknown provider "${p}" (use ${AUTH_PROVIDERS.join(", ")})`);
   if (providers.length === 0) throw new Error("OMB_AUTH_PROVIDERS must name at least one provider");
+  if (providers.includes("oidc") && !env.OMB_OIDC_ISSUER) throw new Error("OMB_OIDC_ISSUER is required when OMB_AUTH_PROVIDERS includes oidc");
   const rateLimits = { ...DEFAULT_RATE_LIMITS } as RateLimits;
   for (const key of Object.keys(rateLimits) as (keyof RateLimits)[]) {
     rateLimits[key] = envInt(env, `OMB_RATE_${key.toUpperCase()}`, rateLimits[key]);
@@ -92,14 +94,15 @@ export function loadConfig(env: Env, overrides: Partial<Config> = {}): Config {
     secret: env.OMB_SECRET ?? "",
     testMode,
     limits,
-    plans: { base: limits, openwork: openworkLimits },
+    plans: { base: limits, plus: plusLimits },
     rateLimits,
     authProviders: providers as AuthProvider[],
-    openwork: {
-      issuer: trimTrailingSlashes(env.OMB_OPENWORK_ISSUER ?? "https://app.openworklabs.com/api/auth"),
-      clientId: env.OMB_OPENWORK_CLIENT_ID || null,
-      clientSecret: env.OMB_OPENWORK_CLIENT_SECRET || null,
-      signUpUrl: env.OMB_OPENWORK_SIGN_UP_URL ?? "https://app.openworklabs.com",
+    oidc: {
+      issuer: env.OMB_OIDC_ISSUER ? trimTrailingSlashes(env.OMB_OIDC_ISSUER) : null,
+      name: env.OMB_OIDC_NAME || "single sign-on",
+      clientId: env.OMB_OIDC_CLIENT_ID || null,
+      clientSecret: env.OMB_OIDC_CLIENT_SECRET || null,
+      signUpUrl: env.OMB_OIDC_SIGN_UP_URL || null,
     },
     freeMailDomains: new Set((env.OMB_FREE_MAIL_DOMAINS?.split(",") ?? FREE_MAIL).map((d) => d.trim().toLowerCase()).filter(Boolean)),
     smtpUrl: env.OMB_SMTP_URL ?? null,

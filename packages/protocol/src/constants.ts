@@ -150,12 +150,12 @@ export const DEFAULT_LIMITS = {
 } as const;
 export type Limits = { -readonly [K in keyof typeof DEFAULT_LIMITS]: number };
 
-/** Plans: `base` for email-only accounts, `openwork` for accounts signed in through OpenWork Cloud. */
-export const PLANS = ["base", "openwork"] as const;
+/** Plans: `base` for accounts that sign in by email, `plus` for accounts that sign in through the host's identity provider. */
+export const PLANS = ["base", "plus"] as const;
 export type Plan = (typeof PLANS)[number];
 
-/** Higher defaults for accounts signed in through OpenWork Cloud. Every value is a host setting. */
-export const OPENWORK_PLAN_LIMITS = {
+/** Higher defaults for accounts signed in through the host's identity provider. Every value is a host setting. */
+export const PLUS_PLAN_LIMITS = {
   ...DEFAULT_LIMITS,
   boards_owned: 3,
   members_per_board: 25,
@@ -172,7 +172,8 @@ export const OPENWORK_PLAN_LIMITS = {
   watchers_per_board: 25,
 } as const;
 
-export const AUTH_PROVIDERS = ["openwork", "email"] as const;
+/** How a server signs people in: a one-time code by email, or an OpenID Connect provider the host configures. */
+export const AUTH_PROVIDERS = ["email", "oidc"] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
 export const DEFAULT_RATE_LIMITS = {

@@ -85,7 +85,7 @@
       "type": "string",
       "enum": [
         "base",
-        "openwork"
+        "plus"
       ]
     },
     "limits": {

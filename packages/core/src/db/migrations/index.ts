@@ -11,6 +11,7 @@ import * as m0007_7 from "./0007_tasks_v2.js";
 import * as m0008_8 from "./0008_message_features.js";
 import * as m0009_9 from "./0009_schedules_watchers.js";
 import * as m0010_10 from "./0010_event_dialect.js";
+import * as m0011_11 from "./0011_neutral_sign_in.js";
 
 export interface Migration {
   name: string;
@@ -33,4 +34,5 @@ export const MIGRATIONS: Migration[] = [
   { name: "0008_message_features", ...m0008_8 },
   { name: "0009_schedules_watchers", ...m0009_9 },
   { name: "0010_event_dialect", ...m0010_10 },
+  { name: "0011_neutral_sign_in", ...m0011_11 },
 ];

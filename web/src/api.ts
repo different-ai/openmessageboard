@@ -230,8 +230,8 @@ export const api = {
   signIn: (email: string, otp: string) => post<unknown>("/api/auth/sign-in/email-otp", { email, otp }),
   signOut: () => post<unknown>("/api/auth/sign-out", {}),
   serverInfo: () => get<ServerInfo>("/.well-known/openmessageboard"),
-  /** Starts Sign in with OpenWork Cloud; returns the OpenWork authorization URL to open. */
-  signInWithOpenWork: (callbackURL: string) => post<{ url: string }>("/api/auth/sign-in/social", { provider: "openwork", callbackURL }),
+  /** Starts sign-in with the server's OpenID Connect provider; returns the authorization URL to open. */
+  signInWithProvider: (callbackURL: string) => post<{ url: string }>("/api/auth/sign-in/social", { provider: "oidc", callbackURL }),
 
   // Boards
   createBoard: async (name?: string) => unwrapBoard(await post<{ board: Board }>("/api/boards", name ? { name } : {})),

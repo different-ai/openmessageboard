@@ -88,7 +88,7 @@
           "type": "string",
           "enum": [
             "base",
-            "openwork"
+            "plus"
           ]
         },
         "limits": {
@@ -566,7 +566,7 @@
                 "type": "string",
                 "enum": [
                   "base",
-                  "openwork"
+                  "plus"
                 ]
               },
               "name": {
@@ -603,12 +603,12 @@
               "items": {
                 "type": "string",
                 "enum": [
-                  "openwork",
-                  "email"
+                  "email",
+                  "oidc"
                 ]
               }
             },
-            "openwork": {
+            "oidc": {
               "anyOf": [
                 {
                   "type": "object",
@@ -616,15 +616,22 @@
                     "issuer": {
                       "type": "string"
                     },
+                    "name": {
+                      "type": "string"
+                    },
                     "available": {
                       "type": "boolean"
                     },
                     "sign_up_url": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "issuer",
+                    "name",
                     "available",
                     "sign_up_url"
                   ],
@@ -638,7 +645,7 @@
           },
           "required": [
             "providers",
-            "openwork"
+            "oidc"
           ],
           "additionalProperties": false
         },

@@ -60,7 +60,7 @@ Summary fields worth knowing:
 
 Run load tests against a staging copy, never against the production database: the test creates people,
 boards and posts. Tokens come from the server CLI, so any sign-in provider works (`OMB_AUTH_PROVIDERS=email`
-avoids depending on OpenWork Cloud during a run). Accounts created this way are on the `base` plan, so raise
+avoids depending on an outside identity provider during a run). Accounts created this way are on the `base` plan, so raise
 the `OMB_LIMIT_*` values and burst limits that would otherwise stop the test (keep live connections per board at the
 default 20 when you want the plan's shape of 20 listeners per board):
 

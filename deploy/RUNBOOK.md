@@ -18,15 +18,14 @@ cluster to coordinate, and a restart only drops live streams, which clients resu
 - **Domain** for `OMB_PUBLIC_URL`. Choose it once: OAuth, invite links and resource URIs are built from it.
 - **`OMB_SECRET`**: `openssl rand -base64 48`. Store it in the team password manager. It is not in the
   database backup; without it a restored server loses every session and every stored integration secret.
-- **Sign-in**: the hosted cloud uses `OMB_AUTH_PROVIDERS=openwork` (Sign in with OpenWork Cloud). The server
-  identifies itself to OpenWork Cloud with a Client ID Metadata Document at
-  `<OMB_PUBLIC_URL>/oauth/openwork-client.json`, so an https deployment needs no client registration; the
-  host only needs outbound HTTPS to `app.openworklabs.com`. Self-hosted servers can use `email` or
-  `openwork,email`.
-- **Email** (only with the `email` provider): an SMTP URL from a sending provider (`OMB_SMTP_URL`,
+- **Sign-in**: `OMB_AUTH_PROVIDERS=email` (one-time codes) is the default and needs no outside service. To add
+  your own identity provider, use `email,oidc` or `oidc` and set `OMB_OIDC_ISSUER` to its OpenID Connect
+  issuer. The server identifies itself with a Client ID Metadata Document at
+  `<OMB_PUBLIC_URL>/oauth/oidc-client.json`; the host then needs outbound HTTPS to that issuer.
+- **Email** (with the `email` provider): an SMTP URL from a sending provider (`OMB_SMTP_URL`,
   `OMB_MAIL_FROM`). Without it sign-in codes only appear in the server log.
 - **Plans**: `OMB_LIMIT_*` are the `base` plan (accounts that signed in by email only) and
-  `OMB_OPENWORK_LIMIT_*` the `openwork` plan (accounts signed in through OpenWork Cloud, higher defaults).
+  `OMB_PLUS_LIMIT_*` the `plus` plan (accounts signed in through the `oidc` provider, higher defaults).
   Override only the values you need to change.
 - **`OMB_METRICS_TOKEN`**: `openssl rand -hex 24`, for your monitoring to read `/metrics`.
 - **Backup bucket**: a dedicated bucket (or path) and an access key limited to it. Fill in `LITESTREAM_*`.
@@ -61,7 +60,7 @@ The plan's pilot host: Basic droplet, 2 GiB RAM, 1 vCPU, 50 GiB disk ($12/month)
    docker compose -f deploy/docker-compose.yml logs litestream | tail   # "replicating to" with no errors
    ```
 
-5. Sign in through the web UI (Sign in with OpenWork Cloud on the hosted cloud), then run the restore
+5. Sign in through the web UI, then run the restore
    drill once (below) before inviting anyone.
 
 On start, `restore` brings the database back from the replica if the volume has none. A rebuilt droplet with
@@ -84,7 +83,7 @@ command runs the server under Litestream in the same container.
    Litestream.)
 6. **Environment**: everything from `.env.example` except `OMB_DOMAIN` (Render terminates TLS), `OMB_PORT`
    (Render sets `PORT`) and `OMB_HOST`. Set `OMB_PUBLIC_URL` to the custom domain, `OMB_TRUST_PROXY=true`,
-   and `OMB_AUTH_PROVIDERS=openwork` for the hosted cloud.
+   and the sign-in settings above.
 7. Add the custom domain in Render and point DNS at it.
 
 Render stops the old instance before starting the new one when a disk is attached, so each deploy has a short
@@ -190,7 +189,7 @@ the report that led to it, and who decided. Message content stays out of that re
   `live_connections`, `rss_bytes`, `heap_used_bytes` and `uptime_s` (404 without the token, or when
   `OMB_METRICS_TOKEN` is unset). Alert when RSS stays above 1 GiB on a 2 GiB host (the plan's "half of RAM").
 - **Disk**: alert at 80% of the volume. `du -sh` of the volume plus `docker system df` on the VM.
-- **Sign-in**: failures to reach OpenWork Cloud show up as sign-in errors in the server log; check outbound
+- **Sign-in**: failures to reach the mail server or a configured identity provider show up as sign-in errors in the server log; check outbound
   HTTPS from the host first.
 - **Logs**: `omb-compose logs -f server`. Errors from `mcp:`, `maintenance failed` and
   `workload identity:` lines deserve a look; the server never logs message bodies or tokens.
