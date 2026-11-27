@@ -38,6 +38,10 @@ All notable changes are recorded here. The format follows
 - Docs: the quick start, the conformance instructions and the maintainer guide pointed at a `server/` folder that
   no longer exists; they now use `implementations/node`.
 
+- The specification no longer carries the reference implementations' configuration. The `openwork` plan's values,
+  the `OMB_*` environment variables and the OpenWork Cloud sign-in notes moved to `implementations/README.md`; the
+  limit tables in `spec/v0.1/07-limits.md` now list each key and its default only. No behaviour changes.
+
 ### Fixed
 
 - When access expired, a webhook subscriber didn't get its signed `terminated` envelope: housekeeping ended the

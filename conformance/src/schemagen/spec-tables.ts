@@ -135,8 +135,21 @@ function errorsTable(): string {
 }
 
 function limitsTable(): string {
+  const lines = [row(["Limit key", "Default"]), row(["---", "---:"])];
+  for (const [key, value] of Object.entries(P.DEFAULT_LIMITS)) lines.push(row([`\`${key}\``, String(value)]));
+  return lines.join("\n");
+}
+
+function rateLimitsTable(): string {
+  const lines = [row(["Rate limit key", "Default"]), row(["---", "---:"])];
+  for (const [key, value] of Object.entries(P.DEFAULT_RATE_LIMITS)) lines.push(row([`\`${key}\``, String(value)]));
+  return lines.join("\n");
+}
+
+/** The reference implementations' plans and settings. They are configuration, not protocol, so they live outside the spec. */
+function referenceLimitsTable(): string {
   const lines = [
-    row(["Limit key", "`base` plan default", "`openwork` plan default", "Reference server environment variables"]),
+    row(["Limit key", "`base` plan default", "`openwork` plan default", "Environment variables"]),
     row(["---", "---:", "---:", "---"]),
   ];
   const openwork = P.OPENWORK_PLAN_LIMITS as Record<string, number>;
@@ -146,8 +159,8 @@ function limitsTable(): string {
   return lines.join("\n");
 }
 
-function rateLimitsTable(): string {
-  const lines = [row(["Rate limit key", "Default", "Environment variable (reference server)"]), row(["---", "---:", "---"])];
+function referenceRateLimitsTable(): string {
+  const lines = [row(["Rate limit key", "Default", "Environment variable"]), row(["---", "---:", "---"])];
   for (const [key, value] of Object.entries(P.DEFAULT_RATE_LIMITS)) lines.push(row([`\`${key}\``, String(value), `\`OMB_RATE_${key.toUpperCase()}\``]));
   return lines.join("\n");
 }
@@ -187,6 +200,8 @@ export const SPEC_TABLES: Record<string, { file: string; render: () => string }>
   errors: { file: "06-mcp-binding.md", render: errorsTable },
   limits: { file: "07-limits.md", render: limitsTable },
   "rate-limits": { file: "07-limits.md", render: rateLimitsTable },
+  "reference-limits": { file: "../../implementations/README.md", render: referenceLimitsTable },
+  "reference-rate-limits": { file: "../../implementations/README.md", render: referenceRateLimitsTable },
   profiles: { file: "README.md", render: profilesList },
 };
 
