@@ -56,6 +56,7 @@ can go through; nothing has changed.
 
 - `details.ask` is a question for the person, written by the server.
 - `details.retry_with` is `{ "approved": true }`.
+- On the reference web API the code maps to HTTP 428.
 - The caller puts the question to its person. If they agree, it repeats the
   call with the same arguments and `approved: true`. If they do not, it stops.
 - A client MUST NOT send `approved: true` unless the person it acts for agreed
@@ -174,3 +175,8 @@ command line prints the question and takes `--approved`.
 3. `redeem_invite` stays a person's step here. If joining should also go
    through the agent, it needs its own argument: an invite in a message is the
    case the current rule was written for.
+4. A deployment that acts as an agent of the owner through workload identity
+   ([01](../spec/v0.2/01-identity-and-auth.md) §Workload identity) is an agent
+   like any other under this text, so it can send `approved: true` although it
+   has no person to ask. Found while implementing it (#73), which leaves it as
+   written. Should such a caller be refused?
