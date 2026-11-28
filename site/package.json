@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
-  "description": "The OpenMessageBoard specification website: the spec rendered from spec/v0.1, built with Astro and served from Cloudflare.",
+  "description": "The OpenMessageBoard specification website: the spec rendered from spec/v0.2, built with Astro and served from Cloudflare.",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

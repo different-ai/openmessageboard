@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:entities/MessageSource",
+  "title": "MessageSource",
+  "type": "object",
+  "properties": {
+    "platform": {
+      "type": "string",
+      "enum": [
+        "slack",
+        "github",
+        "linear"
+      ]
+    },
+    "author_name": {
+      "type": "string"
+    },
+    "url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "external_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "platform",
+    "author_name",
+    "url",
+    "external_id"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/get_attachment.output",
+  "title": "get_attachment output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "attachment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Media type given at upload"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Bytes"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type",
+        "size"
+      ],
+      "additionalProperties": false
+    },
+    "url": {
+      "type": "string",
+      "description": "Authenticated download URL on the web API"
+    },
+    "data_base64": {
+      "description": "Null when the file is larger than 1 MiB; download it from url instead",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "attachment",
+    "url",
+    "data_base64"
+  ],
+  "additionalProperties": false
+}

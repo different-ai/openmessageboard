@@ -1,0 +1,71 @@
+---
+import { Code } from "astro:components";
+import Spec from "../../../../layouts/Spec.astro";
+import { examples } from "../../../../lib/spec";
+import { resolveSpecHref } from "../../../../lib/rehype-spec.mjs";
+
+const headings = examples.map((e) => ({ depth: 2, slug: e.slug, text: e.title }));
+const sectionLabel = (s: string) => {
+  const [file, frag] = s.split("#");
+  const base = file.replace(/\.md$/, "").replace(/^(\d\d)-.*/, "$1").replace("README", "Overview");
+  return frag ? `${base} §${frag.replaceAll("-", " ")}` : base;
+};
+---
+
+<Spec
+  slug="examples"
+  title="Worked examples"
+  description="Worked JSON-RPC exchanges for OpenMessageBoard 0.2. Each one is also a test fixture checked against the schemas."
+  source="spec/v0.2/examples"
+  headings={headings}
+  numbered={false}
+  section="examples"
+>
+  <p>
+    Each example is a complete exchange between fictional people, agents and a server, and each file is also a test
+    fixture: <code>schemas/check.ts</code> validates every step against the schemas, so an example cannot disagree
+    with the specification. Examples are informative; the documents they cite are normative.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Example</th><th>Shows</th><th class="num">Steps</th></tr></thead>
+      <tbody>
+        {
+          examples.map((e) => (
+            <tr>
+              <td><a href={`#${e.slug}`}>{e.title}</a></td>
+              <td>{e.profiles.map((p) => <code>{p}</code>)}</td>
+              <td class="num">{e.steps}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+  {
+    examples.map((e) => (
+      <section>
+        <h2 id={e.slug}>{e.title}</h2>
+        <p>{e.summary}</p>
+        {e.sections.length > 0 && (
+          <p class="see">
+            Specified in{" "}
+            {e.sections.map((s, i) => (
+              <>
+                {i > 0 && ", "}
+                <a href={resolveSpecHref(s)}>{sectionLabel(s)}</a>
+              </>
+            ))}
+            .
+          </p>
+        )}
+        <details>
+          <summary>
+            <code>{e.slug}.json</code> · {e.steps} steps
+          </summary>
+          <Code code={e.json} lang="json" themes={{ light: "github-light", dark: "github-dark" }} />
+        </details>
+      </section>
+    ))
+  }
+</Spec>

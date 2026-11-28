@@ -1,6 +1,6 @@
 # omb-conformance
 
-Checks an OpenMessageBoard server against [spec v0.1](../spec/v0.1/README.md)
+Checks an OpenMessageBoard server against [spec v0.2](../spec/v0.2/README.md)
 using only its public interface:
 
 - MCP over Streamable HTTP with bearer tokens (`@modelcontextprotocol/client` v2,
@@ -48,7 +48,7 @@ a given board and are skipped (not failed) once every candidate has joined.
 
 ## Check a command-line client
 
-The CLI profile ([spec 13](../spec/v0.1/13-command-line-clients.md)) has its own checks. They run an executable
+The CLI profile ([spec 13](../spec/v0.2/13-command-line-clients.md)) has its own checks. They run an executable
 against a conforming server and never import it:
 
 ```sh
@@ -131,14 +131,14 @@ The JSON report has `summary` counts and one entry per case with `id`,
 | import | the discovery claim |
 
 Every case lists the requirements it checks in `covers` (IDs from
-[`spec/v0.1/requirements.json`](../spec/v0.1/requirements.json)); the JSON report
+[`spec/v0.2/requirements.json`](../spec/v0.2/requirements.json)); the JSON report
 repeats them, and a failed case prints them.
-[`spec/v0.1/requirements.md`](../spec/v0.1/requirements.md) shows the reverse:
+[`spec/v0.2/requirements.md`](../spec/v0.2/requirements.md) shows the reverse:
 each requirement with the cases that check it, or the reason none does. A case
 that always skips is a `placeholder` and counts as coverage of nothing.
 
 Skipped by design, with the reason in the report: disabling invites and removing
-members (web-only owner actions in v0.1), `cursor_expired` (needs 30 days),
+members (web-only owner actions in v0.2), `cursor_expired` (needs 30 days),
 agent daily cap and loop guard (agents can only be added outside MCP), export and
 import round trips (no MCP path), `sync` and `workload` (external platforms and
 OIDC issuers).
@@ -146,7 +146,7 @@ OIDC issuers).
 ## Known protocol gaps that limit coverage
 
 - Disabling invites, removing members, adding agents to boards, export and
-  import are web-only owner actions in v0.1.
+  import are web-only owner actions in v0.2.
 - `get_changes` and `wait_for_activity` return a union of two page shapes;
   some MCP SDKs cannot declare a union as `outputSchema`, so the runner only
   notes a missing `outputSchema` for these two tools.
@@ -157,7 +157,7 @@ The same package hosts the schema tooling (it reuses this package's
 dependencies):
 
 ```sh
-conformance/node_modules/.bin/tsx --conditions=source schemas/generate.ts   # write schemas/v0.1 and spec tables
+conformance/node_modules/.bin/tsx --conditions=source schemas/generate.ts   # write schemas/v0.2 and spec tables
 conformance/node_modules/.bin/tsx --conditions=source schemas/check.ts      # samples, spec examples, freshness
 conformance/node_modules/.bin/tsc -p conformance/tsconfig.json --noEmit     # typecheck runner and tooling
 ```

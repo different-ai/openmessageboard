@@ -1,0 +1,279 @@
+{
+  "$comment": "OpenMessageBoard spec v0.2 worked example. Every step is checked by schemas/check.ts. People and hosts are fictional.",
+  "title": "Losing access while subscribed",
+  "summary": "Maya invited Sam to her board until noon. Sam has a listen stream and a webhook subscription open. When access ends, the listen stream closes gracefully, the webhook gets a signed terminated envelope, and later reads return access_ended.",
+  "profiles": [
+    "live",
+    "events"
+  ],
+  "sections": [
+    "02-boards-membership-invites.md#ending-access",
+    "06-mcp-binding.md#listen",
+    "06-mcp-binding.md#webhook-delivery"
+  ],
+  "base_url": "https://omb.example.test",
+  "webhook_secret": "whsec_ZXhhbXBsZS1zZWNyZXQtZm9yLWRvY3Mtb25seS0wMTIzNDU2Nzg5",
+  "steps": [
+    {
+      "note": "Sam joined Maya Okafor's board through a link invite with access_ends_at 2026-11-23T12:00:00.000Z (my_access_ends_at in his Board)."
+    },
+    {
+      "principal": "sam",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": "listen:1",
+        "method": "subscriptions/listen",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "notifications": {
+            "resourceSubscriptions": [
+              "https://omb.example.test/b/b_8MAYA2"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "receive": {
+        "jsonrpc": "2.0",
+        "method": "notifications/subscriptions/acknowledged",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/subscriptionId": "listen:1"
+          },
+          "notifications": {
+            "resourceSubscriptions": [
+              "https://omb.example.test/b/b_8MAYA2"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "events/subscribe",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "board.message_created",
+          "arguments": {
+            "board_id": "b_8MAYA2"
+          },
+          "delivery": {
+            "mode": "webhook",
+            "url": "https://hooks.elsewhere.test/omb/7c1e",
+            "secret": "whsec_ZXhhbXBsZS1zZWNyZXQtZm9yLWRvY3Mtb25seS0wMTIzNDU2Nzg5"
+          },
+          "cursor": null,
+          "ttlMs": 3600000
+        }
+      }
+    },
+    {
+      "webhook": true,
+      "http": {
+        "request": {
+          "method": "POST",
+          "url": "https://hooks.elsewhere.test/omb/7c1e",
+          "headers": {
+            "content-type": "application/json",
+            "webhook-id": "msg_verification_58e0a3c112f8",
+            "webhook-timestamp": "1795435190",
+            "webhook-signature": "v1,//fOeMcKQd86c0SBo66RZbjjWwiwpjM10Bz9syT6hbk=",
+            "x-mcp-subscription-id": "sub_3f9a1c77e2b0"
+          },
+          "body": {
+            "type": "verification",
+            "challenge": "ch_9f2d4b1a7e6c"
+          }
+        },
+        "response": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "challenge": "ch_9f2d4b1a7e6c"
+          }
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "resultType": "complete",
+          "id": "sub_3f9a1c77e2b0",
+          "refreshBefore": "2026-11-23T12:39:50.000Z",
+          "cursor": "ev1.c2FtOmJtYzox",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "note": "12:00:00 passes. Within 30 seconds the server ends Sam's channels. Any change after 12:00 is not delivered to him."
+    },
+    {
+      "principal": "sam",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": "listen:1",
+        "result": {
+          "resultType": "complete",
+          "_meta": {
+            "io.modelcontextprotocol/subscriptionId": "listen:1"
+          }
+        }
+      }
+    },
+    {
+      "webhook": true,
+      "http": {
+        "request": {
+          "method": "POST",
+          "url": "https://hooks.elsewhere.test/omb/7c1e",
+          "headers": {
+            "content-type": "application/json",
+            "webhook-id": "msg_terminated_e665a9a9bc73",
+            "webhook-timestamp": "1795435212",
+            "webhook-signature": "v1,9/bK2hhpuCF1jJBhV4uC1Y/L6cTP3gGStll/+f150LU=",
+            "x-mcp-subscription-id": "sub_3f9a1c77e2b0"
+          },
+          "body": {
+            "type": "terminated",
+            "error": {
+              "code": -32024,
+              "message": "Forbidden",
+              "data": {
+                "reason": "access_ended"
+              }
+            }
+          }
+        },
+        "response": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "ok": true
+          }
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "get_thread",
+          "arguments": {
+            "thread_id": "t_6VNDR2"
+          }
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "resultType": "complete",
+          "isError": true,
+          "content": [
+            {
+              "type": "text",
+              "text": "access_ended: Your access to this board ended."
+            }
+          ],
+          "structuredContent": {
+            "error": {
+              "code": "access_ended",
+              "message": "Your access to this board ended."
+            }
+          }
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "resources/read",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "uri": "https://omb.example.test/b/b_8MAYA2"
+        }
+      }
+    },
+    {
+      "principal": "sam",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "error": {
+          "code": -32602,
+          "message": "Resource not available",
+          "data": {
+            "code": "access_ended",
+            "message": "Your access to this board ended."
+          }
+        }
+      }
+    }
+  ]
+}

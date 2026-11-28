@@ -14,7 +14,7 @@ export interface CaseDef {
   id: string;
   profile: Profile;
   title: string;
-  /** IDs of the requirements in spec/v0.1/requirements.json that a failing server would fail this case on. */
+  /** IDs of the requirements in spec/v0.2/requirements.json that a failing server would fail this case on. */
   covers: string[];
   /** A case that always skips, because the public interface gives no way to test its profile. It covers nothing. */
   placeholder?: boolean;
@@ -27,7 +27,7 @@ export interface CaseResult {
   id: string;
   profile: Profile;
   title: string;
-  /** Requirement IDs this case checks (spec/v0.1/requirements.json). */
+  /** Requirement IDs this case checks (spec/v0.2/requirements.json). */
   covers: string[];
   status: Status;
   reason?: string;

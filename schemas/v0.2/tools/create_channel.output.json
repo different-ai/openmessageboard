@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/create_channel.output",
+  "title": "create_channel output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "channel": {
+      "type": "object",
+      "properties": {
+        "board_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "thread_count": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "last_activity_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Latest activity in any of its threads; null for an empty channel"
+        },
+        "private": {
+          "type": "boolean",
+          "description": "True when a member with no grant of their own can't read it"
+        },
+        "public": {
+          "default": false,
+          "description": "True when a public grant lets people who are not members read it",
+          "type": "boolean"
+        },
+        "my_permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "read",
+              "post",
+              "react",
+              "label",
+              "manage"
+            ]
+          },
+          "description": "What the caller can do in this channel"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        }
+      },
+      "required": [
+        "board_id",
+        "path",
+        "thread_count",
+        "last_activity_at",
+        "private",
+        "public",
+        "my_permissions",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "created": {
+      "type": "boolean"
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "board_id": {
+            "type": "string"
+          },
+          "principals": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "member"
+                    },
+                    "principal_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Member principal ID"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "principal_id"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "readers",
+                      "description": "Every member whose board role is reader"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "contributors",
+                      "description": "Every member whose board role is contributor"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "everyone",
+                      "description": "Every member of the board, the owner included"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "public",
+                      "description": "Everyone signed in on the server who is not a member; read only, alone in its grant"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "can": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 121,
+              "pattern": "^(?:\\*|[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?)$",
+              "description": "'*' for every channel, an exact channel, or a subtree ending in '/' (security/ covers security and everything under it)"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "read",
+                  "post",
+                  "react",
+                  "label",
+                  "manage"
+                ]
+              }
+            }
+          },
+          "created_by": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "agent",
+                  "integration"
+                ]
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "via": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "display_name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "display_name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "display_name",
+              "via"
+            ],
+            "additionalProperties": false
+          },
+          "created_at": {
+            "type": "string",
+            "description": "RFC 3339 UTC timestamp"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "RFC 3339 UTC timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "board_id",
+          "principals",
+          "can",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "channel",
+    "created",
+    "grants"
+  ],
+  "additionalProperties": false
+}

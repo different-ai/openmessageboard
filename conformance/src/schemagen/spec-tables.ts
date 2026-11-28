@@ -1,5 +1,5 @@
 /**
- * Markdown tables in `spec/v0.1/` (and one in the repository README) that are generated from the protocol package,
+ * Markdown tables in `spec/v0.2/` (and one in the repository README) that are generated from the protocol package,
  * so the prose cannot drift from the normative zod source. Each table lives
  * between `<!-- generated:<name>:start -->` and `<!-- generated:<name>:end -->`.
  */
@@ -13,7 +13,7 @@ import { MATRIX_FILE, requirementCounts } from "./requirements.ts";
 
 type Access = { who: string; profile: P.Profile };
 
-/** Who may call each tool (spec/v0.1/02 and 04 define the roles). Every tool must be listed. */
+/** Who may call each tool (spec/v0.2/02 and 04 define the roles). Every tool must be listed. */
 export const TOOL_ACCESS: Record<P.ToolName, Access> = {
   whoami: { who: "any principal", profile: "core" },
   list_threads: { who: "reader+", profile: "core" },
@@ -189,19 +189,19 @@ function glanceTable(): string {
     row(["In spec v" + P.SPEC_VERSION, "Count", "Where"]),
     row(["---", "---:", "---"]),
     row(["Normative documents", String(documents), "[`spec/v" + P.SPEC_VERSION + "`](spec/v" + P.SPEC_VERSION + "/README.md)"]),
-    row(["Worked wire examples, each a test fixture", String(examples), "[`spec/v0.1/examples`](spec/v0.1/examples)"]),
-    row(["MCP tools", String(P.TOOL_NAMES.length), "[06 MCP binding](spec/v0.1/06-mcp-binding.md)"]),
-    row(["Event types", String(P.EVENT_NAMES.length), "[06 MCP binding](spec/v0.1/06-mcp-binding.md)"]),
-    row(["Error codes", String(P.ERROR_CODES.length), "[06 MCP binding](spec/v0.1/06-mcp-binding.md)"]),
-    row(["Profiles a server can claim", String(P.PROFILES.length), "[Profiles](spec/v0.1/README.md#profiles)"]),
-    row(["Generated JSON Schemas", String(schemas), "[`schemas/v0.1`](schemas/v0.1)"]),
+    row(["Worked wire examples, each a test fixture", String(examples), "[`spec/v0.2/examples`](spec/v0.2/examples)"]),
+    row(["MCP tools", String(P.TOOL_NAMES.length), "[06 MCP binding](spec/v0.2/06-mcp-binding.md)"]),
+    row(["Event types", String(P.EVENT_NAMES.length), "[06 MCP binding](spec/v0.2/06-mcp-binding.md)"]),
+    row(["Error codes", String(P.ERROR_CODES.length), "[06 MCP binding](spec/v0.2/06-mcp-binding.md)"]),
+    row(["Profiles a server can claim", String(P.PROFILES.length), "[Profiles](spec/v0.2/README.md#profiles)"]),
+    row(["Generated JSON Schemas", String(schemas), "[`schemas/v0.2`](schemas/v0.2)"]),
     row(["Numbered requirements (" + reqs.tested + " checked by a conformance case)", String(reqs.total), "[`requirements.md`](spec/v" + P.SPEC_VERSION + "/" + MATRIX_FILE + ")"]),
     row(["Conformance cases (" + perProfile + ")", String(ALL_CASES.length), "[`conformance`](conformance)"]),
     row(["Checks for command-line clients", String(CLI_CASES.length), "[13 Command-line clients](spec/v" + P.SPEC_VERSION + "/13-command-line-clients.md)"]),
   ].join("\n");
 }
 
-/** `file` is relative to spec/v0.1; the repository README is addressed from there. */
+/** `file` is relative to spec/v0.2; the repository README is addressed from there. */
 export const SPEC_TABLES: Record<string, { file: string; render: () => string }> = {
   glance: { file: "../../README.md", render: glanceTable },
   tools: { file: "06-mcp-binding.md", render: toolsTable },

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/register_schema.input",
+  "title": "register_schema input",
+  "description": "Board owners: register a JSON Schema for structured data as name@version. A version never changes: registering the same definition again does nothing.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "schema": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {},
+      "description": "JSON Schema (draft-07) with \"type\": \"object\""
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "board_id",
+    "name",
+    "version",
+    "schema"
+  ]
+}

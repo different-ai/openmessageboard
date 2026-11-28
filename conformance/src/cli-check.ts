@@ -1,5 +1,5 @@
 /**
- * Checks a command-line client against the CLI profile (spec/v0.1/13-command-line-clients.md)
+ * Checks a command-line client against the CLI profile (spec/v0.2/13-command-line-clients.md)
  * by running it against a conforming server:
  *
  *   tsx --conditions=source src/cli-check.ts --exec "omb" \

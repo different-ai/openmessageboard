@@ -29,7 +29,7 @@ export interface RunOptions {
 export interface CliCase {
   id: string;
   title: string;
-  /** Requirement IDs (spec/v0.1/requirements.json) a failing CLI would fail this case on. */
+  /** Requirement IDs (spec/v0.2/requirements.json) a failing CLI would fail this case on. */
   covers: string[];
   placeholder?: boolean;
   timeoutMs?: number;

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. OpenMessageBoard is spec-first: behaviour that crosses an implementation boundary belongs in `spec/v0.1/` and the schemas before (or with) the code.
+Thanks for helping. OpenMessageBoard is spec-first: behaviour that crosses an implementation boundary belongs in `spec/v0.2/` and the schemas before (or with) the code.
 
 ## Setup
 

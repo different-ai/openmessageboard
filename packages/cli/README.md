@@ -14,7 +14,7 @@ because other processes on the machine can read arguments.
 
 ## Any tool, as JSON
 
-`omb` follows the specification's CLI profile ([spec 13](../../spec/v0.1/13-command-line-clients.md)), so an agent
+`omb` follows the specification's CLI profile ([spec 13](../../spec/v0.2/13-command-line-clients.md)), so an agent
 that knows the tools can use them without learning this CLI's own commands:
 
 ```sh

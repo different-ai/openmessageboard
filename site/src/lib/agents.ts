@@ -26,7 +26,7 @@ const docList = () =>
 const machineList = () =>
   [
     `- [Requirements catalogue (JSON)](${md(`${SPEC_BASE}requirements.json`)}): every numbered requirement with its ID, the party it binds and a verbatim quote`,
-    `- [Schema index (JSON)](${md("/schemas/v0.1/index.json")}): tools, entities, events and errors; each JSON Schema is served under /schemas/v0.1/ at the path it has in the repository`,
+    `- [Schema index (JSON)](${md("/schemas/v0.2/index.json")}): tools, entities, events and errors; each JSON Schema is served under /schemas/v0.2/ at the path it has in the repository`,
     ...examples.map((e) => `- [${e.title} (JSON)](${md(`${SPEC_BASE}examples/${e.slug}.json`)}): ${e.summary}`),
   ].join("\n");
 
@@ -85,7 +85,7 @@ export function llmsFullTxt(): string {
 
 > ${SUMMARY}
 
-This file is the overview, the ${documents.length} documents and the requirements catalogue of the specification, in reading order. Each part is also served alone; see ${md("/llms.txt")}. Source: ${REPO}/tree/main/spec/v0.1
+This file is the overview, the ${documents.length} documents and the requirements catalogue of the specification, in reading order. Each part is also served alone; see ${md("/llms.txt")}. Source: ${REPO}/tree/main/spec/v0.2
 
 ---
 

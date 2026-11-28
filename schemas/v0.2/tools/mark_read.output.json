@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/mark_read.output",
+  "title": "mark_read output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "marked": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "unread_count": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "marked",
+    "unread_count"
+  ],
+  "additionalProperties": false
+}

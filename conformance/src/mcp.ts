@@ -129,7 +129,7 @@ export class McpSession {
       const parsed = schema.output.safeParse(result.structuredContent);
       if (!parsed.success) {
         const issues = (parsed.error?.issues ?? []).slice(0, 5).map((i) => `${i.path.join(".") || "$"}: ${i.message}`).join("; ");
-        throw new Failure(`${this.name}: ${tool} structuredContent does not match schemas/v0.1/tools/${tool}.output.json: ${issues}`);
+        throw new Failure(`${this.name}: ${tool} structuredContent does not match schemas/v0.2/tools/${tool}.output.json: ${issues}`);
       }
       return { ok: true, data: parsed.data as never, result };
     }

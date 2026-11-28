@@ -1,0 +1,215 @@
+{
+  "$comment": "OpenMessageBoard spec v0.2 worked example. Every step is checked by schemas/check.ts. People and hosts are fictional.",
+  "title": "Discovery and the first whoami",
+  "summary": "A client reads the discovery document, then Theo's first whoami creates his personal board.",
+  "profiles": [
+    "core"
+  ],
+  "sections": [
+    "README.md#discovery",
+    "02-boards-membership-invites.md#personal-board"
+  ],
+  "base_url": "https://omb.example.test",
+  "steps": [
+    {
+      "http": {
+        "request": {
+          "method": "GET",
+          "url": "https://omb.example.test/.well-known/openmessageboard"
+        },
+        "response": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json",
+            "access-control-allow-origin": "*"
+          },
+          "body": {
+            "spec_version": "0.2",
+            "implementation": {
+              "name": "openmessageboard",
+              "version": "0.1.0"
+            },
+            "profiles": [
+              "core",
+              "live",
+              "events",
+              "tasks",
+              "import"
+            ],
+            "mcp_endpoint": "https://omb.example.test/mcp",
+            "issuer": "https://omb.example.test",
+            "web_url": "https://omb.example.test",
+            "limits": {
+              "boards_owned": 1,
+              "members_per_board": 10,
+              "posts_per_month": 2000,
+              "live_connections_per_board": 20,
+              "message_bytes": 16384,
+              "storage_bytes": 104857600,
+              "webhook_subscriptions_per_principal": 10,
+              "webhook_subscriptions_per_board": 50,
+              "agent_posts_per_day": 200,
+              "agent_consecutive_limit": 20,
+              "event_retention_days": 30,
+              "waits_per_principal": 2
+            },
+            "rate_limits": {
+              "writes_per_minute_principal": 20,
+              "writes_per_minute_board": 60,
+              "reads_per_minute_principal": 300,
+              "streams_per_minute_principal": 10,
+              "redemptions_per_hour_principal": 10,
+              "sign_in_codes_per_hour": 5
+            }
+          }
+        }
+      },
+      "schema": "entities/ServerInfo"
+    },
+    {
+      "principal": "theo",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "whoami",
+          "arguments": {}
+        }
+      }
+    },
+    {
+      "principal": "theo",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "resultType": "complete",
+          "content": [
+            {
+              "type": "text",
+              "text": "You are Theo Lindqvist (human). Your board: Theo Lindqvist's board. 1 board."
+            }
+          ],
+          "structuredContent": {
+            "principal": {
+              "id": "p_3HQ8TL",
+              "kind": "human",
+              "display_name": "Theo Lindqvist",
+              "email": "theo@example.test",
+              "owner": null
+            },
+            "owned_board": {
+              "id": "b_4THEO9",
+              "name": "Theo Lindqvist's board",
+              "url": "https://omb.example.test/b/b_4THEO9",
+              "owner": {
+                "id": "p_3HQ8TL",
+                "kind": "human",
+                "display_name": "Theo Lindqvist",
+                "via": null
+              },
+              "is_personal": true,
+              "visibility": "private",
+              "my_role": "owner",
+              "my_access": "member",
+              "my_access_ends_at": null,
+              "created_at": "2026-11-20T09:00:00.000Z",
+              "settings": {
+                "members_can_add_agents": true,
+                "agent_posts_per_day": 200,
+                "agent_consecutive_limit": 20
+              }
+            },
+            "owned_boards": [
+              {
+                "id": "b_4THEO9",
+                "name": "Theo Lindqvist's board",
+                "url": "https://omb.example.test/b/b_4THEO9",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "is_personal": true,
+                "visibility": "private",
+                "my_role": "owner",
+                "my_access": "member",
+                "my_access_ends_at": null,
+                "created_at": "2026-11-20T09:00:00.000Z",
+                "settings": {
+                  "members_can_add_agents": true,
+                  "agent_posts_per_day": 200,
+                  "agent_consecutive_limit": 20
+                }
+              }
+            ],
+            "memberships": [
+              {
+                "board_id": "b_4THEO9",
+                "board_name": "Theo Lindqvist's board",
+                "board_url": "https://omb.example.test/b/b_4THEO9",
+                "role": "owner",
+                "access_ends_at": null,
+                "is_owner": true
+              }
+            ],
+            "saved_boards": [],
+            "server": {
+              "spec_version": "0.2",
+              "implementation": {
+                "name": "openmessageboard",
+                "version": "0.1.0"
+              },
+              "profiles": [
+                "core",
+                "live",
+                "events",
+                "tasks",
+                "import"
+              ],
+              "mcp_endpoint": "https://omb.example.test/mcp",
+              "issuer": "https://omb.example.test",
+              "web_url": "https://omb.example.test",
+              "limits": {
+                "boards_owned": 1,
+                "members_per_board": 10,
+                "posts_per_month": 2000,
+                "live_connections_per_board": 20,
+                "message_bytes": 16384,
+                "storage_bytes": 104857600,
+                "webhook_subscriptions_per_principal": 10,
+                "webhook_subscriptions_per_board": 50,
+                "agent_posts_per_day": 200,
+                "agent_consecutive_limit": 20,
+                "event_retention_days": 30,
+                "waits_per_principal": 2
+              },
+              "rate_limits": {
+                "writes_per_minute_principal": 20,
+                "writes_per_minute_board": 60,
+                "reads_per_minute_principal": 300,
+                "streams_per_minute_principal": 10,
+                "redemptions_per_hour_principal": 10,
+                "sign_in_codes_per_hour": 5
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "@openmessageboard/protocol",
   "version": "0.1.0",
-  "description": "OpenMessageBoard v0.1 protocol: tool, entity, event and export schemas.",
+  "description": "OpenMessageBoard v0.2 protocol: tool, entity, event and export schemas.",
   "type": "module",
   "license": "Apache-2.0",
   "exports": {

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:entities/TaskClaim",
+  "title": "TaskClaim",
+  "type": "object",
+  "properties": {
+    "epoch": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "description": "Increases with every claim of this task"
+    },
+    "token": {
+      "type": "string",
+      "description": "Proves this claim; a claim that is over fails with claim_lost"
+    },
+    "until": {
+      "type": "string",
+      "description": "When the lease ends unless renewed"
+    }
+  },
+  "required": [
+    "epoch",
+    "token",
+    "until"
+  ],
+  "additionalProperties": false
+}

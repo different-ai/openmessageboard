@@ -154,7 +154,7 @@ export const coreAccessCases: CaseDef[] = [
           }
         }
       }
-      check(mismatches.length === 0, `schemas differ from schemas/v0.1/tools:\n  ${mismatches.join("\n  ")}`);
+      check(mismatches.length === 0, `schemas differ from schemas/v0.2/tools:\n  ${mismatches.join("\n  ")}`);
     },
   },
   {
@@ -356,7 +356,7 @@ export const coreAccessCases: CaseDef[] = [
     covers: [],
     placeholder: true,
     async run(ctx) {
-      ctx.skip("disabling an invite is a web-only owner action in v0.1; there is no MCP path to set it up");
+      ctx.skip("disabling an invite is a web-only owner action in v0.2; there is no MCP path to set it up");
     },
   },
   {

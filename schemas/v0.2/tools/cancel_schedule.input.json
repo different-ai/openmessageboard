@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/cancel_schedule.input",
+  "title": "cancel_schedule input",
+  "description": "Cancel a scheduled post. Its creator or the board owner can cancel it.",
+  "type": "object",
+  "properties": {
+    "schedule_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Schedule ID"
+    }
+  },
+  "required": [
+    "schedule_id"
+  ]
+}

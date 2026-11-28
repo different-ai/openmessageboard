@@ -33,7 +33,7 @@ function checkOccurrence(o: Occurrence, name: EventName, where: string): void {
   check(typeof o.eventId === "string" && /^[A-Za-z0-9_-]+$/.test(o.eventId), `${where}: eventId must be a string of [A-Za-z0-9_-] (usable as webhook-id)`);
   check(!Number.isNaN(Date.parse(o.timestamp)), `${where}: timestamp must be an ISO 8601 instant`);
   const parsed = EVENT_DEFINITIONS[name].payload.safeParse(o.data);
-  check(parsed.success, `${where}: data does not match schemas/v0.1/events/${name}.payload.json: ${parsed.error?.issues.slice(0, 4).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+  check(parsed.success, `${where}: data does not match schemas/v0.2/events/${name}.payload.json: ${parsed.error?.issues.slice(0, 4).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
 }
 
 /** Polls until `match` finds an occurrence or `timeoutMs` passes; returns all occurrences seen and the last cursor. */
@@ -97,7 +97,7 @@ export const eventCases: CaseDef[] = [
         for (const [part, schema] of [["arguments", e.inputSchema], ["payload", e.payloadSchema]] as const) {
           const ours = schemaShape(toJsonSchema(entryByRef(`events/${e.name}.${part}`)!));
           const theirs = schemaShape(schema);
-          check(JSON.stringify(ours) === JSON.stringify(theirs), `${e.name} ${part} schema differs from schemas/v0.1: properties [${theirs.properties}] required [${theirs.required}] vs [${ours.properties}] required [${ours.required}]`);
+          check(JSON.stringify(ours) === JSON.stringify(theirs), `${e.name} ${part} schema differs from schemas/v0.2: properties [${theirs.properties}] required [${theirs.required}] vs [${ours.properties}] required [${ours.required}]`);
         }
       }
     },

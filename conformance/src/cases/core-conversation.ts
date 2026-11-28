@@ -511,7 +511,7 @@ export const coreConversationCases: CaseDef[] = [
     covers: [],
     placeholder: true,
     async run(ctx) {
-      ctx.skip("needs agents added to a board by their owner, which has no MCP path in v0.1");
+      ctx.skip("needs agents added to a board by their owner, which has no MCP path in v0.2");
     },
   },
 ];

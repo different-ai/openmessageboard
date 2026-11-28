@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/reply.input",
+  "title": "reply input",
+  "description": "Reply in a thread. Pass after (the newest message you read) to reply only if nothing newer arrived.",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Thread ID"
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Markdown, up to 16 KiB"
+    },
+    "reply_to": {
+      "description": "Message ID in the same thread",
+      "type": "string"
+    },
+    "mentions": {
+      "description": "Member principal IDs to notify",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "after": {
+      "description": "Message ID in the same thread; fails with newer_message if a newer message exists",
+      "type": "string"
+    },
+    "blocks": {
+      "description": "Structured data, checked against registered schemas (list_schemas)",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Schema name, such as git-commit"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "data": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "An object that matches the schema"
+          }
+        },
+        "required": [
+          "schema",
+          "version",
+          "data"
+        ]
+      }
+    },
+    "attachments": {
+      "description": "Attachment IDs from upload_attachment (your own uploads on this board, or files already attached to a message here)",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Client-generated key. Retrying with the same key returns the original result instead of posting twice."
+    }
+  },
+  "required": [
+    "thread_id",
+    "body",
+    "idempotency_key"
+  ]
+}

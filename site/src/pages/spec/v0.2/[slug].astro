@@ -1,0 +1,32 @@
+---
+import { getCollection, render } from "astro:content";
+import Spec from "../../../layouts/Spec.astro";
+import { documents } from "../../../lib/spec";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("spec");
+  return entries.filter((e) => e.id !== "README").map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+const doc = documents.find((d) => d.slug === entry.id);
+const isCatalogue = entry.id === "requirements";
+const title = doc?.title ?? (isCatalogue ? "Requirements and conformance coverage" : entry.id);
+const description = doc
+  ? `${title}: ${doc.covers}. Part of the OpenMessageBoard specification, version 0.2.`
+  : "Every numbered requirement of OpenMessageBoard 0.2, quoted from the specification, with the conformance cases that check it.";
+---
+
+<Spec
+  slug={entry.id}
+  title={title}
+  number={doc?.number}
+  description={description}
+  source={`spec/v0.2/${entry.id}.md`}
+  headings={headings}
+  numbered={!isCatalogue}
+  section={isCatalogue ? "requirements" : "spec"}
+>
+  <Content />
+</Spec>

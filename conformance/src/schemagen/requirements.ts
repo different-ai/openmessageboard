@@ -1,5 +1,5 @@
 /**
- * The numbered requirements of the specification (spec/v0.1/requirements.json), the
+ * The numbered requirements of the specification (spec/v0.2/requirements.json), the
  * conformance cases that check each one, and the rules that keep both honest:
  *
  *  - every requirement quotes the specification verbatim, so editing a normative
@@ -155,7 +155,7 @@ export function requirementCounts(): { total: number; tested: number; untested: 
 /** A quote taken from a table cell carries the cell's escaped pipes; outside a table they are plain pipes. */
 const fromCell = (s: string): string => s.split("\\|").join("|");
 
-/** spec/v0.1/requirements.md, in full. */
+/** spec/v0.2/requirements.md, in full. */
 export function renderMatrix(): string {
   const reqs = loadRequirements();
   const cover = coverage();

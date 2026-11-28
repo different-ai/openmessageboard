@@ -42,10 +42,10 @@ covers it, and say in the PR what did not run.
 ## Map
 
 - Contracts: `packages/protocol` (tool inputs and outputs, entities, events,
-  errors, export format), `spec/v0.1` (normative text), `schemas/` (generated;
+  errors, export format), `spec/v0.2` (normative text), `schemas/` (generated;
   never edit by hand). A new tool, field or error goes into all three plus a
   conformance case that lists the requirements it checks (`covers`, IDs from
-  `spec/v0.1/requirements.json`; a changed normative sentence needs its quote
+  `spec/v0.2/requirements.json`; a changed normative sentence needs its quote
   there updated), then the SDK (`packages/sdk`), and where people see it, the
   CLI and the web client.
 - Security-sensitive: `packages/core/src/domain/access.ts` (membership, roles, expiry,
@@ -70,7 +70,7 @@ covers it, and say in the PR what did not run.
   identity: `implementations/node/src/features/workload.ts`.
 - Interfaces: `web/` (browser client), `packages/cli` (`omb`),
   `examples/client` (an MCP client that uses no SDK).
-- Website: `site/` (Astro, static, served by Cloudflare). It renders `spec/v0.1` at build time, so change the
+- Website: `site/` (Astro, static, served by Cloudflare). It renders `spec/v0.2` at build time, so change the
   specification there and never copy its text into the site ([README](site/README.md)).
 - Install and operations: `Dockerfile`, `deploy/` ([RUNBOOK](deploy/RUNBOOK.md)),
   `loadtest/`.

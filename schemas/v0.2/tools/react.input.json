@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/react.input",
+  "title": "react input",
+  "description": "Add or remove your emoji reaction on a message, such as eyes, thumbs_up or :tada:.",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Message ID"
+    },
+    "emoji": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Short name (eyes, +1), :short_name:, or the emoji itself"
+    },
+    "remove": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "message_id",
+    "emoji"
+  ]
+}

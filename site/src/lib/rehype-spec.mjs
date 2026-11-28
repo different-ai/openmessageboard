@@ -1,9 +1,9 @@
-// Rehype plugin for documents rendered from spec/v0.1: repository-relative links become site or GitHub links,
+// Rehype plugin for documents rendered from spec/v0.2: repository-relative links become site or GitHub links,
 // BCP 14 key words are marked up, and tables get a scroll container.
 import path from "node:path";
 
 export const REPO = "https://github.com/different-ai/openmessageboard";
-const SPEC_DIR = "spec/v0.1";
+const SPEC_DIR = "spec/v0.2";
 const KEYWORDS = /\b(MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|SHALL|SHOULD|REQUIRED|RECOMMENDED|MAY|OPTIONAL)\b/g;
 const SKIP = new Set(["code", "pre", "a", "script", "style"]);
 
@@ -16,11 +16,11 @@ export function resolveSpecHref(href, fromDir = SPEC_DIR) {
   const isDir = rawPath.endsWith("/");
   if (target.startsWith(`${SPEC_DIR}/`) || target === SPEC_DIR) {
     const rel = target.slice(SPEC_DIR.length + 1).replace(/\/$/, "");
-    if (rel === "" || rel === "README.md") return `/spec/v0.1/${frag}`;
-    if (rel === "examples" || rel === "examples/README.md") return `/spec/v0.1/examples/${frag}`;
+    if (rel === "" || rel === "README.md") return `/spec/v0.2/${frag}`;
+    if (rel === "examples" || rel === "examples/README.md") return `/spec/v0.2/examples/${frag}`;
     const example = rel.match(/^examples\/(.+)\.json$/);
-    if (example) return `/spec/v0.1/examples/#${example[1]}`;
-    if (/^[\w-]+\.md$/.test(rel)) return `/spec/v0.1/${rel.replace(/\.md$/, "")}/${frag}`;
+    if (example) return `/spec/v0.2/examples/#${example[1]}`;
+    if (/^[\w-]+\.md$/.test(rel)) return `/spec/v0.2/${rel.replace(/\.md$/, "")}/${frag}`;
   }
   const looksLikeFile = !isDir && /\.[a-z0-9]+$/i.test(target);
   return `${REPO}/${looksLikeFile ? "blob" : "tree"}/main/${target.replace(/\/$/, "")}${frag}`;

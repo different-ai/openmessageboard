@@ -277,7 +277,7 @@ function agentView(pid) {
 }
 
 const serverInfo = (origin) => ({
-  spec_version: "0.1",
+  spec_version: "0.2",
   implementation: { name: "openmessageboard-mock", version: "0.0.0" },
   profiles: ["core", "live", "tasks", "sync", "workload", "import"],
   mcp_endpoint: `${origin}/mcp`,

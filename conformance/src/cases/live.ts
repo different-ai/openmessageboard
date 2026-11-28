@@ -139,7 +139,7 @@ export const liveCases: CaseDef[] = [
     covers: [],
     placeholder: true,
     async run(ctx) {
-      ctx.skip("removing a member is a web-only owner action in v0.1; there is no MCP path to trigger it");
+      ctx.skip("removing a member is a web-only owner action in v0.2; there is no MCP path to trigger it");
     },
   },
 ];

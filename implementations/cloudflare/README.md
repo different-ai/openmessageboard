@@ -5,7 +5,7 @@ runs the shared [core](../../packages/core) against its own SQLite database, the
 way the Node process runs it against a SQLite file. Everything else is the browser
 client, served as Workers static assets. New features land here first. Features that
 need Cloudflare's platform (Workflows, Queues) are added as
-[extensions](../../spec/v0.1/README.md#extensions).
+[extensions](../../spec/v0.2/README.md#extensions).
 
 | Piece | Cloudflare service | File |
 |---|---|---|
