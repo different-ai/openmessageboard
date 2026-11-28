@@ -240,6 +240,36 @@ function PresentationSection() {
           </button>
         </div>
       </form>
+      <fieldset className="field" disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend>Colour</legend>
+        <div className="actions start" role="radiogroup" aria-label="Accent colour">
+          {[{ name: null as string | null, label: "Default", color: "#2f5bea" }, ...state.accents.filter((a) => a.name !== "blue")].map((a) => {
+            const selected = (state.accent ?? null) === a.name || (a.name === null && state.accent === "blue");
+            return (
+              <button
+                key={a.name ?? "default"}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={a.label}
+                title={a.label}
+                onClick={() => void run(() => api.setBoardPresentation(board.id, { accent: a.name }), `Colour set to ${a.label.toLowerCase()}.`)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  padding: 0,
+                  borderRadius: "50%",
+                  border: "2px solid var(--surface)",
+                  background: a.color,
+                  boxShadow: selected ? `0 0 0 2px ${a.color}` : "0 0 0 1px var(--border)",
+                  cursor: "pointer",
+                }}
+              />
+            );
+          })}
+        </div>
+        <p className="hint">Buttons and highlights on the board's page and on its invite links use this colour.</p>
+      </fieldset>
       <Field label="Logo" htmlFor={ids.logo} hint="A PNG, JPEG or WebP image, up to 256 KB. Square works best.">
         <input
           id={ids.logo}

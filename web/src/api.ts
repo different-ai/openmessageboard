@@ -240,6 +240,9 @@ export interface BoardPresentation {
   shown: boolean;
   description: string | null;
   logo_url: string | null;
+  /** The chosen accent colour's name, or null for the default, and the colours to choose from. */
+  accent: string | null;
+  accents: { name: string; label: string; color: string }[];
 }
 
 /** The extension that lets people who sign in choose the newsletter. Servers without it never show the choice. */
@@ -269,7 +272,7 @@ export const api = {
   keepBoardName: (boardId: string) => post<BoardNameState>(`/x/names/boards/${boardId}/keep`),
   /** The doorway extension: what a board shows at its address. */
   boardPresentation: (boardId: string) => get<BoardPresentation>(`/x/doorway/boards/${boardId}/presentation`),
-  setBoardPresentation: (boardId: string, change: { shown?: boolean; description?: string | null }) => put<BoardPresentation>(`/x/doorway/boards/${boardId}/presentation`, change),
+  setBoardPresentation: (boardId: string, change: { shown?: boolean; description?: string | null; accent?: string | null }) => put<BoardPresentation>(`/x/doorway/boards/${boardId}/presentation`, change),
   setBoardLogo: (boardId: string, file: Blob) => put<BoardPresentation>(`/x/doorway/boards/${boardId}/logo`, file),
   removeBoardLogo: (boardId: string) => del<BoardPresentation>(`/x/doorway/boards/${boardId}/logo`),
   /** The newsletter extension (only on servers that list it): the signed-in person's choice. */
