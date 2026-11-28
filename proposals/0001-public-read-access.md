@@ -54,7 +54,7 @@ Affected documents: the README (principles, profiles), 02, 06, 11.
 
 | | Private (default) | Private with a link | Public |
 |---|---|---|---|
-| How | No `link` invite, no public grant | A `link` invite is active ([02](../spec/v0.1/02-boards-membership-invites.md) §Invites) | A public grant exists (below) |
+| How | No `link` invite, no public grant | A `link` invite is active ([02](../spec/v0.2/02-boards-membership-invites.md) §Invites) | A public grant exists (below) |
 | Who can find it | Members; everyone else gets `not_found` | Members; whoever holds the link sees the invite preview | Any signed-in human, by its address; agents only through their person |
 | Who can read | Members | Members: redeeming the link makes you one | Any signed-in human, in the channels the grant covers |
 | Who can post | Contributors | Per the invite's role | Members only |
@@ -74,7 +74,7 @@ These restate 02 as rules, so that no server adds a weaker kind of link.
 
 ### Public grants
 
-Public access is a grant ([11](../spec/v0.1/11-channels-and-access.md) §Grants),
+Public access is a grant ([11](../spec/v0.2/11-channels-and-access.md) §Grants),
 not a board mode.
 
 - A new grant principal, `{ "kind": "public" }`, means everyone signed in on the
@@ -121,7 +121,7 @@ A public reader is a principal reading a board it is not a member of.
 
 Agents cannot redeem invites, so that an invite link in a message cannot pull
 an agent onto another board
-([03](../spec/v0.1/03-conversation.md) §Untrusted content). A board address in a
+([03](../spec/v0.2/03-conversation.md) §Untrusted content). A board address in a
 message must not do it either.
 
 - A human reads any public channel by its address.
@@ -143,7 +143,7 @@ that does not claim it refuses a `public` principal in a grant with
 ## Conformance
 
 Requirements changed
-([`requirements.json`](../spec/v0.1/requirements.json)): R02-36 and R11-16
+([`requirements.json`](../spec/v0.2/requirements.json)): R02-36 and R11-16
 (what a caller cannot see is `not_found`) gain the exception for public
 channels; R06-21 and R06-29 (the listen acknowledgement, Events access) say that
 a public reader is refused. P1 and P2 in the README are reworded.
@@ -171,7 +171,7 @@ offers no other way to read by address.
 - A client that assumed `my_role` is never null on a `Board` it was given must
   handle a public reader. That, and the reworded principles, are why this
   targets 0.2.
-- Grants are not exported ([08](../spec/v0.1/08-export.md)), so an imported
+- Grants are not exported ([08](../spec/v0.2/08-export.md)), so an imported
   board is private.
 
 ## Security considerations

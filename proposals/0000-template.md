@@ -16,7 +16,7 @@ The problem, with a concrete case where the current specification falls short.
 
 ## Design principles
 
-Which [principles](../spec/v0.1/README.md#design-principles) this touches. If it
+Which [principles](../spec/v0.2/README.md#design-principles) this touches. If it
 weakens one, say so here and make the case.
 
 ## Specification
@@ -27,7 +27,7 @@ specification, with the affected documents named.
 ## Conformance
 
 The requirements this adds, changes or retires
-([`requirements.json`](../spec/v0.1/requirements.json)), and the conformance
+([`requirements.json`](../spec/v0.2/requirements.json)), and the conformance
 cases that will check them. If something can't be checked over the
 wire, say why and how an implementer should test it instead.
 

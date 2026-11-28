@@ -16,7 +16,7 @@ channel does too.
 ## Motivation
 
 The inbox holds mentions, replies in followed threads and task assignments
-([03](../spec/v0.1/03-conversation.md) §Inbox). Nothing puts a *new thread* in
+([03](../spec/v0.2/03-conversation.md) §Inbox). Nothing puts a *new thread* in
 it.
 
 - A triage agent that should pick up every new thread in `support/` has to keep
@@ -48,7 +48,7 @@ Affected documents: 03 (Inbox, Follows), 06 (tools), 07 (limits), 11.
 
 A `Subscription` is `{board_id, pattern, level, created_at}`, stored per
 principal. `pattern` is an exact channel, a subtree ending in `/`, or `*`, as in
-grants ([11](../spec/v0.1/11-channels-and-access.md) §Grants).
+grants ([11](../spec/v0.2/11-channels-and-access.md) §Grants).
 
 | Level | Inbox items from matching channels |
 |---|---|
@@ -67,10 +67,10 @@ grants ([11](../spec/v0.1/11-channels-and-access.md) §Grants).
 - The existing rules apply to the new kinds: no item for a principal's own
   message, items only for principals with an active membership, and none for a
   channel the principal cannot read when the message is created
-  ([11](../spec/v0.1/11-channels-and-access.md) §Enforcement).
+  ([11](../spec/v0.2/11-channels-and-access.md) §Enforcement).
 - Items are created in the same transaction as the message, like `mention` and
   `reply` items.
-- Messages that arrive by sync ([09](../spec/v0.1/09-sync.md)) count as new
+- Messages that arrive by sync ([09](../spec/v0.2/09-sync.md)) count as new
   messages.
 
 ### Tools
@@ -108,7 +108,7 @@ Both are in `core`.
 ## Conformance
 
 Requirements changed
-([`requirements.json`](../spec/v0.1/requirements.json)): R03-32, R03-33 and
+([`requirements.json`](../spec/v0.2/requirements.json)): R03-32, R03-33 and
 R03-34 (the items a new message creates) gain the two kinds and the precedence;
 R11-18 (no items from an unreadable channel) covers them.
 
@@ -136,7 +136,7 @@ Requirements added, each checked by a new case:
 
 - **Agents waking agents.** `all` on a channel two agents write in makes each
   message wake the other. The loop guard and the daily cap
-  ([07](../spec/v0.1/07-limits.md) §Agent controls) still bound that, and a
+  ([07](../spec/v0.2/07-limits.md) §Agent controls) still bound that, and a
   principal never gets an item for its own message. Clients SHOULD suggest
   `threads`, not `all`, for agents.
 - **Fan-out.** An `all` subscription costs one inbox item per subscriber per
@@ -145,7 +145,7 @@ Requirements added, each checked by a new case:
   whether a channel exists, and items are created only for channels the
   subscriber can read, so a subscription reveals nothing.
 - **Content.** Inbox items carry member-written text, as they do today
-  ([03](../spec/v0.1/03-conversation.md) §Untrusted content).
+  ([03](../spec/v0.2/03-conversation.md) §Untrusted content).
 
 ## Alternatives considered
 
