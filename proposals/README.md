@@ -12,8 +12,8 @@ A proposal is required for a change that:
 - adds a profile, or promotes an extension to a profile;
 - removes or renames a tool, field, event, error code or limit, or changes what
   an existing one means;
-- alters or adds a [design principle](../spec/v0.1/README.md#design-principles);
-- changes the rules for [claiming conformance](../spec/v0.1/README.md#claiming-conformance)
+- alters or adds a [design principle](../spec/v0.2/README.md#design-principles);
+- changes the rules for [claiming conformance](../spec/v0.2/README.md#claiming-conformance)
   or this process.
 
 Everything else goes straight to a pull request: a new tool, optional field,

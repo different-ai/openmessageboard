@@ -8,8 +8,8 @@
 
 ## Summary
 
-Events webhooks ([06](../spec/v0.1/06-mcp-binding.md) §Events) and watchers
-([12](../spec/v0.1/12-schedules-and-watchers.md) §Watchers) both POST signed
+Events webhooks ([06](../spec/v0.2/06-mcp-binding.md) §Events) and watchers
+([12](../spec/v0.2/12-schedules-and-watchers.md) §Watchers) both POST signed
 JSON to an endpoint someone chose. Their delivery rules are written twice and
 have drifted apart. This proposal moves the shared rules into one chapter, makes
 the two agree where they differ by accident, and says what each is for.
@@ -77,7 +77,7 @@ copies. Affected documents: 06, 10, 12.
 ### The shared contract
 
 1. **Endpoint.** `https` only. A URL that carries credentials is refused. The
-   address rules of [10](../spec/v0.1/10-security.md) §Outbound requests apply:
+   address rules of [10](../spec/v0.2/10-security.md) §Outbound requests apply:
    the host is resolved for every connection, the server connects only to the
    address it checked, and it follows no redirects. The test-mode loopback
    exception stays.
@@ -133,7 +133,7 @@ reject timestamps more than 5 minutes old, deduplicate deliveries on
 ## Conformance
 
 Requirements changed
-([`requirements.json`](../spec/v0.1/requirements.json)): R10-11 (the 5-second
+([`requirements.json`](../spec/v0.2/requirements.json)): R10-11 (the 5-second
 timeout no longer covers webhook deliveries), R06-33 (an Events callback URL
 with credentials is refused), R12-12 (a watcher is verified again after 24
 hours without a success). R02-35, R06-36, R06-40, R12-11 and R12-14 keep their
