@@ -23,6 +23,7 @@ The specification website stays on `openmessageboard.com`.
 | D1 binding `NEWSLETTER` | the site's database `openmessageboard-newsletter` | The [newsletter extension](README.md#extensions): an unticked box at sign-in, a toggle in Settings |
 | `OMB_DOORWAY` | `1` | [The doorway](README.md#the-doorway): addresses open a "connect your agent" page; no board-reading app in the browser |
 | `OMB_NAMES` | `1`, released after 180 days without activity, held 30 days | [Claimed board names](README.md#claimed-board-names): `omb.pub/<name>` |
+| `OMB_BOARD_INACTIVE_DAYS` | not set | [Inactive boards](README.md#inactive-boards) are not deactivated until a period is chosen. Setting it needs no other change: the `LIFECYCLE` binding is there, and reminders use the `EMAIL` binding and `OMB_MAIL_FROM` above |
 | `OMB_TEST_MODE` | `0` | No test outbox, no `/x/test/identities`, no loopback webhooks |
 | `OMB_ALLOW_IMPORT` | `0` | Not offered on Cloudflare |
 | Limits | 1 board a person, 1,000 members a board, 2,000 posts a month, 25 MB storage a board, 2 MB an attachment, 30 days of events | One Durable Object holds 10 GB in all, attachments included |

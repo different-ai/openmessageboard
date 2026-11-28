@@ -3,6 +3,7 @@ import { doorwayEnabled, doorwayRoute, doorwayTarget } from "./doorway.js";
 import { stringVars, type Env } from "./env.js";
 
 export { BoardServer } from "./server.js";
+export { BoardLifecycle } from "./lifecycle-object.js";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
