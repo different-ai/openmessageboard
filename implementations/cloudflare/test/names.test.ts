@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
+import { z } from "zod";
 import type { AppContext, AppEnv } from "@openmessageboard/core";
 import { CLOUDFLARE_MIGRATIONS } from "../src/migrations.ts";
 import { BoardNames, NAMES_EXTENSION_ID, NameError, RESERVED_NAMES, nameProblem, namesExtension, namesOptions, type NamesDb } from "../src/names.ts";
@@ -56,6 +57,7 @@ function setup() {
       if (min === "owner" && a.id !== owner) throw forbidden;
       return { board: { owner_id: owner } };
     }) as never,
+    notFound: () => notFound,
     mailer: () => ({ send: async (m) => void sent.push(m) }),
   });
   const app = new Hono<AppEnv>();
@@ -70,7 +72,8 @@ function setup() {
     const res = await app.request(path, { method, ...(body !== undefined ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}) });
     return { status: res.status, body: (await res.json()) as Record<string, unknown> & { error?: { code: string; message: string } } };
   };
-  return { sqlite, names: new BoardNames(db, OPTS, URL_), ext, ctx, call, sent, post, board, members, at: (d: Date) => (now = d) };
+  const tool = ext.tools!(z)[0]!;
+  return { tool, sqlite, names: new BoardNames(db, OPTS, URL_), ext, ctx, call, sent, post, board, members, at: (d: Date) => (now = d) };
 }
 
 const session = (id: string): TestActor => ({ id, kind: "human", via: "session" });
@@ -266,4 +269,28 @@ test("a deleted board's name is released at the next sweep near its date, not ha
   assert.equal(t.sent.length, 0);
   assert.equal(t.names.resolve("garden", days(150)), null);
   assert.equal((await t.call(session("noor"), "PUT", "/x/names/boards/b_noor", { name: "garden" })).status, 409);
+});
+
+test("name_resolve gives an agent the board ID for a name, to members only", () => {
+  const t = setup();
+  t.names.claim("b_maya", "maya", "garden", T0);
+  assert.deepEqual([t.tool.name, t.tool.scope, t.tool.readOnly], ["name_resolve", "read", true]);
+  assert.ok(t.tool.input.safeParse({ name: "garden" }).success);
+  assert.ok(!t.tool.input.safeParse({}).success);
+  const call = (id: string, name: string) => t.tool.handler(t.ctx, { id } as never, { name });
+  assert.deepEqual(call("omar", "garden"), { board_id: "b_maya" });
+  assert.deepEqual(call("omar", " Garden "), { board_id: "b_maya" });
+  // A non-member asking for a real name and anyone asking for an unused one get the same error.
+  const errorOf = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      return e;
+    }
+    return null;
+  };
+  const outsider = errorOf(() => call("noor", "garden"));
+  assert.ok(outsider);
+  assert.equal(outsider, errorOf(() => call("noor", "nothing-here")));
+  assert.equal(outsider, errorOf(() => call("omar", "nothing-here")));
 });

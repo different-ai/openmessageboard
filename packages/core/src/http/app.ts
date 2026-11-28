@@ -18,6 +18,7 @@ import { registerOAuthConsentRoutes } from "./consent.js";
 import { registerSignInRoutes } from "./signin.js";
 import type { Mailer } from "../auth/mailer.js";
 import { clientMetadataDocument } from "../auth/oidc.js";
+import { z } from "zod";
 import type { AppEnv, ExtensionModule, RouteModule } from "./util.js";
 export { WEB_CSP, isServerPath } from "./paths.js";
 
@@ -48,6 +49,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
     ...(opts.modules ?? []).map((m) => m.name),
   ];
   const extensions = opts.extensions ?? [];
+  const extensionTools = extensions.flatMap((e) => e.tools?.(z) ?? []);
   const serverInfo = (): ServerInfo => ({
     spec_version: SPEC_VERSION,
     implementation: { name: `openmessageboard-${ctx.platform.name}`, version: ctx.config.version },
@@ -179,7 +181,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
   for (const e of extensions) e.register(app, ctx);
 
   // MCP (Streamable HTTP). subscriptions/listen and events/stream are served here with per-principal authorization.
-  const mcp = createMcpHandler(({ era }) => createMcpServer({ ctx, serverInfo, events: opts.events }, era), {
+  const mcp = createMcpHandler(({ era }) => createMcpServer({ ctx, serverInfo, events: opts.events, extensionTools }, era), {
     onerror: (e) => {
       if (!/Rejected inbound request|refused/i.test(e.message)) console.error("mcp:", e.message);
     },

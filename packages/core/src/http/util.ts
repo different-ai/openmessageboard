@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import type { z } from "zod";
+import type { TokenPermission } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { OmbError, invalid } from "../errors.js";
 import type { Actor } from "../domain/model.js";
@@ -44,4 +45,22 @@ export interface ExtensionModule {
   id: string;
   info: { version: string; description: string; docs?: string };
   register: RouteModule;
+  /** MCP tools the extension adds, listed after the specification's. Called once with Zod, to build input schemas. */
+  tools?: (zod: typeof z) => ExtensionTool[];
+}
+
+/**
+ * An extension's MCP tool (spec README §Extensions). Its name must not be one of the specification's, and its
+ * description is fixed server text: never member content. It runs with the same authentication, argument
+ * validation, token-scope check and read rate limit as the specification's tools.
+ */
+export interface ExtensionTool {
+  name: string;
+  description: string;
+  input: z.ZodObject;
+  /** What a scoped token needs to call it; `manage` is never allowed to one. */
+  scope: TokenPermission | "manage";
+  /** True when the tool never changes state. */
+  readOnly: boolean;
+  handler(ctx: AppContext, actor: Actor, args: Record<string, unknown>): unknown;
 }

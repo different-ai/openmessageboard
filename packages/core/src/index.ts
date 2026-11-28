@@ -12,5 +12,5 @@ export { CallbackError, isIP, isPrivateAddress, isLoopbackAddress, validateCallb
 export { createOutboxMailer, type Mail, type Mailer } from "./auth/mailer.js";
 export { setAttachmentStore, type AttachmentStore } from "./domain/attachments.js";
 export { WEB_CSP, isServerPath, type AppOptions } from "./http/app.js";
-export type { AppEnv, AppHono, ExtensionModule, RouteModule } from "./http/util.js";
+export type { AppEnv, AppHono, ExtensionModule, ExtensionTool, RouteModule } from "./http/util.js";
 export type { WorkloadVerifier } from "./auth/resolve.js";
