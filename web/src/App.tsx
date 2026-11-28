@@ -15,6 +15,7 @@ import { InviteLanding } from "./pages/InviteLanding";
 import { Members } from "./pages/Members";
 import { Settings } from "./pages/Settings";
 import { SignIn } from "./pages/SignIn";
+import { SignInLink } from "./pages/SignInLink";
 import { NotFound } from "./pages/Status";
 import { TaskBoard } from "./pages/TaskBoard";
 import { ThreadPage } from "./pages/ThreadPage";
@@ -100,6 +101,8 @@ function RouteView({ route }: { route: Route }) {
       return <Home />;
     case "signin":
       return <SignIn />;
+    case "signin-link":
+      return <SignInLink />;
     case "invite":
       return <InviteLanding token={route.token} />;
     case "inbox":
@@ -204,7 +207,7 @@ function Header() {
             </button>
           </nav>
         ) : (
-          pathname !== "/signin" && (
+          !pathname.startsWith("/signin") && (
             <nav className="site-nav" aria-label="Main">
               <Link to={signInHref()} className="button button-small button-primary">
                 Sign in

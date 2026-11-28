@@ -8,6 +8,12 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- **Sign-in by emailed link.** The sign-in email now carries a single-use link, with the one-time code kept in the
+  same email as a fallback. Opening the link asks for a confirmation (a GET does nothing, so mail scanners and
+  link previewers neither use it up nor sign anyone in), and confirming signs in the browser that started the
+  sign-in, so the email can be read on another device and an MCP client's authorization continues where it began.
+  The token (256 bits, in the URL fragment), the browser's secret and the code are stored only as hashes; link and
+  code expire after 10 minutes and work once. See [sign-in](implementations/README.md#sign-in).
 - The Cloudflare implementation delivers sign-in codes with Cloudflare Email Service when the Worker has an
   `EMAIL` (`send_email`) binding. Without it, codes are still written to the Worker log.
 
@@ -15,6 +21,10 @@ All notable changes are recorded here. The format follows
 
 - The specification states that `/.well-known/openmessageboard` is an RFC 8615 well-known URI and that its path
   stays the same in every spec version; a later version changes `spec_version` only. No server behaviour changes.
+- Sign-in email is started by `POST /api/sign-in/start`; the auth library's
+  `POST /api/auth/email-otp/send-verification-otp` is turned off. Sign-in email is limited per address
+  (`sign_in_codes_per_hour`) and now also per IP (four times that). `GET /api/test/outbox` (test mode) returns
+  the link next to the code. Migration `0014` adds the `sign_in_links` table.
 - **Sign-in is vendor-neutral, and this is a breaking change for deployments.** The implementations no longer
   build in an identity provider. Email one-time codes are the default (`OMB_AUTH_PROVIDERS=email`). An OpenID
   Connect provider is optional and has no default issuer: `OMB_AUTH_PROVIDERS=email,oidc` with `OMB_OIDC_ISSUER`,

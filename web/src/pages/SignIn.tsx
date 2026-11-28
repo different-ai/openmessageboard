@@ -8,7 +8,7 @@ import { ErrorNote } from "../ui";
 type AuthInfo = NonNullable<ServerInfo["auth"]> & { newsletter: boolean };
 let authInfoCache: Promise<AuthInfo> | null = null;
 
-/** How this server lets people sign in (an identity provider, an email code, or both). */
+/** How this server lets people sign in (an identity provider, an emailed link, or both). */
 function useAuthInfo(): AuthInfo | null {
   const [info, setInfo] = useState<AuthInfo | null>(null);
   useEffect(() => {
@@ -69,7 +69,7 @@ function ProviderButton({ next, name, available, signUpUrl }: { next: string; na
   );
 }
 
-/** Sign-in: an identity provider and/or an email one-time code, as the server allows. Calls onSignedIn after the session is set. */
+/** Sign-in: an identity provider and/or an emailed link (with a one-time code as a fallback), as the server allows. Calls onSignedIn after the session is set. */
 export function SignInForm({ onSignedIn, compact, next = "/" }: { onSignedIn: () => void; compact?: boolean; next?: string }) {
   const auth = useAuthInfo();
   if (!auth) return null;
@@ -84,7 +84,10 @@ export function SignInForm({ onSignedIn, compact, next = "/" }: { onSignedIn: ()
   );
 }
 
-/** Email one-time code sign-in. */
+/**
+ * Email sign-in. The email carries a link and a code. While this form waits, it asks the server whether the link was
+ * confirmed (on this device or another) and continues by itself when it was; the code can be typed instead.
+ */
 function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSignedIn: () => void; compact?: boolean; secondary?: boolean; newsletter?: boolean }) {
   const ids = { email: useId(), code: useId() };
   // Offered only by servers with the newsletter extension, and never ticked for the person.
@@ -104,13 +107,56 @@ function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSigne
     return () => clearInterval(t);
   }, [sentAt]);
   const wait = sentAt ? Math.max(0, 30 - Math.floor((now - sentAt) / 1000)) : 0;
+  const [expired, setExpired] = useState(false);
+
+  async function finish() {
+    const p = await refresh();
+    if (!p) throw new Error("Signed in, but the session didn't start. Check that cookies are allowed for this site.");
+    // The link or the code has just proved the address is theirs, so a ticked box subscribes it without a second
+    // email. Sign-in never fails over this: the choice is also in Settings.
+    if (newsletter && wantsNewsletter) await api.setNewsletter(true).catch(() => undefined);
+    const resume = pendingAuthorization();
+    if (resume) window.location.href = resume;
+    else onSignedIn();
+  }
+
+  // Waiting for the link: it may be confirmed in another tab or on another device.
+  useEffect(() => {
+    if (step !== "code" || !sentAt) return;
+    setExpired(false);
+    let live = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      let status: "pending" | "signed_in" | "expired" = "pending";
+      try {
+        status = (await api.signInClaim()).status;
+      } catch {
+        // A dropped request: keep waiting.
+      }
+      if (!live) return;
+      if (status === "signed_in") void finish().catch((err) => live && setError(err));
+      else if (status === "expired") {
+        // Signed in some other way meanwhile (another tab, the provider)? Then there is nothing to resend.
+        const p = await refresh().catch(() => null);
+        if (!live) return;
+        if (p) void finish().catch((err) => live && setError(err));
+        else setExpired(true);
+      } else timer = setTimeout(() => void poll(), 2000);
+    };
+    timer = setTimeout(() => void poll(), 2000);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+    // Restarts with each email sent.
+  }, [step, sentAt]);
 
   async function send(e?: FormEvent) {
     e?.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await api.sendSignInCode(email.trim());
+      await api.startSignIn(email.trim());
       setStep("code");
       setSentAt(Date.now());
       setNow(Date.now());
@@ -127,14 +173,7 @@ function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSigne
     setError(null);
     try {
       await api.signIn(email.trim(), code.trim());
-      const p = await refresh();
-      if (!p) throw new Error("Signed in, but the session didn't start. Check that cookies are allowed for this site.");
-      // The code has just proved the address is theirs, so a ticked box subscribes it without a second email.
-      // Sign-in never fails over this: the choice is also in Settings.
-      if (newsletter && wantsNewsletter) await api.setNewsletter(true).catch(() => undefined);
-      const resume = pendingAuthorization();
-      if (resume) window.location.href = resume;
-      else onSignedIn();
+      await finish();
     } catch (err) {
       setError(err);
     } finally {
@@ -169,9 +208,9 @@ function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSigne
         )}
         <ErrorNote error={error} />
         <button type="submit" className={`button ${secondary ? "" : "button-primary"} button-block`} disabled={busy}>
-          {busy ? "Sending…" : "Email me a sign-in code"}
+          {busy ? "Sending…" : "Email me a sign-in link"}
         </button>
-        <p className="hint">No password. We'll send a one-time code to this address.</p>
+        <p className="hint">No password. We'll send a link to this address; you can open it on any device.</p>
       </form>
     );
   }
@@ -179,10 +218,11 @@ function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSigne
   return (
     <form className={`stack signin-form ${compact ? "compact" : ""}`} onSubmit={verify}>
       <p className="note" role="status">
-        We sent a code to <strong>{email}</strong>. It expires in a few minutes.
+        We sent a sign-in link to <strong>{email}</strong>. Open it on any device and confirm: this page continues by itself. It expires in 10 minutes.
       </p>
+      {expired && <p className="note note-warning">That link has expired or was replaced. Send a new one below.</p>}
       <div className="field">
-        <label htmlFor={ids.code}>Sign-in code</label>
+        <label htmlFor={ids.code}>Or type the code from the email</label>
         <input
           id={ids.code}
           className="code-input"
@@ -190,15 +230,14 @@ function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSigne
           autoComplete="one-time-code"
           pattern="[0-9A-Za-z]{4,12}"
           required
-          autoFocus
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/\s/g, ""))}
           placeholder="123456"
         />
       </div>
       <ErrorNote error={error} />
-      <button type="submit" className="button button-primary button-block" disabled={busy}>
-        {busy ? "Checking…" : "Sign in"}
+      <button type="submit" className="button button-block" disabled={busy}>
+        {busy ? "Checking…" : "Sign in with the code"}
       </button>
       <div className="actions between">
         <button
@@ -213,7 +252,7 @@ function EmailCodeForm({ onSignedIn, compact, secondary, newsletter }: { onSigne
           Use a different email
         </button>
         <button type="button" className="link-button" disabled={wait > 0 || busy} onClick={() => void send()}>
-          {wait > 0 ? `Resend in ${wait}s` : "Resend code"}
+          {wait > 0 ? `Resend in ${wait}s` : "Send a new email"}
         </button>
       </div>
     </form>

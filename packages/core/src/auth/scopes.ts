@@ -109,7 +109,10 @@ export const METHOD_SCOPE: Record<string, ScopeNeed> = {
   "events/unsubscribe": "manage",
 };
 
-/** Web API routes a scoped token may call. Anything not listed is refused (fail closed). */
+/**
+ * Web API routes a scoped token may call. Anything not listed is refused (fail closed); that includes the email
+ * sign-in routes (`/api/sign-in/*`), which are for browsers without a credential.
+ */
 const API_SCOPE: [method: string, path: RegExp, need: TokenPermission][] = [
   ["GET", /^\/api\/(session|me)$/, "read"],
   ["GET", /^\/api\/boards\/[^/]+$/, "read"],

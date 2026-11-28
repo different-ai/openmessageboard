@@ -60,7 +60,7 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
   const mailer = opts.mailer ? await opts.mailer(ctx) : createOutboxMailer(ctx);
   const oidcClient: OidcClient | null = config.authProviders.includes("oidc") ? await resolveOidcClient(ctx) : null;
   if (config.authProviders.includes("oidc") && !oidcClient) console.warn("OIDC sign-in is unavailable; check OMB_OIDC_ISSUER and network access.");
-  const auth = createAuth(ctx, mailer, oidcClient);
+  const auth = createAuth(ctx, oidcClient);
   const { runMigrations } = await getMigrations(auth.options);
   await runMigrations();
   const features = opts.features ?? {};
@@ -70,7 +70,7 @@ export async function bootServer(opts: BootOptions): Promise<Booted> {
   const modules: { name: Profile; register: RouteModule }[] = [];
   if (features.workload) modules.push({ name: "workload", register: features.workload.register });
   if (sync) modules.push({ name: "sync", register: sync.register });
-  const { app } = createApp(ctx, { auth, resolver, events, modules, extensions: features.extensions ?? [], oidcAvailable: oidcClient !== null, ...(opts.web ? { web: opts.web } : {}) });
+  const { app } = createApp(ctx, { auth, mailer, resolver, events, modules, extensions: features.extensions ?? [], oidcAvailable: oidcClient !== null, ...(opts.web ? { web: opts.web } : {}) });
 
   const maintain = () => {
     try {

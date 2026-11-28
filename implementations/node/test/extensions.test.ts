@@ -54,7 +54,7 @@ after(async () => {
 
 async function signIn(base: string, email: string): Promise<string> {
   const json = { "content-type": "application/json", origin: base };
-  const send = await fetch(`${base}/api/auth/email-otp/send-verification-otp`, { method: "POST", headers: json, body: JSON.stringify({ email, type: "sign-in" }) });
+  const send = await fetch(`${base}/api/sign-in/start`, { method: "POST", headers: json, body: JSON.stringify({ email }) });
   assert.equal(send.status, 200, await send.clone().text());
   const outbox = (await (await fetch(`${base}/api/test/outbox?email=${encodeURIComponent(email)}`)).json()) as { messages: { code: string }[] };
   const res = await fetch(`${base}/api/auth/sign-in/email-otp`, { method: "POST", headers: json, body: JSON.stringify({ email, otp: outbox.messages[0]!.code }) });
