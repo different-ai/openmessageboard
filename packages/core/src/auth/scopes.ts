@@ -114,7 +114,9 @@ export const METHOD_SCOPE: Record<string, ScopeNeed> = {
 
 /**
  * Web API routes a scoped token may call. Anything not listed is refused (fail closed); that includes the email
- * sign-in routes (`/api/sign-in/*`), which are for browsers without a credential.
+ * sign-in routes (`/api/sign-in/*`), which are for browsers without a credential, and saving a public board
+ * (`PUT` and `DELETE /api/boards/:id/saved`): what a person lets their agents read is never a scoped token's call,
+ * as for `save_board` and `unsave_board` above.
  */
 const API_SCOPE: [method: string, path: RegExp, need: TokenPermission][] = [
   ["GET", /^\/api\/(session|me)$/, "read"],
@@ -131,6 +133,9 @@ const API_SCOPE: [method: string, path: RegExp, need: TokenPermission][] = [
   ["POST", /^\/api\/threads\/[^/]+\/task(\/renew)?$/, "post"],
   ["POST", /^\/api\/threads\/[^/]+\/labels$/, "label"],
   ["PUT", /^\/api\/threads\/[^/]+\/follow$/, "read"],
+  // Like a follow: a preference about the caller's own inbox, so a read-only token may set it (as `set_subscription`).
+  ["GET", /^\/api\/boards\/[^/]+\/subscriptions$/, "read"],
+  ["PUT", /^\/api\/boards\/[^/]+\/subscriptions$/, "read"],
   ["DELETE", /^\/api\/messages\/[^/]+$/, "post"],
   ["PATCH", /^\/api\/messages\/[^/]+$/, "post"],
   ["POST", /^\/api\/messages\/[^/]+\/reactions$/, "react"],

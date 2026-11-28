@@ -19,6 +19,7 @@ import {
 } from "../messageParts";
 import { Link, useTitle } from "../router";
 import { AccessRequired } from "./Status";
+import { useChannels } from "../channels";
 import { ScheduleDialog, ThreadSchedules } from "../schedules";
 import { TaskPanel } from "./TaskPanel";
 import {
@@ -49,7 +50,8 @@ function replaceMessage(list: Message[], m: Message): Message[] {
 }
 
 export function ThreadPage({ threadId }: { threadId: string }) {
-  const { board, live, members, meId, isOwner, canWrite } = useBoard();
+  const { board, live, members, meId, isOwner, isMember, canWrite } = useBoard();
+  const { channels } = useChannels();
   const [thread, setThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -163,10 +165,16 @@ export function ThreadPage({ threadId }: { threadId: string }) {
             <Link to={`/b/${board.id}?channel=${encodeURIComponent(thread.channel)}`} className="channel-tag">
               #{thread.channel}
             </Link>
+            {channels?.find((c) => c.path === thread.channel)?.public && (
+              <span className="badge badge-public" title="People who are not members can read this thread.">
+                Public
+              </span>
+            )}
             <span>
               Started by <Author p={thread.created_by} /> <TimeAgo iso={thread.created_at} />
             </span>
-            <FollowButton thread={thread} onChange={(following) => setThread((t) => (t ? { ...t, following } : t))} />
+            {/* Following puts replies in an inbox: for members. */}
+            {isMember && <FollowButton thread={thread} onChange={(following) => setThread((t) => (t ? { ...t, following } : t))} />}
           </div>
           <LabelChips labels={thread.labels} />
         </header>
@@ -177,10 +185,11 @@ export function ThreadPage({ threadId }: { threadId: string }) {
               key={m.id}
               m={m}
               parent={m.reply_to ? (byId.get(m.reply_to) ?? null) : null}
-              canDelete={!m.deleted && (m.author.id === meId || isOwner)}
+              canDelete={isMember && !m.deleted && (m.author.id === meId || isOwner)}
               canReply={canWrite && !m.deleted}
               canEdit={canEditMessage(m, meId, canWrite)}
               canLabel={canWrite && !m.deleted && m.id !== rootId}
+              canReact={isMember}
               showLabels={m.id !== rootId}
               members={members}
               onUpdate={(next) => updateMessage(m.id, next)}
@@ -201,7 +210,8 @@ export function ThreadPage({ threadId }: { threadId: string }) {
         )}
         <ErrorNote error={error} />
 
-        <ThreadSchedules threadId={thread.id} refreshKey={scheduleKey} />
+        {/* Scheduled replies are the members': the server refuses anyone else. */}
+        {isMember && <ThreadSchedules threadId={thread.id} refreshKey={scheduleKey} />}
         {canWrite ? (
           <ReplyForm
             onScheduled={() => setScheduleKey((k) => k + 1)}
@@ -215,8 +225,10 @@ export function ThreadPage({ threadId }: { threadId: string }) {
             }}
             members={members}
           />
-        ) : (
+        ) : isMember ? (
           <p className="note">You're a reader on this board, so you can follow this thread but not reply.</p>
+        ) : (
+          <p className="note">You're reading a public board and are not a member, so you can read this thread but not reply, react or follow it.</p>
         )}
       </div>
       <aside className="aside-col">
@@ -290,6 +302,7 @@ function MessageItem({
   canReply,
   canEdit,
   canLabel,
+  canReact,
   showLabels,
   members,
   onReply,
@@ -302,6 +315,7 @@ function MessageItem({
   canReply: boolean;
   canEdit: boolean;
   canLabel: boolean;
+  canReact: boolean;
   showLabels: boolean;
   members: ReturnType<typeof useBoard>["members"];
   onReply: () => void;
@@ -371,7 +385,7 @@ function MessageItem({
                 onUpdate={onUpdate}
               />
             )}
-            <ReactionChips m={m} onToggle={(emoji) => void toggleReaction(emoji)} />
+            <ReactionChips m={m} onToggle={(emoji) => void toggleReaction(emoji)} readOnly={!canReact} />
           </>
         )}
         {!m.deleted && !isEditing && (
@@ -381,7 +395,7 @@ function MessageItem({
                 Reply
               </button>
             )}
-            <ReactionPicker m={m} onToggle={(emoji) => void toggleReaction(emoji)} />
+            {canReact && <ReactionPicker m={m} onToggle={(emoji) => void toggleReaction(emoji)} />}
             {canEdit && (
               <button ref={editRef} type="button" className="link-button" onClick={() => setEditing(true)}>
                 Edit

@@ -5,6 +5,7 @@ import { useBoard, useBoardChanges } from "./board";
 import { Link, navigate } from "./router";
 import { useSession } from "./session";
 import { Dialog, ErrorNote, useToast } from "./ui";
+import { SubscriptionsDialog, effectiveLevel, levelBadge, useSubscriptions } from "./subscriptions";
 
 export const DEFAULT_CHANNEL = "general";
 const CHANNEL_RE = /^[a-z0-9_-]{1,40}(\/[a-z0-9_-]{1,40}){0,5}$/;
@@ -63,10 +64,14 @@ function channelHref(boardId: string, search: string, channel: string | null): s
 
 /** Channel list with thread counts; choosing one filters the thread list. */
 export function ChannelsPanel({ current, search }: { current: string | undefined; search: string }) {
-  const { board, canWrite } = useBoard();
+  const { board, canWrite, isMember } = useBoard();
   const { channels, error, reload } = useChannels();
+  // Subscriptions are a member's: someone reading through a public grant has no inbox for this board.
+  const subscriptions = useSubscriptions(board.id, isMember);
   const [creating, setCreating] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
   const total = channels?.reduce((n, c) => n + c.thread_count, 0) ?? 0;
+  const subs = subscriptions.subs ?? [];
   return (
     <section className="card channels-panel" aria-labelledby="channels-title">
       <div className="card-head">
@@ -96,6 +101,16 @@ export function ChannelsPanel({ current, search }: { current: string | undefined
                 {c.path}
               </span>
               {c.private && <span className="badge channel-private">private</span>}
+              {c.public && (
+                <span className="badge channel-private badge-public" title="People who are not members can read this channel.">
+                  public
+                </span>
+              )}
+              {levelBadge(effectiveLevel(subs, c.path)) && (
+                <span className="badge channel-private badge-plain" title="What this channel sends to your inbox. Change it under Inbox subscriptions.">
+                  {levelBadge(effectiveLevel(subs, c.path))}
+                </span>
+              )}
               <span className="channel-count">
                 {c.thread_count}
                 <span className="visually-hidden"> {c.thread_count === 1 ? "thread" : "threads"}</span>
@@ -105,6 +120,18 @@ export function ChannelsPanel({ current, search }: { current: string | undefined
         ))}
       </ul>
       {current?.endsWith("/") && <p className="hint">Showing {current} and every channel under it.</p>}
+      {!isMember && <p className="hint">These are the board's public channels. Its other channels are for its members.</p>}
+      {isMember && (
+        <p className="channels-foot">
+          <button type="button" className="link-button" onClick={() => setSubscribing(true)}>
+            Inbox subscriptions
+          </button>
+          <span className="hint">What each channel sends to your inbox.</span>
+        </p>
+      )}
+      {isMember && (
+        <SubscriptionsDialog open={subscribing} onClose={() => setSubscribing(false)} boardName={board.name} channels={channels ?? []} subscriptions={subscriptions} />
+      )}
       <CreateChannelDialog
         open={creating}
         onClose={() => setCreating(false)}
@@ -184,17 +211,20 @@ export function BoardSwitcher() {
   const [open, setOpen] = useState(false);
   const id = useId();
   const boards = me?.memberships ?? [];
+  // A public board read without membership is not among the caller's boards: list it too, so the switcher shows where they are.
+  const listed = boards.some((b) => b.board_id === board.id);
   const owned = me?.owned_boards?.length ?? 0;
   const limit = me?.principal.limits?.boards_owned;
   const atLimit = typeof limit === "number" && owned >= limit;
   return (
     <div className="board-switcher">
-      {boards.length > 1 && (
+      {boards.length > (listed ? 1 : 0) && (
         <>
           <label htmlFor={id} className="visually-hidden">
             Switch board
           </label>
           <select id={id} value={board.id} onChange={(e) => navigate(`/b/${e.target.value}`)}>
+            {!listed && <option value={board.id}>{board.name} (public)</option>}
             {boards.map((b) => (
               <option key={b.board_id} value={b.board_id}>
                 {b.board_name}

@@ -70,7 +70,7 @@ export function applyThreadChange(list: Thread[], c: Change, matches: (t: Thread
 }
 
 export function BoardThreads() {
-  const { board, live, canWrite, members, meId } = useBoard();
+  const { board, live, canWrite, isMember, members, meId } = useBoard();
   const { search } = useLocation();
   const filters = readFilters(search);
   const filterKey = filtersHref(board.id, filters);
@@ -150,16 +150,19 @@ export function BoardThreads() {
       <div className="main-col">
         <div className="toolbar">
           <h1 className="visually-hidden">{board.name}: threads</h1>
-          <Segmented
-            label="Show"
-            value={filters.filter}
-            options={[
-              ["all", "All"],
-              ["following", "Following"],
-              ["unread", "Unread"],
-            ]}
-            onChange={(v) => setFilters({ filter: v })}
-          />
+          {/* Following and unread are kept for members: someone reading a public board leaves nothing behind. */}
+          {isMember && (
+            <Segmented
+              label="Show"
+              value={filters.filter}
+              options={[
+                ["all", "All"],
+                ["following", "Following"],
+                ["unread", "Unread"],
+              ]}
+              onChange={(v) => setFilters({ filter: v })}
+            />
+          )}
           <Segmented
             label="Kind"
             value={filters.kind}
@@ -208,13 +211,15 @@ export function BoardThreads() {
               </button>
             ) : canWrite ? (
               <p>Start the first thread, or connect an agent from the panel on this page.</p>
-            ) : (
+            ) : isMember ? (
               <p>Threads will appear here as members post.</p>
+            ) : (
+              <p>Threads will appear here as members post in the board's public channels.</p>
             )}
           </Empty>
         ) : (
           <ul className="thread-list" aria-label="Threads">
-            {threads?.map((t) => <ThreadRow key={t.id} t={t} boardId={board.id} />)}
+            {threads?.map((t) => <ThreadRow key={t.id} t={t} boardId={board.id} showUnread={isMember} />)}
           </ul>
         )}
         {next && !hasMessageFilters(messageFilters) && (
@@ -227,14 +232,16 @@ export function BoardThreads() {
       </div>
       <aside className="aside-col">
         <ChannelsPanel current={filters.channel} search={search} />
-        <ConnectPanel />
+        {/* An agent of someone who is not a member reads a public board once its person saved it (the note above). */}
+        {isMember && <ConnectPanel />}
       </aside>
     </div>
   );
 }
 
-function ThreadRow({ t, boardId }: { t: Thread; boardId: string }) {
-  const unread = t.unread_count > 0;
+/** `showUnread` is off for someone reading a public board: nothing records what they read, so every message would stay "new". */
+function ThreadRow({ t, boardId, showUnread }: { t: Thread; boardId: string; showUnread: boolean }) {
+  const unread = showUnread && t.unread_count > 0;
   return (
     <li className={`thread-row ${unread ? "unread" : ""}`}>
       <div className="thread-row-main">
@@ -416,7 +423,11 @@ function NewThreadForm({
         <datalist id={ids.channels}>
           {channels?.filter((c) => c.my_permissions.includes("post")).map((c) => <option key={c.path} value={c.path} />)}
         </datalist>
-        <div className="hint">A new name creates the channel with this post.</div>
+        {channels?.find((c) => c.path === channel.trim())?.public ? (
+          <div className="hint warn-text">#{channel.trim()} is public: people who are not members of this board can read what you post here.</div>
+        ) : (
+          <div className="hint">A new name creates the channel with this post.</div>
+        )}
       </div>
       <div className="field">
         <label htmlFor={ids.title}>Title</label>

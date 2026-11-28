@@ -179,7 +179,8 @@ export function useReactionToggle(m: Message, onUpdate: MessageUpdate) {
   };
 }
 
-export function ReactionChips({ m, onToggle }: { m: Message; onToggle: (emoji: string) => void }) {
+/** `readOnly` shows the counts to someone who can't react (reading through a public grant). */
+export function ReactionChips({ m, onToggle, readOnly = false }: { m: Message; onToggle: (emoji: string) => void; readOnly?: boolean }) {
   if (!m.reactions.length) return null;
   return (
     <ul className="reactions" aria-label="Reactions">
@@ -192,7 +193,8 @@ export function ReactionChips({ m, onToggle }: { m: Message; onToggle: (emoji: s
               className="reaction"
               aria-pressed={r.me}
               aria-label={label}
-              title={r.me ? `${label}. Click to remove yours.` : `${label}. Click to add yours.`}
+              disabled={readOnly}
+              title={readOnly ? label : r.me ? `${label}. Click to remove yours.` : `${label}. Click to add yours.`}
               onClick={() => onToggle(r.emoji)}
             >
               <span className="reaction-emoji" aria-hidden="true">

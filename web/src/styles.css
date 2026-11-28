@@ -3024,3 +3024,102 @@ a.channel-tag:hover {
   background: var(--surface-3);
   color: var(--muted);
 }
+
+/* ---------- Public boards and channel subscriptions ---------- */
+.badge-public {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+/* Badges move under a channel's name before the name breaks. */
+.channel-list .channel-link {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.channel-list .channel-name {
+  flex: 1 0 auto;
+  max-width: 100%;
+}
+.channels-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 10px 0 0;
+  padding: 10px 8px 0;
+  border-top: 1px solid var(--border);
+}
+.public-reader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.public-reader p {
+  margin: 0;
+}
+.public-reader-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.public-reader-row .button {
+  flex: none;
+}
+.public-access > p {
+  margin: 0 0 10px;
+}
+.public-grant-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.public-grant-form h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.public-grant-form > .button {
+  align-self: flex-start;
+}
+.inbox-thread,
+.inbox-message {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+.subscription-levels {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.86rem;
+}
+.subscription-levels > div {
+  display: flex;
+  gap: 8px;
+}
+.subscription-levels dt {
+  flex: none;
+  min-width: 170px;
+  font-weight: 600;
+}
+.subscription-levels dd {
+  margin: 0;
+  color: var(--muted);
+}
+.subscription-rows .row {
+  align-items: center;
+}
+.subscription-rows select {
+  flex: none;
+  max-width: 60%;
+}
+@media (max-width: 640px) {
+  .public-reader-row {
+    flex-direction: column;
+  }
+  .subscription-levels > div {
+    flex-direction: column;
+    gap: 0;
+  }
+  .subscription-rows select {
+    max-width: 100%;
+  }
+}

@@ -14,12 +14,23 @@ const KIND_LABEL: Record<InboxKind, string> = {
   thread: "New thread",
   message: "New message",
 };
+/** Why an item is here, for the badge's tooltip. */
+const KIND_WHY: Record<InboxKind, string> = {
+  mention: "Someone mentioned you.",
+  reply: "A reply in a thread you follow.",
+  task_assigned: "A task was assigned to you.",
+  thread: "A new thread in a channel you subscribed to.",
+  message: "A new message in a channel you subscribed to.",
+};
+/** The kinds a channel subscription adds; the others are addressed to you. */
+const SUBSCRIBED = new Set<InboxKind>(["thread", "message"]);
 
 export function Inbox() {
   useTitle("Inbox");
   const { me } = useSession();
   const { onItem, setUnread, unread } = useInbox();
   const [show, setShow] = useState<"all" | "unread">("all");
+  const [kinds, setKinds] = useState<"all" | "direct" | "subscribed">("all");
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -30,6 +41,8 @@ export function Inbox() {
   const boardNames = new Map<string, string>();
   if (me?.owned_board) boardNames.set(me.owned_board.id, me.owned_board.name);
   me?.memberships.forEach((m) => boardNames.set(m.board_id, m.board_name));
+  const shown = items?.filter((i) => kinds === "all" || (kinds === "direct") !== SUBSCRIBED.has(i.kind)) ?? null;
+  const hasSubscribed = !!items?.some((i) => SUBSCRIBED.has(i.kind));
 
   useEffect(() => {
     let cancelled = false;
@@ -111,25 +124,48 @@ export function Inbox() {
           ]}
           onChange={setShow}
         />
+        {(hasSubscribed || kinds !== "all") && (
+          <Segmented
+            label="Kind"
+            value={kinds}
+            options={[
+              ["all", "Everything"],
+              ["direct", "To you"],
+              ["subscribed", "Subscriptions"],
+            ]}
+            onChange={setKinds}
+          />
+        )}
         <button type="button" className="button toolbar-end" onClick={markAll} disabled={busy || !asOf || unread === 0}>
           Mark all read
         </button>
       </div>
-      <p className="muted small">Mentions, replies in threads you follow, and tasks assigned to you.</p>
+      <p className="muted small">
+        Mentions, replies in threads you follow and tasks assigned to you, plus new threads and messages from channels you subscribed to. Choose
+        those under “Inbox subscriptions” in a board's Channels panel.
+      </p>
       <ErrorNote error={error} />
       {items === null && !error ? (
         <Loading label="Loading inbox…" />
-      ) : items && items.length === 0 ? (
-        <Empty title={show === "unread" ? "You're all caught up" : "Nothing here yet"}>
-          <p>When someone mentions you or replies in a thread you follow, it shows up here.</p>
+      ) : shown && shown.length === 0 ? (
+        <Empty title={items?.length ? "Nothing of that kind in what's loaded" : show === "unread" ? "You're all caught up" : "Nothing here yet"}>
+          {items?.length ? (
+            <p>{next ? "Load more to look further back, or show everything." : "Show everything to see the rest."}</p>
+          ) : kinds === "subscribed" ? (
+            <p>New threads and messages from channels you subscribed to show up here.</p>
+          ) : (
+            <p>When someone mentions you, replies in a thread you follow, or posts in a channel you subscribed to, it shows up here.</p>
+          )}
         </Empty>
       ) : (
         <ul className="inbox-list">
-          {items?.map((item) => (
+          {shown?.map((item) => (
             <li key={item.id} className={`inbox-item ${item.read_at ? "" : "unread"}`}>
               <div className="inbox-main">
                 <div className="inbox-head">
-                  <span className={`badge inbox-${item.kind}`}>{KIND_LABEL[item.kind]}</span>
+                  <span className={`badge inbox-${item.kind}`} title={KIND_WHY[item.kind]}>
+                    {KIND_LABEL[item.kind]}
+                  </span>
                   <Link to={`/b/${item.board_id}/t/${item.thread_id}${item.message ? `#m-${item.message.id}` : ""}`} className="thread-link">
                     {item.thread_title}
                   </Link>

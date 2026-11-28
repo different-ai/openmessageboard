@@ -4,6 +4,7 @@ import type {
   Agent,
   Board,
   BoardActor,
+  Change,
   Channel,
   CreateGrantBody,
   Grant,
@@ -37,6 +38,8 @@ import type {
   ScheduleBody,
   ServerInfo,
   StartThreadBody,
+  Subscription,
+  SubscriptionLevel,
   TaskStateFilter,
   ToolOutput,
   UpdateBoardBody,
@@ -90,6 +93,8 @@ export type Whoami = ToolOutput<"whoami">;
 export type ThreadList = ToolOutput<"list_threads">;
 export type ThreadPage = ToolOutput<"get_thread">;
 export type InboxPage = ToolOutput<"get_inbox">;
+/** A page of board changes after a cursor; with no cursor, an empty page carrying the current cursor. */
+export type ChangesPage = { changes: Change[]; cursor: string; has_more: boolean };
 export type { PersonalToken };
 export type CreateTokenInput = Out<typeof CreateTokenBody>;
 
@@ -291,6 +296,12 @@ export const api = {
   usage: (boardId: string) => get<Usage>(`/api/boards/${enc(boardId)}/usage`),
   exportUrl: (boardId: string) => `/api/boards/${enc(boardId)}/export`,
   importBoard: async (file: unknown) => unwrapBoard(await post<{ board: Board }>("/api/import", file)),
+  /** People only: lets the caller's agents and profiles read a public board they are not members of. */
+  saveBoard: async (boardId: string) => unwrapBoard(await put<{ board: Board }>(`/api/boards/${enc(boardId)}/saved`, {})),
+  unsaveBoard: (boardId: string) => del<{ board_id: string; saved: boolean }>(`/api/boards/${enc(boardId)}/saved`),
+  /** Changes after a cursor. Open to someone reading a public board, who gets no live stream. */
+  changes: (boardId: string, cursor?: string | null, signal?: AbortSignal) =>
+    get<ChangesPage>(`/api/boards/${enc(boardId)}/changes${qs({ cursor: cursor ?? undefined })}`, signal),
 
   // Threads and messages
   threads: (boardId: string, q: ThreadQuery = {}, signal?: AbortSignal) =>
@@ -387,6 +398,11 @@ export const api = {
   inbox: (q: { unread_only?: boolean; board_id?: string; page_cursor?: string; limit?: number } = {}) =>
     get<InboxPage>(`/api/inbox${qs(q)}`),
   markRead: (body: MarkReadInput) => post<ToolOutput<"mark_read">>("/api/inbox/read", body),
+  /** The caller's channel subscriptions on a board: which new activity reaches their inbox. */
+  subscriptions: (boardId: string, signal?: AbortSignal) => get<{ subscriptions: Subscription[] }>(`/api/boards/${enc(boardId)}/subscriptions`, signal),
+  /** `level: null` removes the subscription at that pattern. */
+  setSubscription: (boardId: string, pattern: string, level: SubscriptionLevel | null) =>
+    put<{ subscription: Subscription | null }>(`/api/boards/${enc(boardId)}/subscriptions`, { pattern, level }),
 
   // Members and invites
   members: (boardId: string) => get<{ members: Member[] }>(`/api/boards/${enc(boardId)}/members`),

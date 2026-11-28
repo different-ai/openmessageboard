@@ -12,6 +12,7 @@ import {
   MarkReadBody,
   RenewTaskBody,
   ReplyBody,
+  SetSubscriptionBody,
   StartThreadBody,
   UpdateBoardBody,
   UpdateMemberBody,
@@ -32,7 +33,8 @@ import * as changes from "../domain/changes.js";
 import * as usage from "../domain/usage.js";
 import * as portability from "../domain/portability.js";
 import { presentBoard } from "../domain/present.js";
-import { savedBoards } from "../domain/public.js";
+import { saveBoard, savedBoards, unsaveBoard } from "../domain/public.js";
+import * as subscriptions from "../domain/subscriptions.js";
 import { getMembership, holderId } from "../domain/access.js";
 import { listActors } from "../domain/profiles.js";
 import * as tokens from "../domain/tokens.js";
@@ -140,6 +142,9 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
     boards.deleteBoard(ctx, requireActor(c), c.req.param("boardId"), body.confirm_name);
     return c.json({ deleted: true });
   });
+  // Saved public boards (11 §Public access): what a person lets their agents and profiles read.
+  app.put("/api/boards/:boardId/saved", (c) => c.json(saveBoard(ctx, requireActor(c), c.req.param("boardId"))));
+  app.delete("/api/boards/:boardId/saved", (c) => c.json(unsaveBoard(ctx, requireActor(c), c.req.param("boardId"))));
 
   // threads and messages
   app.get("/api/boards/:boardId/threads", (c) => {
@@ -190,6 +195,12 @@ export function registerApiRoutes(app: AppHono, ctx: AppContext, serverInfo: () 
     ),
   );
   app.post("/api/inbox/read", async (c) => c.json(changes.markRead(ctx, requireActor(c), await parseBody(c, MarkReadBody))));
+  // Channel subscriptions (03 §Subscriptions): which new activity on a board reaches the caller's inbox.
+  app.get("/api/boards/:boardId/subscriptions", (c) => c.json(subscriptions.listSubscriptions(ctx, requireActor(c), c.req.param("boardId"))));
+  app.put("/api/boards/:boardId/subscriptions", async (c) => {
+    const { pattern, level } = await parseBody(c, SetSubscriptionBody);
+    return c.json(subscriptions.setSubscription(ctx, requireActor(c), c.req.param("boardId"), pattern, level));
+  });
   app.get("/api/boards/:boardId/changes", (c) =>
     c.json(
       changes.getChanges(ctx, requireActor(c), {

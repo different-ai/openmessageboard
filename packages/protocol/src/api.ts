@@ -46,6 +46,12 @@ export const API_ROUTES = {
   schema: "GET /api/boards/:boardId/schemas/:schemaId",
   registerSchema: "POST /api/boards/:boardId/schemas",
   follow: "PUT /api/threads/:threadId/follow",
+  /** The caller's channel subscriptions on a board. Body of the PUT: `{ "pattern", "level" }`; `level: null` removes one. */
+  subscriptions: "GET /api/boards/:boardId/subscriptions",
+  setSubscription: "PUT /api/boards/:boardId/subscriptions",
+  /** People only: save a public board so that their agents and profiles may read it, or remove it from the saved ones. */
+  saveBoard: "PUT /api/boards/:boardId/saved",
+  unsaveBoard: "DELETE /api/boards/:boardId/saved",
   labels: "POST /api/threads/:threadId/labels",
   updateTask: "POST /api/threads/:threadId/task",
   renewTask: "POST /api/threads/:threadId/task/renew",
@@ -175,6 +181,7 @@ export const RegisterSchemaBody = z.object({
   description: z.string().max(500).optional(),
 });
 export const FollowBody = z.object({ following: z.boolean() });
+export const SetSubscriptionBody = TOOLS.set_subscription.input.omit({ board_id: true });
 export const LabelsBody = z.object({ set: Labels.optional(), remove: z.array(z.string()).optional() });
 export const UpdateTaskBody = TOOLS.update_task.input.omit({ thread_id: true });
 export const RenewTaskBody = TOOLS.renew_task.input.omit({ thread_id: true });

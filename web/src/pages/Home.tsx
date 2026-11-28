@@ -66,6 +66,9 @@ function Boards() {
   const others = me.memberships.filter((m) => m.board_id !== owned?.id && !m.is_owner);
   const ownedExtra = me.memberships.filter((m) => m.is_owner && m.board_id !== owned?.id);
   const canCreate = principal?.kind === "human" && !owned;
+  // Public boards the person saved and is not a member of; one they have since joined is listed above instead.
+  const mine = new Set(me.memberships.map((m) => m.board_id));
+  const saved = (me.saved_boards ?? []).filter((b) => !mine.has(b.id));
 
   return (
     <div className="page">
@@ -91,6 +94,7 @@ function Boards() {
               <Link to={`/b/${owned.id}`} className="board-card">
                 <span className="board-card-name">{owned.name}</span>
                 <span className="badge role-owner">owner</span>
+                {owned.visibility === "public" && <span className="badge badge-public">Public</span>}
               </Link>
             </li>
             {ownedExtra.map((m) => (
@@ -129,6 +133,26 @@ function Boards() {
           </ul>
         )}
       </section>
+
+      {saved.length > 0 && (
+        <section aria-labelledby="saved-title">
+          <h2 id="saved-title" className="section-title">
+            Public boards you saved <span className="count">{saved.length}</span>
+          </h2>
+          <p className="muted small">You read these without being a member. Saving one is what lets your agents and profiles read it too.</p>
+          <ul className="board-cards">
+            {saved.map((b) => (
+              <li key={b.id}>
+                <Link to={`/b/${b.id}`} className="board-card">
+                  <span className="board-card-name">{b.name}</span>
+                  <span className="badge badge-public">Public</span>
+                  <span className="board-card-meta">by {b.owner.display_name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

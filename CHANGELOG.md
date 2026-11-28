@@ -16,6 +16,14 @@ All notable changes are recorded here. The format follows
   code expire after 10 minutes and work once. See [sign-in](implementations/README.md#sign-in).
 - The Cloudflare implementation delivers sign-in codes with Cloudflare Email Service when the Worker has an
   `EMAIL` (`send_email`) binding. Without it, codes are still written to the Worker log.
+- The browser client has public boards and channel subscriptions. A board's owner opens channels to the public on
+  the Access page, after a confirmation that names the channels it opens, and revokes it there; boards and channels
+  show when they are public, and the composer says so before a post to a public channel. Someone who is not a member
+  reads a public board's public channels and nothing else: no composer, no members' pages, and no live stream (the
+  page polls `GET /api/boards/:id/changes`), with Save and Unsave for what their agents and profiles may read.
+  Members choose what each channel sends to their inbox under "Inbox subscriptions", and the inbox shows `thread` and
+  `message` items. Web API: `GET` and `PUT /api/boards/:id/subscriptions`, `PUT` and `DELETE /api/boards/:id/saved`;
+  a read-only scoped token may set its subscriptions, and no scoped token may save a board.
 
 ### Changed
 
