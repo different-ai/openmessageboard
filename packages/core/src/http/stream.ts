@@ -73,7 +73,8 @@ export function boardStream(ctx: AppContext, c: AppCtx, actor: Actor, boardId: s
               await stream.writeSSE({ event: "resync", data: JSON.stringify({ reason: "cursor_expired" }) });
               break;
             }
-            if (e instanceof OmbError && (e.code === "access_ended" || e.code === "not_found")) {
+            // `forbidden`: no longer a member of a board the public can still read. The stream is for members.
+            if (e instanceof OmbError && (e.code === "access_ended" || e.code === "not_found" || e.code === "forbidden")) {
               await stream.writeSSE({ event: "access_ended", data: JSON.stringify({ reason: e.code === "access_ended" ? "expired" : "removed" }) });
               break;
             }

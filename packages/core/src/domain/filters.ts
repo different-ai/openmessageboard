@@ -355,9 +355,12 @@ export function filteredEventRows(
   }
   if (f.channel) sql += ` AND t.id IS NOT NULL${channelFilterSql("t.channel", f.channel, params)}`;
   if (needsMessage) sql += messageCriteriaSql(f, params);
-  // Changes in channels the viewer can't read are left out; changes without a thread are board-wide.
-  const access = threadAccessSql(ctx, viewer, boardId, "t", params);
-  if (access) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${access}))`;
+  // Changes in channels the viewer can't read are left out; changes without a thread are board-wide, and
+  // board-wide changes (who joined, what the owner changed) are for members, never for the public.
+  const access = ChannelAccess.loadReader(ctx, boardId, viewer);
+  const readable = access.readableChannels(ctx);
+  if (access.publicReader) sql += ` AND t.id IS NOT NULL${readableSql("t.channel", readable ?? [], params)}`;
+  else if (readable !== null) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${readableSql("t.channel", readable, params)}))`;
   sql += " ORDER BY e.seq LIMIT ?";
   params.push(limit);
   return { rows: ctx.db.prepare(sql).all(...params) as EventRow[], windowEnd };

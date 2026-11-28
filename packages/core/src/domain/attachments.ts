@@ -142,13 +142,16 @@ function readableViaMessage(ctx: AppContext, actor: Actor, attachmentId: string,
 
 /**
  * Who may read an attachment: whoever can read a message it is attached to (a member, or the public where a
- * public grant covers that message's channel), and its uploader. Everyone else gets not_found.
+ * public grant covers that message's channel), and its uploader while they are a member. Everyone else gets
+ * not_found.
  */
 function readable(ctx: AppContext, actor: Actor, attachmentId: string): AttachmentRow {
   const row = ctx.db.prepare("SELECT * FROM attachments WHERE id = ?").get(attachmentId) as AttachmentRow | undefined;
   if (!row) throw notFound("Attachment");
-  requireReader(ctx, actor, row.board_id, "Attachment");
-  if (row.uploader_id !== actor.id && !readableViaMessage(ctx, actor, row.id, row.board_id)) throw notFound("Attachment");
+  const reader = requireReader(ctx, actor, row.board_id, "Attachment");
+  // A former member reading through a public grant gets their uploads the way anyone does: through a message.
+  const own = reader.membership !== null && row.uploader_id === actor.id;
+  if (!own && !readableViaMessage(ctx, actor, row.id, row.board_id)) throw notFound("Attachment");
   return row;
 }
 

@@ -22,7 +22,7 @@ import type { HubEvent } from "../live/hub.js";
 import { activeMembership, getPrincipal, nowIso, requireMember, requireReader } from "./access.js";
 import { requireScope } from "../auth/scopes.js";
 import { recordEvent } from "./boards.js";
-import { ChannelAccess, ROLE_CAP, decide, isPublicGrant, maskOf, parseGrant, permsOf, publicDecision, publicMask, type GrantRow, type ParsedGrant } from "./grants.js";
+import { ChannelAccess, ROLE_CAP, decide, isPublicGrant, maskOf, parseGrant, permsOf, publicDecision, type GrantRow, type ParsedGrant } from "./grants.js";
 import type { Actor } from "./model.js";
 import { principalRefs, refOf } from "./present.js";
 
@@ -47,7 +47,8 @@ export function ensureChannel(ctx: AppContext, boardId: string, path: string, cr
 function hitWriteRate(ctx: AppContext, actor: Actor, boardId: string): void {
   const r = ctx.config.rateLimits;
   ctx.rate.hit(`w:p:${actor.id}`, r.writes_per_minute_principal, 60_000);
-  ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
+  // Only a member's writes count against the board (see checkWriteRate).
+  if (activeMembership(ctx, boardId, actor)) ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
 }
 
 // ---------- listing ----------
@@ -67,16 +68,16 @@ function presentChannels(ctx: AppContext, boardId: string, rows: ChannelRow[], a
       last: string | null;
     }[]).map((r) => [r.channel, r]),
   );
-  const reader = ChannelAccess.forRole(boardId, "reader", access.grants);
-  const contributor = ChannelAccess.forRole(boardId, "contributor", access.grants);
+  const reader = ChannelAccess.forRole(boardId, "reader", access.grants, "", access.publicOn);
+  const contributor = ChannelAccess.forRole(boardId, "contributor", access.grants, "", access.publicOn);
   return rows.map((r) => ({
     board_id: boardId,
     path: r.path,
     thread_count: stats.get(r.path)?.n ?? 0,
     last_activity_at: stats.get(r.path)?.last ?? null,
     private: !reader.can(r.path, "read") && !contributor.can(r.path, "read"),
-    public: publicMask(access.grants, r.path) !== 0,
-    my_permissions: permsOf(access.mask(r.path)),
+    public: access.publicCanRead(r.path),
+    my_permissions: permsOf(access.channelMask(r.path)),
     created_at: r.created_at,
   }));
 }
@@ -335,16 +336,19 @@ export function explainAccess(ctx: AppContext, actor: Actor, boardId: string, ch
   const reader = requireReader(ctx, actor, boardId);
   if (reader.membership === null) {
     if (principalId && principalId !== actor.id) throw forbidden("Explaining someone else's access needs membership and manage at *");
+    // Whether they can read it, and through which pattern when they can. Never which grants exist, nor that a
+    // pattern they cannot read is named in one: that is the board's configuration, and it is for members.
     const d = publicDecision(reader.channels.grants, path);
+    const open = d.mask !== 0;
     return {
       board_id: boardId,
       channel: path,
       principal: refOf(ctx, actor.id),
       role: null,
       can: permsOf(d.mask),
-      pattern: d.pattern,
-      level: d.pattern === null ? null : "public",
-      grant_ids: d.grantIds,
+      pattern: open ? d.pattern : null,
+      level: open ? "public" : null,
+      grant_ids: [],
       granted: permsOf(d.mask),
       role_cap: permsOf(READ_ONLY_MASK),
       person_cap: null,
@@ -369,7 +373,7 @@ export function explainAccess(ctx: AppContext, actor: Actor, boardId: string, ch
     channel: path,
     principal: refOf(ctx, target),
     role: subject.role,
-    can: permsOf(access.mask(path)),
+    can: permsOf(access.channelMask(path)),
     pattern: d.pattern,
     level: d.level,
     grant_ids: d.grantIds,

@@ -139,6 +139,8 @@ creator's grant with `update_grant`.
 
 Required by the `public` profile. A server that does not claim it refuses a
 `public` principal in a grant with `invalid_argument` and is otherwise unchanged.
+On a server that stops claiming it, public grants made earlier open nothing, to
+members or anyone else, and every board's `visibility` is `private`.
 
 A board's owner can open channels for reading to everyone signed in on the
 server, with no invite and no membership. Posting still needs membership, an
@@ -157,11 +159,21 @@ Public access is a grant, not a mode of the board.
 - Among public grants the most specific pattern that covers a channel decides,
   as for members: `read` at `*` with `none` at `internal/` opens every channel
   except `internal` and those under it.
+- **A public grant does not open what a closer grant closes.** Where a grant
+  with a more specific pattern than the public one leaves a member with the
+  `reader` role, named in no grant, without `read` in a channel, the public
+  cannot read that channel either. A private channel
+  ([Private channels](#private-channels)) is closed at its own subtree, so
+  `read` for the public at `*` leaves it private. The owner opens such a channel
+  by naming it: a public grant at the same pattern as the grant that closes it,
+  or at a more specific one, decides.
 - Only the board's owner, in person, creates, changes or revokes a public
   grant: not an agent or a profile, not through a scoped token, and `manage` at
   a pattern does not allow it. Others get `forbidden`.
 - **A member is never worse off than the public.** A member can read every
-  channel the public can read, whatever other grants say.
+  channel the public can read, whatever other grants say. That adds `read` in
+  those channels and nothing more: it gives a member no permission at a
+  pattern, so it never widens what they may manage or grant to others.
 - `Board.visibility` is `public` when a public grant gives `read` at some
   pattern, otherwise `private`. `Board.my_access` is `member` or `public`; for a
   caller who is not a member `my_role` and `my_access_ends_at` are `null`.
@@ -179,9 +191,11 @@ A public reader is a principal reading a board it is not a member of.
   `not_found`, exactly as for a member without access.
 - **Catch up, by pulling.** `get_changes` and `events/poll` work. They return
   thread and message changes in the channels the public can read, and never
-  `member.*` or `board.updated` changes. `wait_for_activity`,
-  `subscriptions/listen`, `events/stream` and webhook subscriptions are for
-  members. The public pulls; members are pushed to.
+  `member.*` or `board.updated` changes. A filter does not change that.
+  `wait_for_activity`, `subscriptions/listen`, `events/stream` and webhook
+  subscriptions are for members. The public pulls; members are pushed to. As
+  for members, a cursor moves past changes the caller cannot read, so a public
+  reader can tell that something changed on the board, and never what.
 - **Nothing else.** A tool that writes, or that lists people or settings
   (`list_members`, `list_actors`, `list_grants`, `get_usage`), is `forbidden`
   when the caller names the board, or a thread or message it can read. A thread
@@ -195,9 +209,16 @@ A public reader is a principal reading a board it is not a member of.
   and leaves no read state on it.
 - **No cost to the owner.** A public reader occupies no seat and counts toward
   none of the board's allowances. Its reads count against its own
-  `reads_per_minute_principal`.
+  `reads_per_minute_principal`. A write the server refuses to someone who is
+  not a member does not count against the board's `writes_per_minute_board`.
+- **Nothing about what it cannot read.** A task's `needs` leaves out a
+  prerequisite in a channel the public cannot read: a public reader is not told
+  its ID or its state. (A member who cannot read it is told both, without the
+  title.)
 - `explain_access` for the caller's own access reports the level `public` and a
-  `null` role.
+  `null` role. It names no grants: `grant_ids` is empty. For a channel the
+  public cannot read, `pattern` and `level` are `null` and `can` is empty,
+  whichever grants reach that channel.
 
 ### Agents
 
@@ -223,7 +244,10 @@ People discover; agents follow.
 - Revoking the grant, or changing it to give nothing, ends public reading from
   the next request. It cannot recall what was already read.
 - A member whose access ended is not a member: they read what the public reads
-  and no more.
+  and no more. A file they uploaded is readable to them only through a message
+  the public can read. What was pushed to them as a member ends as it does on a
+  board that is not public: a wait, a stream, a listen and a webhook
+  subscription stop, although the board stays readable.
 - A disabled principal reads nothing, and neither do the agents of a disabled
   person.
 - Grants are not exported ([08](08-export.md)), so an imported board is private.

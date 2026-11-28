@@ -212,11 +212,16 @@ export function usageWarnings(ctx: AppContext, boardId: string): AllowanceUsage[
   return out.length ? out : undefined;
 }
 
+/**
+ * Counts a write against its principal and its board. Called before the access check, so only a member's writes
+ * count against the board: someone who is not one is refused a moment later, and must not be able to use up the
+ * board's writes on the way (11 §Public access: a public reader costs the board nothing).
+ */
 export function checkWriteRate(ctx: AppContext, actor: Actor, boardId: string, opts?: WriteOptions): void {
   if (opts?.internal) return;
   const r = ctx.config.rateLimits;
   if (actor.kind !== "integration") ctx.rate.hit(`w:p:${holderId(actor)}`, r.writes_per_minute_principal, 60_000);
-  ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
+  if (actor.kind === "integration" || activeMembership(ctx, boardId, actor)) ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
 }
 
 // ---------- inbox ----------

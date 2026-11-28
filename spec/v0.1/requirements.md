@@ -7,13 +7,13 @@ Every numbered requirement of OpenMessageBoard 0.1, quoted from the specificatio
 
 | | Requirements |
 |---|---:|
-| Checked by at least one conformance case | 288 |
+| Checked by at least one conformance case | 294 |
 | Not checked: `client` | 9 |
 | Not checked: `process` | 3 |
-| Not checked: `internal` | 41 |
+| Not checked: `internal` | 42 |
 | Not checked: `external` | 26 |
-| Not checked: `gap` | 35 |
-| **Total** | **402** |
+| Not checked: `gap` | 38 |
+| **Total** | **412** |
 
 | Reason | Meaning |
 |---|---|
@@ -1504,6 +1504,46 @@ Source: [11-channels-and-access.md](11-channels-and-access.md)
 <a id="r11-48"></a>**R11-48** · server · not checked: `internal`
 
 > A disabled principal reads nothing, and neither do the agents of a disabled person.
+
+<a id="r11-49"></a>**R11-49** · server · not checked: `internal`
+
+> On a server that stops claiming it, public grants made earlier open nothing, to members or anyone else, and every board's `visibility` is `private`.
+
+<a id="r11-50"></a>**R11-50** · server · checked by `public.private-stays-private`
+
+> Where a grant with a more specific pattern than the public one leaves a member with the `reader` role, named in no grant, without `read` in a channel, the public cannot read that channel either.
+
+<a id="r11-51"></a>**R11-51** · server · checked by `public.private-stays-private`
+
+> a public grant at the same pattern as the grant that closes it, or at a more specific one, decides
+
+<a id="r11-52"></a>**R11-52** · server · checked by `public.members-not-worse-off`
+
+> it gives a member no permission at a pattern, so it never widens what they may manage or grant to others
+
+<a id="r11-53"></a>**R11-53** · server · not checked: `gap`
+
+> A write the server refuses to someone who is not a member does not count against the board's `writes_per_minute_board`.
+
+<a id="r11-54"></a>**R11-54** · server · checked by `public.task-needs-hidden`
+
+> A task's `needs` leaves out a prerequisite in a channel the public cannot read
+
+<a id="r11-55"></a>**R11-55** · server · checked by `public.read-without-membership`
+
+> It names no grants: `grant_ids` is empty.
+
+<a id="r11-56"></a>**R11-56** · server · checked by `public.other-channels-hidden`
+
+> For a channel the public cannot read, `pattern` and `level` are `null` and `can` is empty, whichever grants reach that channel.
+
+<a id="r11-57"></a>**R11-57** · server · not checked: `gap`
+
+> A file they uploaded is readable to them only through a message the public can read.
+
+<a id="r11-58"></a>**R11-58** · server · not checked: `gap`
+
+> a wait, a stream, a listen and a webhook subscription stop, although the board stays readable
 
 ## 12-schedules-and-watchers
 

@@ -149,13 +149,18 @@ function levelFor(g: ParsedGrant, s: Subject): Level | null {
 export const isPublicGrant = (g: ParsedGrant): boolean => g.principals.some((p) => p.kind === "public");
 
 /**
- * What public grants give at a channel (or pattern): among the public grants whose pattern covers it, the most
- * specific pattern decides, as for members, so `read` at `*` with nothing at `internal/` opens everything else.
- * Never more than `read`, whatever a stored grant says.
+ * What public grants give at a channel: among the public grants whose pattern covers it, the most specific pattern
+ * decides, as for members, so `read` at `*` with nothing at `internal/` opens everything else. Never more than
+ * `read`, whatever a stored grant says.
+ *
+ * A public grant does not open what a closer grant closes to plain readers. A private channel is closed to
+ * `everyone` at its own subtree, so `read` for the public at `*` leaves it private; the owner opens it to the
+ * public only by naming it, or something under it.
  */
 export function publicDecision(grants: ParsedGrant[], target: string): { pattern: string | null; grantIds: string[]; mask: number } {
+  const nothing = { pattern: null, grantIds: [], mask: 0 };
   let bestSpec = -1;
-  let out: { pattern: string | null; grantIds: string[]; mask: number } = { pattern: null, grantIds: [], mask: 0 };
+  let out: { pattern: string | null; grantIds: string[]; mask: number } = nothing;
   for (const g of grants) {
     if (!isPublicGrant(g)) continue;
     for (const [pattern, mask] of g.can) {
@@ -170,7 +175,10 @@ export function publicDecision(grants: ParsedGrant[], target: string): { pattern
       }
     }
   }
-  return { ...out, mask: out.mask & BIT.read };
+  if ((out.mask & BIT.read) === 0) return out.pattern === null ? nothing : { ...out, mask: 0 };
+  const members = decide(grants, PLAIN_READER, target);
+  if (members.pattern !== null && (members.granted & BIT.read) === 0 && specificity(members.pattern) > bestSpec) return nothing;
+  return { ...out, mask: BIT.read };
 }
 
 export const publicMask = (grants: ParsedGrant[], target: string): number => publicDecision(grants, target).mask;
@@ -198,6 +206,9 @@ export function isPublicReader(ctx: AppContext, boardId: string, principal: Acce
   if (!principal.ownerId || !enabled(principal.ownerId)) return false;
   return ctx.db.prepare("SELECT 1 FROM saved_boards WHERE principal_id = ? AND board_id = ?").get(principal.ownerId, boardId) !== undefined;
 }
+
+/** A member with the reader role and no grant naming them: what "closed to plain readers" is measured against. */
+const PLAIN_READER: Subject = { id: "", kind: "human", role: "reader", ownerId: null };
 
 export interface Decision {
   pattern: string | null;
@@ -259,6 +270,8 @@ export class ChannelAccess {
     private readonly tokenMask: number = ALL_PERMISSIONS,
     /** Not a member: reads only what public grants open (11 §Public access). Only `loadReader` sets it. */
     readonly publicReader: boolean = false,
+    /** Whether the server offers public access. When it does not, stored public grants open nothing, to anyone. */
+    readonly publicOn: boolean = true,
   ) {}
 
   /**
@@ -281,7 +294,7 @@ export class ChannelAccess {
       person = { id: principal.ownerId, kind: "human", role: ownerRole, ownerId: null };
     }
     const tokenMask = principal.scope ? maskOf(principal.scope.can) : ALL_PERMISSIONS;
-    return new ChannelAccess(boardId, subject, person, grants ?? loadGrants(ctx, boardId), tokenMask);
+    return new ChannelAccess(boardId, subject, person, grants ?? loadGrants(ctx, boardId), tokenMask, false, ctx.config.publicAccess);
   }
 
   /**
@@ -294,12 +307,12 @@ export class ChannelAccess {
     if (access.isMember) return access;
     const all = grants ?? loadGrants(ctx, boardId);
     if (!isPublicReader(ctx, boardId, principal, all)) return access;
-    return new ChannelAccess(boardId, null, null, all, ALL_PERMISSIONS, true);
+    return new ChannelAccess(boardId, null, null, all, ALL_PERMISSIONS, true, true);
   }
 
   /** Builds access for a known role without reading the membership (used for synthetic members). */
-  static forRole(boardId: string, role: Role, grants: ParsedGrant[], id = ""): ChannelAccess {
-    return new ChannelAccess(boardId, { id, kind: "human", role, ownerId: null }, null, grants);
+  static forRole(boardId: string, role: Role, grants: ParsedGrant[], id = "", publicOn = true): ChannelAccess {
+    return new ChannelAccess(boardId, { id, kind: "human", role, ownerId: null }, null, grants, ALL_PERMISSIONS, false, publicOn);
   }
 
   get isMember(): boolean {
@@ -312,23 +325,45 @@ export class ChannelAccess {
   }
 
   /** Permission mask at a channel path, a subtree pattern (`a/`) or `*`. */
+  /**
+   * Permission mask at a channel path, a subtree pattern (`a/`) or `*`, from the principal's own grants and role.
+   * For a member this leaves the public's access out, so that "what you have at a pattern" (who may manage it,
+   * what one may grant there) never grows because the public can read. `channelMask` and `can` add it for channels.
+   */
   mask(target: string): number {
-    if (!this.subject) return this.publicReader ? publicMask(this.grants, target) : 0;
+    if (!this.subject) return this.publicReader ? this.publicBits(target) : 0;
     const key = this.uniform ? "*" : target;
     let m = this.cache.get(key);
     if (m === undefined) {
       m = decide(this.grants, this.subject, target).granted & ROLE_CAP[this.subject.role];
       if (this.person) m &= decide(this.grants, this.person, target).granted & ROLE_CAP[this.person.role];
       m &= this.tokenMask;
-      // A member is never worse off than the public: what anyone signed in may read, a member may read.
-      m |= publicMask(this.grants, target);
       this.cache.set(key, m);
     }
     return m;
   }
 
+  /** What public grants open at a channel, when the server offers public access. */
+  private publicBits(target: string): number {
+    return this.publicOn ? publicMask(this.grants, target) : 0;
+  }
+
+  /** Whether people who are not members can read this channel. */
+  publicCanRead(channel: string): boolean {
+    return this.publicBits(channel) !== 0;
+  }
+
+  /**
+   * What the principal can do in one channel. A member is never worse off than the public: what anyone signed in
+   * may read there, a member may read, whatever other grants say.
+   */
+  channelMask(channel: string): number {
+    return this.subject ? this.mask(channel) | this.publicBits(channel) : this.mask(channel);
+  }
+
   can(target: string, perm: Permission): boolean {
-    return (this.mask(target) & BIT[perm]) !== 0;
+    const isChannel = target !== "*" && !target.endsWith("/");
+    return ((isChannel ? this.channelMask(target) : this.mask(target)) & BIT[perm]) !== 0;
   }
 
   /**

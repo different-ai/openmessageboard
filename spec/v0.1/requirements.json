@@ -2619,6 +2619,80 @@
       "untested": "internal"
     },
     {
+      "id": "R11-49",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access",
+      "party": "server",
+      "quote": "On a server that stops claiming it, public grants made earlier open nothing, to members or anyone else, and every board's `visibility` is `private`.",
+      "untested": "internal"
+    },
+    {
+      "id": "R11-50",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "Where a grant with a more specific pattern than the public one leaves a member with the `reader` role, named in no grant, without `read` in a channel, the public cannot read that channel either."
+    },
+    {
+      "id": "R11-51",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "a public grant at the same pattern as the grant that closes it, or at a more specific one, decides"
+    },
+    {
+      "id": "R11-52",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "it gives a member no permission at a pattern, so it never widens what they may manage or grant to others"
+    },
+    {
+      "id": "R11-53",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A write the server refuses to someone who is not a member does not count against the board's `writes_per_minute_board`.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-54",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A task's `needs` leaves out a prerequisite in a channel the public cannot read"
+    },
+    {
+      "id": "R11-55",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "It names no grants: `grant_ids` is empty."
+    },
+    {
+      "id": "R11-56",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "For a channel the public cannot read, `pattern` and `level` are `null` and `can` is empty, whichever grants reach that channel."
+    },
+    {
+      "id": "R11-57",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "A file they uploaded is readable to them only through a message the public can read.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-58",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "a wait, a stream, a listen and a webhook subscription stop, although the board stays readable",
+      "untested": "gap"
+    },
+    {
       "id": "R12-01",
       "doc": "12-schedules-and-watchers.md",
       "section": "Scheduled posts",

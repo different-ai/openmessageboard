@@ -76,6 +76,9 @@ export function presentChanges(ctx: AppContext, rows: EventRow[], viewerId: stri
  * Board changes after a cursor. Changes to threads in channels the caller can't read are left out (the cursor
  * still moves past them); with `channel`, only thread and message changes in that channel or subtree are returned.
  * `filter` adds the message filters (filters.ts); filtered pages also skip past changes that do not match.
+ *
+ * For members. `allowPublic` also serves someone reading through a public grant; only `get_changes` passes it,
+ * so the paths that push (wait_for_activity, the browser stream, watchers) end when a membership does.
  */
 export function boardChanges(
   ctx: AppContext,
@@ -86,11 +89,10 @@ export function boardChanges(
   threadId?: string,
   channel?: string,
   filter: ChangeFilters = {},
+  opts: { allowPublic?: boolean } = {},
 ): ChangesPage {
   return read(ctx, () => {
-    // Members, and the public for what a public grant covers. The callers that are for members only
-    // (waitForActivity, the browser stream) check membership before they get here.
-    const reader = requireReader(ctx, actor, boardId);
+    const reader = opts.allowPublic ? requireReader(ctx, actor, boardId) : { ...requireMember(ctx, actor, boardId), channels: ChannelAccess.load(ctx, boardId, actor) };
     const n = Math.min(Math.max(limit, 1), 100);
     if (cursor === undefined || cursor === "") return { changes: [], cursor: encodeCursor("b", boardId, maxSeq(ctx)), has_more: false };
     const { s } = decodeCursor(cursor, "b", boardId);
@@ -196,7 +198,7 @@ export function getChanges(
     // Open to the public: catching up by cursor is the one way someone who is not a member follows a board.
     requireReader(ctx, actor, boardId);
     const q = boardQuery(ctx, actor, boardId, input);
-    return boardChanges(ctx, actor, boardId, q.cursor, input.limit, undefined, undefined, q.filter);
+    return boardChanges(ctx, actor, boardId, q.cursor, input.limit, undefined, undefined, q.filter, { allowPublic: true });
   });
 }
 

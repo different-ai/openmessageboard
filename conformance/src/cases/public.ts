@@ -14,9 +14,11 @@ interface PublicWorld {
   internal: { threadId: string; channel: string };
   /** A thread in a channel no public grant ever covers. */
   hidden: { threadId: string; messageId: string; channel: string };
+  /** A thread in a private channel under `open`: closed to members at its own subtree, with the owner alone in it. */
+  vault: { threadId: string; channel: string };
 }
 
-/** One board, with three threads posted once and shared by every case (posts are a monthly allowance). */
+/** One board, with four threads posted once and shared by every case (posts are a monthly allowance). */
 function world(ctx: Ctx): Promise<PublicWorld> {
   return ctx.fixture("public-world", async () => {
     const board = await mayaOnOwnerBoard(ctx);
@@ -27,12 +29,15 @@ function world(ctx: Ctx): Promise<PublicWorld> {
     const news = await post(`${open}/news`, `Public news ${ctx.runId}`);
     const internal = await post(`${open}/internal`, `Internal ${ctx.runId}`);
     const hidden = await post(`priv-${ctx.runId}`, `Members only ${ctx.runId}`);
+    await owner.ok("create_channel", { board_id: board, path: `${open}/vault`, private: true });
+    const vault = await post(`${open}/vault`, `Vault ${ctx.runId}`);
     return {
       board,
       open,
       news: { threadId: news.thread.id, messageId: news.message.id, channel: `${open}/news` },
       internal: { threadId: internal.thread.id, channel: `${open}/internal` },
       hidden: { threadId: hidden.thread.id, messageId: hidden.message.id, channel: `priv-${ctx.runId}` },
+      vault: { threadId: vault.thread.id, channel: `${open}/vault` },
     };
   });
 }
@@ -62,7 +67,7 @@ export const publicCases: CaseDef[] = [
     id: "public.read-without-membership",
     profile: "public",
     title: "Someone who is not a member reads a public channel's threads, messages and changes, as a public reader with no role",
-    covers: ["R11-21", "R11-27", "R11-28", "R11-30", "R11-38", "R11-39"],
+    covers: ["R11-21", "R11-27", "R11-28", "R11-30", "R11-38", "R11-39", "R11-55"],
     async run(ctx) {
       const w = await world(ctx);
       const owner = await ctx.session("owner");
@@ -81,6 +86,7 @@ export const publicCases: CaseDef[] = [
         check((await out.ok("search_messages", { board_id: w.board, query: `news ${ctx.runId}` })).results.some((r) => r.message.id === w.news.messageId), "search_messages finds the public message");
         const why = await out.ok("explain_access", { board_id: w.board, channel: w.news.channel });
         check(why.level === "public" && why.role === null && why.can.join() === "read", `explain_access reports level public, no role and read; got ${why.level}/${why.role}/${why.can}`);
+        check(why.grant_ids.length === 0, "explain_access must not name the board's grants to a public reader");
         check((await members()) === before, "a public reader must not occupy a seat");
       });
       const after = await owner.ok("list_threads", { board_id: w.board, channel: w.news.channel });
@@ -91,7 +97,7 @@ export const publicCases: CaseDef[] = [
     id: "public.other-channels-hidden",
     profile: "public",
     title: "Channels the public grant does not cover stay hidden: threads, lists, search and changes; the closest public pattern decides",
-    covers: ["R11-24", "R11-29", "R11-31", "R11-32"],
+    covers: ["R11-24", "R11-29", "R11-31", "R11-32", "R11-56"],
     async run(ctx) {
       const w = await world(ctx);
       const owner = await ctx.session("owner");
@@ -107,6 +113,11 @@ export const publicCases: CaseDef[] = [
         check((await owner.ok("list_channels", { board_id: w.board })).channels.some((c) => c.path === w.hidden.channel && c.public === false), "a member sees the other channel marked public: false");
         check((await out.ok("search_messages", { board_id: w.board, query: `only ${ctx.runId}` })).results.length === 0, "search_messages finds a message the public cannot read");
         check(!(await out.ok("read_messages", { board_id: w.board })).messages.some((m) => m.id === w.hidden.messageId), "read_messages returns a message the public cannot read");
+        // A channel no public grant reaches, and one a public grant names to close: the same answer for both.
+        for (const channel of [w.hidden.channel, w.internal.channel]) {
+          const why = await out.ok("explain_access", { board_id: w.board, channel });
+          check(why.can.length === 0 && why.pattern === null && why.level === null && why.grant_ids.length === 0, `explain_access for ${channel} must say only that the public cannot read it, got ${JSON.stringify(why)}`);
+        }
 
         // Changes: thread and message changes in public channels only. A grant change (board.updated) and a post in
         // another channel happen after the cursor and must not show.
@@ -274,25 +285,99 @@ export const publicCases: CaseDef[] = [
     },
   },
   {
+    id: "public.private-stays-private",
+    profile: "public",
+    title: "A public grant does not open a channel a closer grant closes to members, until the owner names that channel",
+    covers: ["R11-50", "R11-51"],
+    async run(ctx) {
+      const w = await world(ctx);
+      const owner = await ctx.session("owner");
+      const maya = await ctx.session("maya"); // a member who is not in the private channel
+      const out = await ctx.session("outsider");
+      await opened(ctx, w, async () => {
+        await out.ok("get_thread", { thread_id: w.news.threadId });
+        // Public read covers the whole subtree; the private channel under it is closed at its own, closer, pattern.
+        for (const s of [out, maya]) await s.fails("get_thread", { thread_id: w.vault.threadId }, "not_found");
+        check(!(await out.ok("list_threads", { board_id: w.board })).threads.some((t) => t.id === w.vault.threadId), "list_threads shows the public a thread in a private channel");
+        check(!(await out.ok("list_channels", { board_id: w.board })).channels.some((c) => c.path === w.vault.channel), "list_channels shows the public a private channel");
+        check((await out.ok("search_messages", { board_id: w.board, query: `Vault ${ctx.runId}` })).results.length === 0, "search_messages finds a message in a private channel");
+        const listed = (await owner.ok("list_channels", { board_id: w.board })).channels.find((c) => c.path === w.vault.channel);
+        check(listed?.private === true && listed.public === false, "the private channel must stay private: true and public: false under a broader public grant");
+        // The owner names it, at the pattern of the grant that closes it.
+        const named = await owner.ok("create_grant", { board_id: w.board, principals: [{ kind: "public" }], can: { [`${w.vault.channel}/`]: ["read"] } });
+        try {
+          for (const s of [out, maya]) {
+            const thread = await s.ok("get_thread", { thread_id: w.vault.threadId });
+            check(thread.thread.id === w.vault.threadId, "a public grant that names the channel opens it");
+          }
+          const now = (await owner.ok("list_channels", { board_id: w.board })).channels.find((c) => c.path === w.vault.channel);
+          check(now?.public === true && now.private === false, "the channel is public: true once a public grant names it");
+        } finally {
+          await owner.ok("revoke_grant", { grant_id: named.grant.id }).catch(() => undefined);
+        }
+        for (const s of [out, maya]) await s.fails("get_thread", { thread_id: w.vault.threadId }, "not_found");
+      });
+    },
+  },
+  {
     id: "public.members-not-worse-off",
     profile: "public",
-    title: "A member closed out of a channel by another grant can still read it while the public can",
-    covers: ["R11-26"],
+    title: "A member closed out of a channel reads it while the public can, and gains nothing else by it",
+    covers: ["R11-26", "R11-52"],
     async run(ctx) {
       const w = await world(ctx);
       const owner = await ctx.session("owner");
       const maya = await ctx.session("maya");
-      const closed = await owner.ok("create_grant", { board_id: w.board, principals: [{ kind: "everyone" }], can: { [`${w.open}/news`]: "none" } });
+      const mayaId = (await ctx.me("maya")).id;
+      const pattern = `${w.open}/`;
+      // The subtree is closed to members, and maya manages it without reading it.
+      const closed = await owner.ok("create_grant", { board_id: w.board, principals: [{ kind: "everyone" }], can: { [pattern]: "none" } });
+      const manage = await owner.ok("create_grant", { board_id: w.board, principals: [{ kind: "member", principal_id: mayaId }], can: { [pattern]: ["manage"] } });
+      const give = { board_id: w.board, principals: [{ kind: "readers" }], can: { [pattern]: ["read"] } };
       try {
         await maya.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
+        await maya.fails("create_grant", give, "forbidden");
         await opened(ctx, w, async () => {
           const thread = await maya.ok("get_thread", { thread_id: w.news.threadId });
           check(thread.thread.id === w.news.threadId, "a member must be able to read what the public can read");
+          const mine = (await maya.ok("list_channels", { board_id: w.board })).channels.find((c) => c.path === w.news.channel);
+          check(mine?.my_permissions.includes("read") === true && !mine.my_permissions.includes("post"), `my_permissions gains read and nothing else, got ${mine?.my_permissions}`);
+          // Reading as the public reads gives her no read of her own to hand out.
+          await maya.fails("create_grant", give, "forbidden");
         });
         await maya.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
       } finally {
+        await owner.ok("revoke_grant", { grant_id: manage.grant.id }).catch(() => undefined);
         await owner.ok("revoke_grant", { grant_id: closed.grant.id }).catch(() => undefined);
       }
+    },
+  },
+  {
+    id: "public.task-needs-hidden",
+    profile: "public",
+    title: "A public reader is told nothing about a task's prerequisite in a channel the public cannot read",
+    covers: ["R11-54"],
+    async run(ctx) {
+      if (!ctx.claims("tasks")) ctx.skip('the server does not claim the "tasks" profile');
+      const w = await world(ctx);
+      const owner = await ctx.session("owner");
+      const maya = await ctx.session("maya");
+      const out = await ctx.session("outsider");
+      const tasks = await ctx.fixture("public-tasks", async () => {
+        const task = (channel: string, title: string, needs?: string[]) =>
+          owner.ok("start_thread", { board_id: w.board, channel, title, body: `${title}.`, task: true, ...(needs ? { needs } : {}), idempotency_key: newKey() });
+        const hidden = await task(w.vault.channel, `Hidden prerequisite ${ctx.runId}`);
+        const shown = await task(w.news.channel, `Public task ${ctx.runId}`, [hidden.thread.id]);
+        return { hidden: hidden.thread.id, shown: shown.thread.id };
+      });
+      await opened(ctx, w, async () => {
+        const forPublic = (await out.ok("get_thread", { thread_id: tasks.shown })).thread.task?.needs ?? [];
+        check(forPublic.length === 0, `a public reader must not be told of a prerequisite it cannot read, got ${JSON.stringify(forPublic)}`);
+        check(!(await out.ok("list_threads", { board_id: w.board })).threads.some((t) => (t.task?.needs ?? []).some((n) => n.thread_id === tasks.hidden)), "list_threads names the hidden prerequisite to a public reader");
+        // A member who cannot read it is still told it exists, without its title.
+        const forMember = (await maya.ok("get_thread", { thread_id: tasks.shown })).thread.task?.needs ?? [];
+        check(forMember.some((n) => n.thread_id === tasks.hidden && n.title === ""), "a member without access sees the prerequisite with an empty title");
+      });
     },
   },
   {

@@ -123,7 +123,10 @@ export function requireThread(ctx: AppContext, actor: Actor, threadId: string, m
   } catch (e) {
     // Someone who can read this thread through a public grant knows it exists: acting on it is `forbidden`.
     // A thread in a channel the public cannot read stays `not_found`.
-    if (e instanceof OmbError && e.code === "not_found" && ChannelAccess.loadReader(ctx, thread.board_id, actor).can(thread.channel, "read")) throw forbidden(MEMBERS_ONLY);
+    if (e instanceof OmbError && e.code === "not_found") {
+      const reader = ChannelAccess.loadReader(ctx, thread.board_id, actor);
+      if (reader.publicReader && reader.can(thread.channel, "read")) throw forbidden(MEMBERS_ONLY);
+    }
     throw e;
   }
   const channels = ChannelAccess.load(ctx, thread.board_id, actor);

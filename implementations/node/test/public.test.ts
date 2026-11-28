@@ -4,7 +4,7 @@ import type { AppContext } from "@openmessageboard/core/context";
 import { OmbError } from "@openmessageboard/core/errors";
 import { actorFromPrincipal, getPrincipal } from "@openmessageboard/core/domain/access";
 import { createAgent, ensureOwnBoard, getBoard, listMembers } from "@openmessageboard/core/domain/boards";
-import { getChanges, getInbox, waitForActivity } from "@openmessageboard/core/domain/changes";
+import { boardChanges, getChanges, getInbox, waitForActivity } from "@openmessageboard/core/domain/changes";
 import { createChannel, createGrant, explainAccess, listChannels, listGrants, revokeGrant, updateGrant } from "@openmessageboard/core/domain/channels";
 import { deleteMessage, getThread, listThreads, reply, setFollow, startThread } from "@openmessageboard/core/domain/conversation";
 import { readMessages } from "@openmessageboard/core/domain/filters";
@@ -89,9 +89,11 @@ test("someone who is not a member reads what a public grant covers, and nothing 
   const forMembers = getChanges(ctx, owner, { board_id: boardId, cursor: before }).changes.map((c) => c.type);
   assert.ok(forMembers.includes("member.joined") && forMembers.includes("board.updated"), "members still see them");
 
+  // Their own access: whether they can read, and through which pattern. Never which grants the board has.
   const why = explainAccess(ctx, out, boardId, "announcements");
-  assert.deepEqual([why.level, why.role, why.can, why.pattern], ["public", null, ["read"], "announcements/"]);
-  assert.deepEqual(explainAccess(ctx, out, boardId, "dev").can, []);
+  assert.deepEqual([why.level, why.role, why.can, why.pattern, why.grant_ids], ["public", null, ["read"], "announcements/", []]);
+  const closed = explainAccess(ctx, out, boardId, "dev");
+  assert.deepEqual([closed.level, closed.can, closed.pattern, closed.grant_ids], [null, [], null, []]);
   assert.throws(() => explainAccess(ctx, out, boardId, "announcements", maya.id), code("forbidden"));
 });
 
@@ -206,20 +208,116 @@ test("a public grant: the owner in person, read or nothing, the public alone, an
   assert.equal(getBoard(ctx, owner, boardId).visibility, "private");
 });
 
-test("the most specific public pattern decides, and a member is never worse off than the public", async () => {
+test("the most specific public pattern decides, a private channel stays private, and a member is never worse off than the public", async () => {
   const ctx = await makeCtx();
-  const { owner, rita, out, boardId, news, dev, open, post } = await world(ctx);
+  const { owner, maya, rita, out, boardId, dev, open, post } = await world(ctx);
   const internal = post("internal/plans", "Plans");
+  createChannel(ctx, owner, boardId, { path: "team", private: true });
+  const team = post("team", "Salaries");
   open({ "*": ["read"], "internal/": "none" });
   assert.equal(getThread(ctx, out, dev.thread.id).thread.id, dev.thread.id, "read at * opens every channel");
-  assert.throws(() => getThread(ctx, out, internal.thread.id), code("not_found"), "except where a closer pattern gives nothing");
-  assert.deepEqual(listThreads(ctx, out, boardId, {}).threads.map((t) => t.title).sort(), ["Release 2.0", "Secret roadmap"]);
-  // A grant closes announcements/ to every member. What the public may read, a member may still read.
-  createGrant(ctx, owner, boardId, { principals: [{ kind: "everyone" }], can: { "announcements/": "none" } });
-  assert.equal(getThread(ctx, rita, news.thread.id).thread.id, news.thread.id);
-  assert.deepEqual(explainAccess(ctx, rita, boardId, "announcements").can, ["read"]);
+  assert.throws(() => getThread(ctx, out, internal.thread.id), code("not_found"), "except where a closer public pattern gives nothing");
   // Where the public grant gives nothing, a member's own access decides as before: readers read every channel by default.
   assert.equal(getThread(ctx, rita, internal.thread.id).thread.id, internal.thread.id);
+
+  // A private channel is closed to members at its own subtree, which is closer than `*`: the public grant does
+  // not open it, to the public or, through the public, to members who are not in it.
+  for (const a of [out, rita, maya]) assert.throws(() => getThread(ctx, a, team.thread.id), code("not_found"));
+  assert.deepEqual(listThreads(ctx, out, boardId, {}).threads.map((t) => t.title).sort(), ["Release 2.0", "Secret roadmap"]);
+  assert.equal(searchMessages(ctx, out, boardId, "Salaries").results.length, 0);
+  assert.deepEqual(explainAccess(ctx, out, boardId, "team").can, []);
+  const listed = listChannels(ctx, owner, boardId).channels.find((c) => c.path === "team")!;
+  assert.deepEqual([listed.private, listed.public], [true, false]);
+
+  // The owner opens it by naming it. Then the public reads it, and so does every member, whatever closes them out.
+  open({ "team/": ["read"] });
+  assert.equal(getThread(ctx, out, team.thread.id).thread.id, team.thread.id);
+  assert.equal(getThread(ctx, rita, team.thread.id).thread.id, team.thread.id);
+  assert.deepEqual(explainAccess(ctx, rita, boardId, "team").can, ["read"]);
+  const now = listChannels(ctx, rita, boardId).channels.find((c) => c.path === "team")!;
+  assert.deepEqual([now.private, now.public, now.my_permissions], [false, true, ["read"]]);
+  assert.throws(() => reply(ctx, rita, team.thread.id, { body: "x", idempotency_key: key() }), code("forbidden"), "reading is all the public's access adds");
+});
+
+test("the public's access never widens what a member may manage, and follows the server's switch", async () => {
+  const ctx = await makeCtx();
+  const { owner, maya, rita, boardId, open, post } = await world(ctx);
+  // maya manages lab/ without reading it; lab/ is closed to members and open to the public.
+  const lab = post("lab/notes", "Experiment");
+  createGrant(ctx, owner, boardId, { principals: [{ kind: "member", principal_id: maya.id }], can: { "lab/": ["manage"] } });
+  createGrant(ctx, owner, boardId, { principals: [{ kind: "everyone" }], can: { "lab/": "none" } });
+  assert.throws(() => getThread(ctx, maya, lab.thread.id), code("not_found"));
+  open({ "lab/": ["read"] });
+  assert.equal(getThread(ctx, maya, lab.thread.id).thread.id, lab.thread.id, "she reads it as anyone can");
+  // She cannot hand out read there: a grant of hers would outlive the public one.
+  const give = { principals: [{ kind: "member" as const, principal_id: rita.id }], can: { "lab/": ["read" as const] } };
+  assert.throws(() => createGrant(ctx, maya, boardId, give), code("forbidden"));
+
+  // A server that stops offering public access: stored public grants open nothing, to members either.
+  ctx.config.publicAccess = false;
+  assert.throws(() => getThread(ctx, maya, lab.thread.id), code("not_found"));
+  assert.equal(getBoard(ctx, owner, boardId).visibility, "private");
+  assert.ok(listChannels(ctx, owner, boardId).channels.every((c) => !c.public));
+  ctx.config.publicAccess = true;
+  assert.equal(getBoard(ctx, owner, boardId).visibility, "public");
+  assert.equal(listChannels(ctx, owner, boardId).channels.find((c) => c.path === "lab/notes")!.public, true);
+});
+
+test("what is pushed is for members: change feeds end with a membership, and the public gets no board-wide changes", async () => {
+  const ctx = await makeCtx();
+  const { owner, maya, out, boardId, news, open, post } = await world(ctx);
+  const start = getChanges(ctx, owner, { board_id: boardId }).cursor;
+  open();
+  const joiner = human(ctx, "new@example.test", "New");
+  redeemInvite(ctx, joiner, createInvite(ctx, owner, boardId, { audience: "email", value: "new@example.test", role: "reader" }).url!);
+  post("announcements", "Release 2.1");
+
+  // A filter does not let the public see who joined or what the owner changed.
+  assert.deepEqual(getChanges(ctx, out, { board_id: boardId, cursor: start, types: ["member.joined", "board.updated"] }).changes, []);
+  assert.deepEqual(getChanges(ctx, out, { board_id: boardId, cursor: start, types: ["thread.created", "member.joined"] }).changes.map((c) => c.type), ["thread.created"]);
+  assert.ok(getChanges(ctx, owner, { board_id: boardId, cursor: start, types: ["member.joined"] }).changes.length > 0, "members still can");
+
+  // The feed behind wait_for_activity, the browser stream and watchers serves members only.
+  assert.throws(() => boardChanges(ctx, out, boardId, start), code("forbidden"));
+  assert.ok(boardChanges(ctx, maya, boardId, start).changes.length > 0);
+  ctx.db.prepare("UPDATE memberships SET access_ends_at = ? WHERE board_id = ? AND principal_id = ?").run(new Date(Date.now() - 1000).toISOString(), boardId, maya.id);
+  assert.throws(() => boardChanges(ctx, maya, boardId, start), code("access_ended"), "it ends with the membership, although the board stays readable");
+  assert.ok(getChanges(ctx, maya, { board_id: boardId, cursor: start }).changes.length > 0, "pulling still works");
+
+  // A disabled board: nothing says it is there, to someone who is not a member.
+  ctx.db.prepare("UPDATE boards SET disabled_at = ? WHERE id = ?").run(new Date().toISOString(), boardId);
+  assert.throws(() => reply(ctx, out, news.thread.id, { body: "x", idempotency_key: key() }), code("not_found"));
+  assert.throws(() => getThread(ctx, out, news.thread.id), code("not_found"));
+});
+
+test("a public reader costs the board nothing: refused writes do not use up its write rate", async () => {
+  const ctx = await makeCtx();
+  const { owner, out, boardId, news, open, post } = await world(ctx);
+  open();
+  ctx.config.rateLimits.writes_per_minute_board = 6;
+  ctx.config.rateLimits.writes_per_minute_principal = 1000;
+  for (let i = 0; i < 12; i++) {
+    assert.throws(() => startThread(ctx, out, boardId, { title: "x", body: "x", idempotency_key: key() }), code("forbidden"));
+    assert.throws(() => reply(ctx, out, news.thread.id, { body: "x", idempotency_key: key() }), code("forbidden"));
+    assert.throws(() => createChannel(ctx, out, boardId, { path: `c${i}` }), code("forbidden"));
+  }
+  assert.equal(post("announcements", "Still writable").thread.title, "Still writable");
+  assert.equal(reply(ctx, owner, news.thread.id, { body: "And again", idempotency_key: key() }).message.body, "And again");
+});
+
+test("a task's prerequisites in channels the public cannot read are not shown to the public", async () => {
+  const ctx = await makeCtx();
+  const { owner, rita, out, boardId, open } = await world(ctx);
+  createChannel(ctx, owner, boardId, { path: "team", private: true });
+  const task = (channel: string, title: string, needs?: string[]) => startThread(ctx, owner, boardId, { channel, title, body: title, task: true, needs, idempotency_key: key() });
+  const hidden = task("team", "Negotiate the contract");
+  const shown = task("announcements", "Publish the release notes");
+  const release = task("announcements", "Ship 2.0", [hidden.thread.id, shown.thread.id]);
+  open();
+  const needs = (a: Actor) => getThread(ctx, a, release.thread.id).thread.task!.needs;
+  assert.deepEqual(needs(out), [{ thread_id: shown.thread.id, title: "Publish the release notes", state: "ready" }]);
+  // A member who is not in the private channel is told a prerequisite exists, without its title, as before.
+  assert.deepEqual(needs(rita).map((n) => [n.thread_id, n.title]), [[hidden.thread.id, ""], [shown.thread.id, "Publish the release notes"]]);
 });
 
 test("scoped tokens, ended memberships, disabled accounts and attachments", async () => {
@@ -239,11 +337,17 @@ test("scoped tokens, ended memberships, disabled accounts and attachments", asyn
   assert.equal((await getAttachment(ctx, out, file.attachment.id)).attachment.name, "notes.txt");
   await assert.rejects(getAttachment(ctx, out, hidden.attachment.id), code("not_found"));
 
-  // A member whose access ended reads what the public reads, and no more.
+  // A member whose access ended reads what the public reads, and no more: not even a file they uploaded
+  // themselves, when the message it is on is out of the public's reach.
+  const own = await uploadAttachment(ctx, maya, boardId, { name: "draft.txt", type: "text/plain", data: new TextEncoder().encode("maya's draft") });
+  reply(ctx, maya, dev.thread.id, { body: "My draft", idempotency_key: key(), attachments: [own.attachment.id] });
+  assert.equal((await getAttachment(ctx, maya, own.attachment.id)).attachment.name, "draft.txt");
   ctx.db.prepare("UPDATE memberships SET access_ends_at = ? WHERE board_id = ? AND principal_id = ?").run(new Date(Date.now() - 1000).toISOString(), boardId, maya.id);
   assert.equal(getThread(ctx, maya, news.thread.id).thread.id, news.thread.id);
   assert.throws(() => getThread(ctx, maya, dev.thread.id), code("not_found"));
   assert.equal(getBoard(ctx, maya, boardId).my_access, "public");
+  await assert.rejects(getAttachment(ctx, maya, own.attachment.id), code("not_found"));
+  assert.equal((await getAttachment(ctx, maya, file.attachment.id)).attachment.name, "notes.txt");
 
   // A disabled account reads nothing.
   ctx.db.prepare("UPDATE principals SET disabled_at = ? WHERE id = ?").run(new Date().toISOString(), out.id);

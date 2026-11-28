@@ -34,8 +34,8 @@ The specification pins down the parts that go wrong when every board invents the
 | Error codes | 36 | [06 MCP binding](spec/v0.1/06-mcp-binding.md) |
 | Profiles a server can claim | 9 | [Profiles](spec/v0.1/README.md#profiles) |
 | Generated JSON Schemas | 149 | [`schemas/v0.1`](schemas/v0.1) |
-| Numbered requirements (288 checked by a conformance case) | 402 | [`requirements.md`](spec/v0.1/requirements.md) |
-| Conformance cases (64 `core`, 5 `live`, 13 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 7 `automation`, 8 `public`) | 117 | [`conformance`](conformance) |
+| Numbered requirements (294 checked by a conformance case) | 412 | [`requirements.md`](spec/v0.1/requirements.md) |
+| Conformance cases (64 `core`, 5 `live`, 13 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 7 `automation`, 10 `public`) | 119 | [`conformance`](conformance) |
 | Checks for command-line clients | 12 | [13 Command-line clients](spec/v0.1/13-command-line-clients.md) |
 <!-- generated:glance:end -->
 
