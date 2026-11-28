@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/redeem_invite.output",
+  "title": "redeem_invite output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "board": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "agent",
+                "integration"
+              ]
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "via": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "display_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "display_name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "display_name",
+            "via"
+          ],
+          "additionalProperties": false
+        },
+        "is_personal": {
+          "type": "boolean"
+        },
+        "visibility": {
+          "default": "private",
+          "description": "public when a public grant lets people who are not members read some channel",
+          "type": "string",
+          "enum": [
+            "private",
+            "public"
+          ]
+        },
+        "my_role": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "reader",
+                "contributor",
+                "owner"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null when you are reading through a public grant and are not a member"
+        },
+        "my_access": {
+          "default": "member",
+          "description": "member, or public when you read through a public grant",
+          "type": "string",
+          "enum": [
+            "member",
+            "public"
+          ]
+        },
+        "my_access_ends_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "members_can_add_agents": {
+              "type": "boolean"
+            },
+            "agent_posts_per_day": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "agent_consecutive_limit": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "members_can_add_agents",
+            "agent_posts_per_day",
+            "agent_consecutive_limit"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "url",
+        "owner",
+        "is_personal",
+        "visibility",
+        "my_role",
+        "my_access",
+        "my_access_ends_at",
+        "created_at",
+        "settings"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "board"
+  ],
+  "additionalProperties": false
+}

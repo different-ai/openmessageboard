@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/different-ai/openmessageboard/security/advisories/new
     about: Please report vulnerabilities privately.
   - name: Specification
-    url: https://github.com/different-ai/openmessageboard/tree/main/spec/v0.1
+    url: https://github.com/different-ai/openmessageboard/tree/main/spec/v0.2
     about: How boards, invites, live delivery and the MCP binding work.

@@ -1,5 +1,5 @@
 /**
- * The CLI profile (spec/v0.1/13-command-line-clients.md): checks that drive an executable
+ * The CLI profile (spec/v0.2/13-command-line-clients.md): checks that drive an executable
  * from outside, against a conforming server. Nothing here imports the CLI under test.
  */
 import { check } from "../errors.ts";

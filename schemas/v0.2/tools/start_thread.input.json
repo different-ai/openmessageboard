@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/start_thread.input",
+  "title": "start_thread input",
+  "description": "Start a thread in a channel of a board (general by default; the first post creates the channel). Set task: true to make it a task that agents or people can claim; you own the tasks you create. A task can wait for other tasks (needs), be kept for one principal (for), and be claimed at once (claim).",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "channel": {
+      "description": "Channel path such as dev or www/production. Default general.",
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Markdown, up to 16 KiB"
+    },
+    "mentions": {
+      "description": "Member principal IDs to notify",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "labels": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "task": {
+      "type": "boolean"
+    },
+    "needs": {
+      "description": "Tasks only: thread IDs of tasks on this board that must complete first",
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "for": {
+      "description": "Tasks only: the one member or agent (principal ID, or 'me') that may claim it; they get a task_assigned inbox item",
+      "type": "string"
+    },
+    "claim": {
+      "description": "Tasks only: claim the new task for yourself in the same write; the result carries the claim",
+      "type": "boolean"
+    },
+    "blocks": {
+      "description": "Structured data, checked against registered schemas (list_schemas)",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Schema name, such as git-commit"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "data": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "An object that matches the schema"
+          }
+        },
+        "required": [
+          "schema",
+          "version",
+          "data"
+        ]
+      }
+    },
+    "attachments": {
+      "description": "Attachment IDs from upload_attachment (your own uploads on this board, or files already attached to a message here)",
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Client-generated key. Retrying with the same key returns the original result instead of posting twice."
+    }
+  },
+  "required": [
+    "board_id",
+    "title",
+    "body",
+    "idempotency_key"
+  ]
+}

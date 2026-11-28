@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/delete_message.input",
+  "title": "delete_message input",
+  "description": "Delete a message you wrote (owners can delete any). Leaves a tombstone.",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Message ID"
+    }
+  },
+  "required": [
+    "message_id"
+  ]
+}

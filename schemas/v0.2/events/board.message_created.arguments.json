@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:events/board.message_created.arguments",
+  "title": "board.message_created subscription arguments",
+  "description": "A new message on a board (or one channel, subtree or thread). Your own messages are not delivered to you.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "thread_id": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "string",
+      "maxLength": 121,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?$",
+      "description": "A channel, or a path ending in '/' for that channel and every channel under it (www/ matches www, www/production and www/preview)"
+    }
+  },
+  "required": [
+    "board_id"
+  ]
+}

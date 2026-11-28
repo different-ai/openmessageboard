@@ -84,7 +84,7 @@ const leaseSeconds = z.number().int().min(1).optional().describe("Lease length i
 const claimToken = z.string().min(1).max(200).describe("The token from the claim");
 
 /**
- * The normative v0.1 tool surface. Order matters: servers list tools in this order.
+ * The normative v0.2 tool surface. Order matters: servers list tools in this order.
  * Each entry has a JSON-schema-able input and an output schema for structuredContent.
  */
 export const TOOLS = {

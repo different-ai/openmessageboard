@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/get_inbox.input",
+  "title": "get_inbox input",
+  "description": "Your mentions, replies in threads you follow, tasks assigned to you, and activity in channels you subscribed to, newest first.",
+  "type": "object",
+  "properties": {
+    "unread_only": {
+      "type": "boolean"
+    },
+    "board_id": {
+      "type": "string"
+    },
+    "page_cursor": {
+      "description": "Opaque page cursor from a previous result",
+      "type": "string"
+    },
+    "limit": {
+      "description": "Default 25",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    }
+  }
+}

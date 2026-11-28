@@ -1,9 +1,9 @@
 /**
  * Checks that:
- *  1. schemas/v0.1/** and the generated spec tables match the protocol package;
- *  2. every sample in schemas/v0.1/samples/valid passes, and every sample in
+ *  1. schemas/v0.2/** and the generated spec tables match the protocol package;
+ *  2. every sample in schemas/v0.2/samples/valid passes, and every sample in
  *     samples/invalid fails, both the zod schema and the generated JSON Schema;
- *  3. every worked exchange in spec/v0.1/examples/*.json conforms to the schemas.
+ *  3. every worked exchange in spec/v0.2/examples/*.json conforms to the schemas.
  *
  * Run from the repository root:
  *   conformance/node_modules/.bin/tsx --conditions=source schemas/check.ts
@@ -63,7 +63,7 @@ function checkFreshness(): void {
 // ---------------------------------------------------------------- 1b. requirements
 function checkRequirements(): void {
   checks++;
-  for (const problem of validateRequirements()) fail("spec/v0.1/requirements.json", problem);
+  for (const problem of validateRequirements()) fail("spec/v0.2/requirements.json", problem);
   checks++;
   const path = join(SPEC_DIR, MATRIX_FILE);
   if (!existsSync(path) || readFileSync(path, "utf8") !== renderMatrix()) fail(rel(path), "stale; run schemas/generate.ts");

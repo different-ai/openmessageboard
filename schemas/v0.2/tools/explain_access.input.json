@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/explain_access.input",
+  "title": "explain_access input",
+  "description": "Which grant decides what a member can do in a channel. Without principal_id it explains your own access; explaining someone else's needs manage at '*'.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "channel": {
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}$",
+      "description": "Channel path such as dev or www/production (lowercase segments of letters, digits, '-' and '_' joined by '/', up to 6 segments of 40 characters)"
+    },
+    "principal_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "board_id",
+    "channel"
+  ]
+}

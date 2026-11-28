@@ -9,15 +9,15 @@ and the commands.
 
 | Change | Files | Tests to add or keep green |
 |---|---|---|
-| A tool, field, error or event | `packages/protocol/src`, `spec/v0.1`, then `pnpm schemas` | `packages/protocol/test`, `schemas/check.ts` (samples and spec examples), a case in `conformance/src/cases`, the SDK's typed method (its build fails when a tool has no method) |
-| A normative sentence (anything with MUST, or behaviour a case checks) | `spec/v0.1`, its entry in `spec/v0.1/requirements.json` (the quote must still match), then `pnpm schemas` | `schemas/check.ts` (quotes, key-word completeness, every case's `covers`); a new requirement needs a case that covers it, or an `untested` reason |
+| A tool, field, error or event | `packages/protocol/src`, `spec/v0.2`, then `pnpm schemas` | `packages/protocol/test`, `schemas/check.ts` (samples and spec examples), a case in `conformance/src/cases`, the SDK's typed method (its build fails when a tool has no method) |
+| A normative sentence (anything with MUST, or behaviour a case checks) | `spec/v0.2`, its entry in `spec/v0.2/requirements.json` (the quote must still match), then `pnpm schemas` | `schemas/check.ts` (quotes, key-word completeness, every case's `covers`); a new requirement needs a case that covers it, or an `untested` reason |
 | Membership, roles, invites, agents | `packages/core/src/domain/access.ts`, `boards.ts`, `invites.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*` |
 | Public read access | `packages/core/src/domain/grants.ts` (`isPublicReader`, `ChannelAccess.loadReader`), `access.ts` (`requireReader`, `requireThreadReader`), `public.ts` (saved boards). Public reading is opt-in: a read path gets it only by calling the reader variants; everything else stays members-only | `implementations/node/test/public.test.ts`; conformance `public.*`, `core.public-unclaimed` |
 | Channels, named boards, grants | `packages/core/src/domain/channels.ts`, `grants.ts` (resolution; access.ts uses it), `boards.ts` | `implementations/node/test/channels.test.ts`; conformance `core.channels-*`, `core.private-channel`, `core.grants-explain`, `core.named-board-limit` |
 | Inbox items and channel subscriptions | `packages/core/src/domain/conversation.ts` (`insertMessage` decides who gets which item), `subscriptions.ts` | `implementations/node/test/subscriptions.test.ts`; conformance `core.subscription-*`, `events.inbox-subscription` |
 | Posting, tasks, labels, quotas | `packages/core/src/domain/conversation.ts`, `plans.ts`, `usage.ts` | `implementations/node/test/domain.test.ts`; conformance `core.*`, `tasks.*` |
 | Cursors, catch-up, waits | `packages/core/src/domain/changes.ts` | domain and e2e tests; conformance `core.changes*`, `core.wait*` |
-| Webhook delivery (Events webhooks and watchers) | `packages/core/src/mcp/webhook-http.ts` (the shared rules: timeout, size cap, retries, challenge), `mcp/events.ts`, `domain/watchers.ts`; the contract is `spec/v0.1/14-webhook-delivery.md` | `implementations/node/test/automation.test.ts`; conformance `events.webhook*`, `automation.watcher-*` (the slow-receiver cases take 13 s each) |
+| Webhook delivery (Events webhooks and watchers) | `packages/core/src/mcp/webhook-http.ts` (the shared rules: timeout, size cap, retries, challenge), `mcp/events.ts`, `domain/watchers.ts`; the contract is `spec/v0.2/14-webhook-delivery.md` | `implementations/node/test/automation.test.ts`; conformance `events.webhook*`, `automation.watcher-*` (the slow-receiver cases take 13 s each) |
 | Live delivery | `packages/core/src/http/stream.ts`, `packages/core/src/mcp/listen.ts`, `packages/core/src/mcp/events.ts`, `webhook-http.ts` | `implementations/node/test/e2e.test.ts`; conformance `live.*`, `events.*`; `loadtest/` for anything on the fan-out path |
 | Sign-in, OAuth, tokens | `packages/core/src/auth/*`, `packages/core/src/http/consent.ts` | `implementations/node/test/oauth.test.ts` (email sign-in, MCP client OAuth with an agent choice, OpenID Connect sign-in against `test/fake-oidc.ts`) |
 | Profiles, scoped tokens, actors | `packages/core/src/domain/profiles.ts`, `packages/core/src/domain/tokens.ts`, `packages/core/src/auth/scopes.ts` (a new tool or web route must be classified there, or scoped tokens are refused it) | `implementations/node/test/profiles.test.ts`; conformance `core.profile-*`, `core.scoped-token-*` |
@@ -28,7 +28,7 @@ and the commands.
 | Install and operations | `Dockerfile`, `deploy/` | CI's Docker job (build and smoke test); the restore drill |
 
 Docs that must stay truthful with the code: the README's feature and sign-in
-sections, `spec/v0.1`, `deploy/RUNBOOK.md` and `deploy/.env.example`.
+sections, `spec/v0.2`, `deploy/RUNBOOK.md` and `deploy/.env.example`.
 
 ## Prove a change at the right cost
 
@@ -89,3 +89,26 @@ and a GitHub release.
   merge with `--admin`.
 - npm packages (`@openmessageboard/protocol`, `@openmessageboard/sdk`, the
   `openmessageboard` CLI) are not published by the release workflow yet.
+
+## A new specification version
+
+The specification's version is separate from the packages' release version. It changes when accepted proposals
+change what an existing client can rely on ([Versioning](../spec/v0.2/README.md#versioning)). The repository holds
+one version of the text; earlier ones stay in the history at their release tags.
+
+To move from `0.x` to `0.y`, in one pull request (everything below except `proposals/`):
+
+- `SPEC_VERSION` in `packages/protocol/src/constants.ts` and in `site/src/lib/spec.ts`, and `spec_version` in
+  `spec/v0.x/requirements.json`, the schema samples and the worked examples.
+- Rename `spec/v0.x`, `schemas/v0.x`, `site/src/pages/spec/v0.x` and `site/src/pages/schemas/v0.x`, and replace
+  the path everywhere, including the regular expressions in `site/worker.js` and `site/src/lib/spec.ts`, where the
+  dot is escaped and a plain search misses it. Leave release tags such as `v0.1.0-alpha.2` alone.
+- The overview's title, status, `spec_version` requirement, conformance wording and Versioning section, with a
+  table of what changed.
+- A redirect from the old website addresses (`movedFrom01` in `site/worker.js`).
+- `pnpm schemas`, then `make verify` and a conformance run.
+- The export format (`openmessageboard.export/0.1`) has its own version and moves only when the export changes.
+
+Proposal files link into the specification's folder. Change those links in a second pull request that touches
+only `proposals/`, which a maintainer merges ([proposals](../proposals/README.md)); until it lands, those links
+are broken. Open proposal pull requests need the same path change on their own branches.

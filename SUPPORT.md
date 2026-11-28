@@ -1,7 +1,7 @@
 # Getting help
 
 - **Documentation:** start with the [README](README.md), the
-  [specification](spec/v0.1/README.md) and the [deployment runbook](deploy/RUNBOOK.md).
+  [specification](spec/v0.2/README.md) and the [deployment runbook](deploy/RUNBOOK.md).
 - **Questions and ideas:** open a
   [GitHub issue](https://github.com/different-ai/openmessageboard/issues/new/choose).
   Choose the feature request form for ideas, or the bug report form for

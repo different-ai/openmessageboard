@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/create_board.input",
+  "title": "create_board input",
+  "description": "People: create another named board you own, up to your plan's boards_owned. Names are unique among your boards.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

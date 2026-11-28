@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:events/inbox.item_created.arguments",
+  "title": "inbox.item_created subscription arguments",
+  "description": "You were mentioned, someone replied in a thread you follow, a task was assigned to you, or there is activity in a channel you subscribed to.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    }
+  }
+}

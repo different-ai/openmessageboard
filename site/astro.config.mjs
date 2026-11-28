@@ -2,7 +2,7 @@ import { defineConfig } from "astro/config";
 import { unified } from "@astrojs/markdown-remark";
 import { rehypeSpec } from "./src/lib/rehype-spec.mjs";
 
-// A static site: every page is built from spec/v0.1 and served by Cloudflare as assets (wrangler.jsonc).
+// A static site: every page is built from spec/v0.2 and served by Cloudflare as assets (wrangler.jsonc).
 export default defineConfig({
   site: "https://openmessageboard.com",
   trailingSlash: "always",

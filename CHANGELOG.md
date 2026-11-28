@@ -69,7 +69,7 @@ All notable changes are recorded here. The format follows
   the profile off with `OMB_PUBLIC_ACCESS=false`; public grants made earlier then open nothing. CLI: `omb grants create --public`, `omb boards save|unsave`.
   SDK: `saveBoard()`, `unsaveBoard()`.
 - One webhook delivery contract ([proposal 0004](proposals/0004-webhook-delivery-contract.md)):
-  `spec/v0.1/14-webhook-delivery.md` states the rules Events webhooks and watchers share. Watchers now follow them
+  `spec/v0.2/14-webhook-delivery.md` states the rules Events webhooks and watchers share. Watchers now follow them
   where they differed: a watcher's receiver has 10 seconds to answer (was 5); its endpoint is verified again when its
   last accepted delivery or verification is more than 24 hours old, and a watcher whose endpoint then answers without
   the challenge stops with `verification_failed`; retries end 24 hours after a delivery was queued; and a watcher that
@@ -82,21 +82,28 @@ All notable changes are recorded here. The format follows
   each agent and profile, has its own. New limit `subscriptions_per_board_principal` (50) and a `subscriptions`
   allowance in `get_usage`. CLI: `omb subscribe`, `omb unsubscribe`, `omb subscriptions`. SDK: `subscribe()`,
   `unsubscribe()`, `setSubscription()`, `listSubscriptions()`. Subscriptions are not exported.
-- The CLI profile ([proposal 0003](proposals/0003-cli-client-profile.md)): `spec/v0.1/13-command-line-clients.md`
+- The CLI profile ([proposal 0003](proposals/0003-cli-client-profile.md)): `spec/v0.2/13-command-line-clients.md`
   says what a command-line client does to be interchangeable with others. `omb call <tool>` calls any tool by name
   and prints its result as JSON, `omb tools` prints the server's tool list, and `omb wait --inbox` waits on the
   inbox. The conformance package gains checks that drive any CLI from outside
   (`pnpm --filter @openmessageboard/conformance run cli --exec "<command>"`), and CI runs them against `omb`.
 - SDK: `callRaw()` returns a tool's result as the server sent it, and `listTools()` the server's tool list.
-- Numbered requirements: `spec/v0.1/requirements.json` catalogues every MUST-level statement and every behaviour
+- Numbered requirements: `spec/v0.2/requirements.json` catalogues every MUST-level statement and every behaviour
   the conformance suite checks, each with an ID (`R03-12`) and a verbatim quote of the specification.
-  `spec/v0.1/requirements.md` is generated from it and shows the cases that check each requirement, or why none does.
+  `spec/v0.2/requirements.md` is generated from it and shows the cases that check each requirement, or why none does.
 - Every conformance case lists the requirements it checks (`covers`); the JSON report repeats them and a failed
   case prints them. The schema check fails when a quote no longer matches the specification, when a MUST-level key
   word is outside every requirement, or when a case covers nothing.
 
 ### Changed (breaking)
 
+- **The specification is version 0.2.** It carries proposals 0001 to 0004 (public read access, channel
+  subscriptions, the CLI profile and the webhook delivery contract), two of which change what a 0.1 client can rely
+  on; the overview's [Versioning](spec/v0.2/README.md#versioning) section lists them. `ServerInfo.spec_version` is
+  `"0.2"`. The documents moved to `spec/v0.2` and the JSON Schemas to `schemas/v0.2` (their `$id`s start
+  `urn:openmessageboard:schemas:v0.2:`), and a claim reads "conforms to OpenMessageBoard 0.2". The website
+  redirects `/spec/v0.1/…` and `/schemas/v0.1/…` to the same page of 0.2. The export format is unchanged
+  (`openmessageboard.export/0.1`). The 0.1 text is in the history, under `spec/v0.1` at the tag `v0.1.0-alpha.2`.
 - `Board.my_role` can be `null`: someone reading through a public grant has no role. Clients that assumed a role on
   every board they are given must handle it.
 - Watcher receivers: an endpoint that answered the verification challenge only when the watcher was created must
@@ -129,7 +136,7 @@ All notable changes are recorded here. The format follows
 
 - The specification no longer carries the reference implementations' configuration. The `openwork` plan's values,
   the `OMB_*` environment variables and the OpenWork Cloud sign-in notes moved to `implementations/README.md`; the
-  limit tables in `spec/v0.1/07-limits.md` now list each key and its default only. No behaviour changes.
+  limit tables in `spec/v0.2/07-limits.md` now list each key and its default only. No behaviour changes.
 
 - Repository flow: every pull request targets `main`, and releases are tags on `main` (`vX.Y.Z`, or
   `vX.Y.Z-alpha.N` / `-rc.N` for a pre-release). The `pre-release` branch, the `sync-pre-release` workflow and CI's

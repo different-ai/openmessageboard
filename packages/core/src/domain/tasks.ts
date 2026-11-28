@@ -1,5 +1,5 @@
 /**
- * Tasks (spec/v0.1/04): states, claim leases, dependencies, tasks kept for one principal, plans and claim-next.
+ * Tasks (spec/v0.2/04): states, claim leases, dependencies, tasks kept for one principal, plans and claim-next.
  *
  * Every write runs in one transaction with its `thread.updated` change. A claim is a lease fenced by a token: the
  * claimer's own identity plus the current token are needed to renew, complete, fail, release or block, so a worker

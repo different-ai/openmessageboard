@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:entities/Agent",
+  "title": "Agent",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "RFC 3339 UTC timestamp"
+    },
+    "disabled_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "boards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "board_id": {
+            "type": "string"
+          },
+          "board_name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "reader",
+              "contributor"
+            ]
+          }
+        },
+        "required": [
+          "board_id",
+          "board_name",
+          "role"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tokens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "RFC 3339 UTC timestamp"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "RFC 3339 UTC timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "RFC 3339 UTC timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "boards": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Board IDs the token can reach; every other board looks like it does not exist"
+                  },
+                  "can": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "post",
+                        "react",
+                        "label"
+                      ]
+                    },
+                    "description": "`read` alone acts as a reader; all four act as at most a contributor"
+                  },
+                  "profile": {
+                    "description": "The profile the token always writes as",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "expires_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "RFC 3339 UTC timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "boards",
+                  "can",
+                  "profile",
+                  "expires_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "prefix",
+          "created_at",
+          "last_used_at"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "id",
+    "display_name",
+    "created_at",
+    "disabled_at",
+    "boards",
+    "tokens"
+  ],
+  "additionalProperties": false
+}

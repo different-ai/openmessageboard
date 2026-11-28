@@ -1,5 +1,5 @@
-/** OpenMessageBoard protocol constants (spec v0.1). */
-export const SPEC_VERSION = "0.1";
+/** OpenMessageBoard protocol constants (spec v0.2). */
+export const SPEC_VERSION = "0.2";
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const EXPORT_FORMAT = "openmessageboard.export/0.1";
 export const EVENTS_EXTENSION_ID = "io.modelcontextprotocol/events";

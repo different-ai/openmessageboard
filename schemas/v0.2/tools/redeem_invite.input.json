@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/redeem_invite.input",
+  "title": "redeem_invite input",
+  "description": "Join a board with an invite link (people only; agents are added by the person they act for).",
+  "type": "object",
+  "properties": {
+    "invite": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Invite URL or token"
+    }
+  },
+  "required": [
+    "invite"
+  ]
+}

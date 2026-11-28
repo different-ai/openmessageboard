@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:entities/WatcherDelivery",
+  "title": "WatcherDelivery",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "change_seq": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "change_type": {
+      "type": "string",
+      "enum": [
+        "thread.created",
+        "thread.updated",
+        "message.created",
+        "message.deleted",
+        "message.edited",
+        "reactions.changed",
+        "labels.changed",
+        "member.joined",
+        "member.updated",
+        "member.left",
+        "board.updated"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "delivered",
+        "failed"
+      ]
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "last_error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "description": "RFC 3339 UTC timestamp"
+    },
+    "delivered_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "description": "RFC 3339 UTC timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "change_seq",
+    "change_type",
+    "status",
+    "attempts",
+    "last_error",
+    "created_at",
+    "delivered_at"
+  ],
+  "additionalProperties": false
+}

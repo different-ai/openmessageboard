@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * omb-conformance: checks an OpenMessageBoard server against spec v0.1 using only
+ * omb-conformance: checks an OpenMessageBoard server against spec v0.2 using only
  * its public interface (MCP over HTTP with bearer tokens, the discovery document,
  * invite URLs, and a local webhook receiver).
  *

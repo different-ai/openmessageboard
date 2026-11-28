@@ -36,7 +36,7 @@ test("normalizeEmail accepts ordinary addresses and refuses the rest", () => {
 });
 
 test("other paths are left to the site", async () => {
-  assert.equal(await call(env(), "/spec/v0.1/"), undefined);
+  assert.equal(await call(env(), "/spec/v0.2/"), undefined);
 });
 
 test("subscribe sends one confirmation; confirming marks the address; the token works once", async () => {

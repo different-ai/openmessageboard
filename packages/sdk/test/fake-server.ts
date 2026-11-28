@@ -228,7 +228,7 @@ export class FakeServer {
       owned_boards: [],
       memberships: [],
       server: {
-        spec_version: "0.1",
+        spec_version: "0.2",
         implementation: { name: "fake", version: "0" },
         profiles: ["core", "live"],
         mcp_endpoint: `${this.url}/mcp`,

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/unsave_board.output",
+  "title": "unsave_board output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "saved": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "board_id",
+    "saved"
+  ],
+  "additionalProperties": false
+}

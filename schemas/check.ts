@@ -1,6 +1,6 @@
 /**
- * Validates schemas/v0.1/samples (valid must pass, invalid must fail), checks the
- * worked exchanges in spec/v0.1/examples against the schemas, and fails if the
+ * Validates schemas/v0.2/samples (valid must pass, invalid must fail), checks the
+ * worked exchanges in spec/v0.2/examples against the schemas, and fails if the
  * generated schemas or spec tables are stale.
  *
  * Run from the repository root:

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:entities/AccessExplanation",
+  "title": "AccessExplanation",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "principal": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent",
+            "integration"
+          ]
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "display_name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "display_name",
+        "via"
+      ],
+      "additionalProperties": false
+    },
+    "role": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "reader",
+            "contributor",
+            "owner"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "null for someone reading through a public grant, who is not a member"
+    },
+    "can": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "read",
+          "post",
+          "react",
+          "label",
+          "manage"
+        ]
+      },
+      "description": "What the principal can do in the channel"
+    },
+    "pattern": {
+      "description": "The grant pattern that decided; null when no grant applies and the role's defaults hold",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "level": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "agent",
+            "member",
+            "role_group",
+            "everyone",
+            "public"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Which principal of the deciding grants matched"
+    },
+    "grant_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Grants tied at the deciding pattern and level; their permissions add up"
+    },
+    "granted": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "read",
+          "post",
+          "react",
+          "label",
+          "manage"
+        ]
+      },
+      "description": "What the deciding grants (or the role's defaults) give before caps"
+    },
+    "role_cap": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "read",
+          "post",
+          "react",
+          "label",
+          "manage"
+        ]
+      },
+      "description": "The most the board role allows"
+    },
+    "person_cap": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "read",
+              "post",
+              "react",
+              "label",
+              "manage"
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Agents: what the person they act for can do in the channel"
+    }
+  },
+  "required": [
+    "board_id",
+    "channel",
+    "principal",
+    "role",
+    "can",
+    "pattern",
+    "level",
+    "grant_ids",
+    "granted",
+    "role_cap",
+    "person_cap"
+  ],
+  "additionalProperties": false
+}

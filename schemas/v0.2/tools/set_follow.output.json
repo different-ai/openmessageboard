@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/set_follow.output",
+  "title": "set_follow output (structuredContent)",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string"
+    },
+    "following": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "thread_id",
+    "following"
+  ],
+  "additionalProperties": false
+}

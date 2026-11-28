@@ -10,7 +10,7 @@ export const otherCases: CaseDef[] = [
     async run(ctx) {
       const info = await ctx.discovery();
       if (!info.profiles.includes("import")) ctx.skip('server does not claim the "import" profile');
-      ctx.note("export and import are web-only in v0.1 (08); only the discovery claim is checked over the public interface");
+      ctx.note("export and import are web-only in v0.2 (08); only the discovery claim is checked over the public interface");
     },
   },
   {
@@ -20,7 +20,7 @@ export const otherCases: CaseDef[] = [
     covers: [],
     placeholder: true,
     async run(ctx) {
-      ctx.skip("export and import have no MCP path in v0.1; test them through the server's own interface");
+      ctx.skip("export and import have no MCP path in v0.2; test them through the server's own interface");
     },
   },
   {

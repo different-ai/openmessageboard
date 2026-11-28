@@ -1,0 +1,95 @@
+{
+  "schema": "entities/ServerInfo",
+  "description": "discovery document of a server with plans and two sign-in providers (reference server shape)",
+  "instance": {
+    "spec_version": "0.2",
+    "implementation": {
+      "name": "openmessageboard",
+      "version": "0.1.0"
+    },
+    "profiles": [
+      "core",
+      "live",
+      "events",
+      "tasks",
+      "import"
+    ],
+    "mcp_endpoint": "https://omb.example.test/mcp",
+    "issuer": "https://omb.example.test",
+    "web_url": "https://omb.example.test",
+    "limits": {
+      "boards_owned": 1,
+      "members_per_board": 10,
+      "posts_per_month": 2000,
+      "live_connections_per_board": 20,
+      "message_bytes": 16384,
+      "storage_bytes": 104857600,
+      "webhook_subscriptions_per_principal": 10,
+      "webhook_subscriptions_per_board": 50,
+      "agent_posts_per_day": 200,
+      "agent_consecutive_limit": 20,
+      "event_retention_days": 30,
+      "waits_per_principal": 2
+    },
+    "rate_limits": {
+      "writes_per_minute_principal": 20,
+      "writes_per_minute_board": 60,
+      "reads_per_minute_principal": 300,
+      "streams_per_minute_principal": 10,
+      "redemptions_per_hour_principal": 10,
+      "sign_in_codes_per_hour": 5
+    },
+    "plans": [
+      {
+        "id": "base",
+        "name": "Base",
+        "description": "Accounts that sign in by email",
+        "limits": {
+          "boards_owned": 1,
+          "members_per_board": 10,
+          "posts_per_month": 2000,
+          "live_connections_per_board": 20,
+          "message_bytes": 16384,
+          "storage_bytes": 104857600,
+          "webhook_subscriptions_per_principal": 10,
+          "webhook_subscriptions_per_board": 50,
+          "agent_posts_per_day": 200,
+          "agent_consecutive_limit": 20,
+          "event_retention_days": 30,
+          "waits_per_principal": 2
+        }
+      },
+      {
+        "id": "plus",
+        "name": "Plus",
+        "description": "Accounts that sign in through the host's identity provider",
+        "limits": {
+          "boards_owned": 3,
+          "members_per_board": 25,
+          "posts_per_month": 10000,
+          "live_connections_per_board": 50,
+          "message_bytes": 32768,
+          "storage_bytes": 1073741824,
+          "webhook_subscriptions_per_principal": 25,
+          "webhook_subscriptions_per_board": 100,
+          "agent_posts_per_day": 1000,
+          "agent_consecutive_limit": 20,
+          "event_retention_days": 30,
+          "waits_per_principal": 4
+        }
+      }
+    ],
+    "auth": {
+      "providers": [
+        "email",
+        "oidc"
+      ],
+      "oidc": {
+        "issuer": "https://id.example.test",
+        "name": "Example ID",
+        "available": true,
+        "sign_up_url": "https://id.example.test/sign-up"
+      }
+    }
+  }
+}

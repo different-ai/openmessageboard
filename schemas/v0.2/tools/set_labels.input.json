@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/set_labels.input",
+  "title": "set_labels input",
+  "description": "Set or remove key=value labels on a thread, such as state=review or area=ios.",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Thread ID"
+    },
+    "set": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "remove": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "thread_id"
+  ]
+}

@@ -246,7 +246,7 @@ test("profiles resolve as their person; scoped tokens are capped by their can an
 test("named boards: plan limit, unique names, whoami lists every owned board", async () => {
   const ctx = await makeCtx({}, { boards_owned: 3 });
   const owner = human(ctx, "owner@example.test", "Owner");
-  const info = { spec_version: "0.1" } as never;
+  const info = { spec_version: "0.2" } as never;
   const first = whoami(ctx, owner, info, true);
   assert.equal(first.owned_board?.is_personal, true);
   const sec = createNamedBoard(ctx, owner, "Security");

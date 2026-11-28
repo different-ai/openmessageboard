@@ -1,5 +1,5 @@
 /**
- * Builds the JSON Schema 2020-12 documents in `schemas/v0.1/` from the normative
+ * Builds the JSON Schema 2020-12 documents in `schemas/v0.2/` from the normative
  * zod schemas in `@openmessageboard/protocol`. Shared by `schemas/generate.ts`,
  * `schemas/check.ts` and the conformance runner (which compares a server's
  * `tools/list` against the same source).
@@ -23,7 +23,7 @@ export const ToolError = z.object({ error: ErrorBody });
 export interface SchemaEntry {
   /** Stable reference such as `tools/reply.input` or `entities/Thread`. */
   ref: string;
-  /** Path relative to `schemas/v0.1/`. */
+  /** Path relative to `schemas/v0.2/`. */
   file: string;
   title: string;
   description?: string;
@@ -164,7 +164,7 @@ export function toJsonSchema(entry: SchemaEntry): Record<string, unknown> {
   return { ...doc, ...rest };
 }
 
-/** Every generated file (path relative to `schemas/v0.1/`) with its serialized contents. */
+/** Every generated file (path relative to `schemas/v0.2/`) with its serialized contents. */
 export function generatedFiles(): Map<string, string> {
   const files = new Map<string, string>();
   const index: Record<string, string> = {};

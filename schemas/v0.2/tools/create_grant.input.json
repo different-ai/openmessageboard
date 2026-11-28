@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/create_grant.input",
+  "title": "create_grant input",
+  "description": "Open or narrow access per channel. The most specific pattern decides, then the closest principal (member, then role group, then everyone); grants tied there add up, and the board role caps the result. Needs manage at every pattern.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "principals": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "member"
+              },
+              "principal_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Member principal ID"
+              }
+            },
+            "required": [
+              "kind",
+              "principal_id"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "readers",
+                "description": "Every member whose board role is reader"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "contributors",
+                "description": "Every member whose board role is contributor"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "everyone",
+                "description": "Every member of the board, the owner included"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "public",
+                "description": "Everyone signed in on the server who is not a member; read only, alone in its grant"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      }
+    },
+    "can": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 121,
+        "pattern": "^(?:\\*|[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?)$",
+        "description": "'*' for every channel, an exact channel, or a subtree ending in '/' (security/ covers security and everything under it)"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "all",
+              "none"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "post",
+                "react",
+                "label",
+                "manage"
+              ]
+            }
+          }
+        ]
+      },
+      "description": "Pattern → 'all', 'none' or a list of read, post, react, label, manage (up to 20 patterns)"
+    }
+  },
+  "required": [
+    "board_id",
+    "principals",
+    "can"
+  ]
+}

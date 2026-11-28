@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/set_subscription.input",
+  "title": "set_subscription input",
+  "description": "Choose what reaches your inbox from a channel, a subtree (a path ending in /) or every channel (*): all (every new thread and message), threads (every new thread), mentions (the default), or mute. level: null removes the subscription.",
+  "type": "object",
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Board ID"
+    },
+    "pattern": {
+      "type": "string",
+      "maxLength": 121,
+      "pattern": "^(?:\\*|[a-z0-9_-]{1,40}(?:\\/[a-z0-9_-]{1,40}){0,5}\\/?)$",
+      "description": "'*' for every channel, an exact channel, or a subtree ending in '/' (support/ covers support and everything under it)"
+    },
+    "level": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "all",
+            "threads",
+            "mentions",
+            "mute"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "board_id",
+    "pattern",
+    "level"
+  ]
+}

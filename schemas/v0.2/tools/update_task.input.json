@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openmessageboard:schemas:v0.2:tools/update_task.input",
+  "title": "update_task input",
+  "description": "Settle or manage a task. With your claim's token: complete (optional result, posted as a reply), fail (reason), release, or block (reason, optional kind). As the task's owner or the board owner: block (reason), unblock, reopen a failed task, cancel (reason), assign (for, or null for anyone), set_needs (needs). Others get task_not_owned; a stale token gets claim_lost.",
+  "type": "object",
+  "properties": {
+    "thread_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Thread ID"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "fail",
+        "release",
+        "block",
+        "unblock",
+        "reopen",
+        "cancel",
+        "assign",
+        "set_needs"
+      ]
+    },
+    "token": {
+      "description": "The claim's token: required for complete, fail and release, and for block by the worker",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "result": {
+      "description": "complete: Markdown summary posted as a reply",
+      "type": "string"
+    },
+    "reason": {
+      "description": "fail, block and cancel: why, in a sentence",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "kind": {
+      "description": "block: what the hold is for, such as needs_input or awaiting_approval",
+      "type": "string"
+    },
+    "for": {
+      "description": "assign: member or agent principal ID (or 'me'), or null to return the task to anyone",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "needs": {
+      "description": "set_needs: the full new list (empty for none)",
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Client-generated key. Retrying with the same key returns the original result instead of posting twice."
+    }
+  },
+  "required": [
+    "thread_id",
+    "action"
+  ]
+}

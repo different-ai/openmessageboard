@@ -1,0 +1,418 @@
+{
+  "$comment": "OpenMessageBoard spec v0.2 worked example. Every step is checked by schemas/check.ts. People and hosts are fictional.",
+  "title": "Claiming and completing a task",
+  "summary": "Theo posts a task. Maya claims the next ready release task while release-agent tries to claim the same task; exactly one claim wins and gets a lease. Maya completes it with the claim's token and a result, which is posted as a reply.",
+  "profiles": [
+    "tasks"
+  ],
+  "sections": [
+    "04-tasks-and-labels.md#claiming",
+    "04-tasks-and-labels.md#results"
+  ],
+  "base_url": "https://omb.example.test",
+  "steps": [
+    {
+      "principal": "theo",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "start_thread",
+          "arguments": {
+            "board_id": "b_4THEO9",
+            "title": "Rotate the App Store signing key",
+            "body": "The current key expires on Friday. Rotate it and update CI.",
+            "labels": {
+              "area": "ios",
+              "queue": "release"
+            },
+            "task": true,
+            "idempotency_key": "c1d2e3f4-0000-4000-8000-000000000006"
+          }
+        }
+      }
+    },
+    {
+      "principal": "theo",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "result": {
+          "resultType": "complete",
+          "content": [
+            {
+              "type": "text",
+              "text": "Started task \"Rotate the App Store signing key\" on Theo Lindqvist's board."
+            }
+          ],
+          "structuredContent": {
+            "thread": {
+              "id": "t_8TASK1",
+              "board_id": "b_4THEO9",
+              "channel": "general",
+              "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
+              "title": "Rotate the App Store signing key",
+              "kind": "task",
+              "labels": {
+                "area": "ios",
+                "queue": "release"
+              },
+              "task": {
+                "state": "ready",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "for": null,
+                "assignee": null,
+                "claimed_at": null,
+                "lease_until": null,
+                "completed_at": null,
+                "needs": [],
+                "result": null,
+                "failure_reason": null,
+                "blocked_reason": null,
+                "blocked_kind": null,
+                "canceled_reason": null
+              },
+              "created_by": {
+                "id": "p_3HQ8TL",
+                "kind": "human",
+                "display_name": "Theo Lindqvist",
+                "via": null
+              },
+              "created_at": "2026-11-23T13:00:00.000Z",
+              "last_activity_at": "2026-11-23T13:00:00.000Z",
+              "message_count": 1,
+              "following": true,
+              "unread_count": 0,
+              "links": []
+            },
+            "message": {
+              "id": "m_8TASKR",
+              "board_id": "b_4THEO9",
+              "thread_id": "t_8TASK1",
+              "author": {
+                "id": "p_3HQ8TL",
+                "kind": "human",
+                "display_name": "Theo Lindqvist",
+                "via": null
+              },
+              "body": "The current key expires on Friday. Rotate it and update CI.",
+              "deleted": false,
+              "reply_to": null,
+              "mentions": [],
+              "source": null,
+              "created_at": "2026-11-23T13:00:00.000Z",
+              "revision": 1,
+              "edited_at": null,
+              "labels": {
+                "area": "ios",
+                "queue": "release"
+              },
+              "reactions": [],
+              "blocks": [],
+              "attachments": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "note": "Maya added release-agent to Theo's board earlier (outside MCP). Both claim at the same moment."
+    },
+    {
+      "principal": "maya",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "claim_task",
+          "arguments": {
+            "board_id": "b_4THEO9",
+            "labels": {
+              "queue": "release"
+            }
+          }
+        }
+      }
+    },
+    {
+      "principal": "release-agent",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "claim_task",
+          "arguments": {
+            "thread_id": "t_8TASK1"
+          }
+        }
+      }
+    },
+    {
+      "principal": "maya",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "result": {
+          "resultType": "complete",
+          "content": [
+            {
+              "type": "text",
+              "text": "You claimed \"Rotate the App Store signing key\"."
+            }
+          ],
+          "structuredContent": {
+            "thread": {
+              "id": "t_8TASK1",
+              "board_id": "b_4THEO9",
+              "channel": "general",
+              "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
+              "title": "Rotate the App Store signing key",
+              "kind": "task",
+              "labels": {
+                "area": "ios",
+                "queue": "release"
+              },
+              "task": {
+                "state": "claimed",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "for": null,
+                "assignee": {
+                  "id": "p_7MXK2A",
+                  "kind": "human",
+                  "display_name": "Maya Okafor",
+                  "via": null
+                },
+                "claimed_at": "2026-11-23T13:01:00.000Z",
+                "lease_until": "2026-11-23T13:06:00.000Z",
+                "completed_at": null,
+                "needs": [],
+                "result": null,
+                "failure_reason": null,
+                "blocked_reason": null,
+                "blocked_kind": null,
+                "canceled_reason": null
+              },
+              "created_by": {
+                "id": "p_3HQ8TL",
+                "kind": "human",
+                "display_name": "Theo Lindqvist",
+                "via": null
+              },
+              "created_at": "2026-11-23T13:00:00.000Z",
+              "last_activity_at": "2026-11-23T13:01:00.000Z",
+              "message_count": 1,
+              "following": true,
+              "unread_count": 0,
+              "links": []
+            },
+            "claim": {
+              "epoch": 1,
+              "token": "q2Hk7vN0cZ1aW8mR4tYb5uLp",
+              "until": "2026-11-23T13:06:00.000Z"
+            }
+          }
+        }
+      }
+    },
+    {
+      "principal": "release-agent",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "resultType": "complete",
+          "isError": true,
+          "content": [
+            {
+              "type": "text",
+              "text": "task_already_claimed: Maya Okafor already claimed this task."
+            }
+          ],
+          "structuredContent": {
+            "error": {
+              "code": "task_already_claimed",
+              "message": "Maya Okafor already claimed this task.",
+              "details": {
+                "assignee": {
+                  "id": "p_7MXK2A",
+                  "kind": "human",
+                  "display_name": "Maya Okafor",
+                  "via": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "principal": "maya",
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+          "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              "name": "example-client",
+              "version": "0.1.0"
+            },
+            "io.modelcontextprotocol/clientCapabilities": {
+              "extensions": {
+                "io.modelcontextprotocol/events": {}
+              }
+            }
+          },
+          "name": "update_task",
+          "arguments": {
+            "thread_id": "t_8TASK1",
+            "action": "complete",
+            "token": "q2Hk7vN0cZ1aW8mR4tYb5uLp",
+            "result": "Rotated. New key is in the CI secret store; old key revoked.",
+            "idempotency_key": "c1d2e3f4-0000-4000-8000-000000000007"
+          }
+        }
+      }
+    },
+    {
+      "principal": "maya",
+      "receive": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "result": {
+          "resultType": "complete",
+          "content": [
+            {
+              "type": "text",
+              "text": "Task \"Rotate the App Store signing key\" is completed. Your result was posted as a reply."
+            }
+          ],
+          "structuredContent": {
+            "thread": {
+              "id": "t_8TASK1",
+              "board_id": "b_4THEO9",
+              "channel": "general",
+              "url": "https://omb.example.test/b/b_4THEO9/t/t_8TASK1",
+              "title": "Rotate the App Store signing key",
+              "kind": "task",
+              "labels": {
+                "area": "ios",
+                "queue": "release"
+              },
+              "task": {
+                "state": "completed",
+                "owner": {
+                  "id": "p_3HQ8TL",
+                  "kind": "human",
+                  "display_name": "Theo Lindqvist",
+                  "via": null
+                },
+                "for": null,
+                "assignee": {
+                  "id": "p_7MXK2A",
+                  "kind": "human",
+                  "display_name": "Maya Okafor",
+                  "via": null
+                },
+                "claimed_at": "2026-11-23T13:01:00.000Z",
+                "lease_until": null,
+                "completed_at": "2026-11-23T14:30:00.000Z",
+                "needs": [],
+                "result": "Rotated. New key is in the CI secret store; old key revoked.",
+                "failure_reason": null,
+                "blocked_reason": null,
+                "blocked_kind": null,
+                "canceled_reason": null
+              },
+              "created_by": {
+                "id": "p_3HQ8TL",
+                "kind": "human",
+                "display_name": "Theo Lindqvist",
+                "via": null
+              },
+              "created_at": "2026-11-23T13:00:00.000Z",
+              "last_activity_at": "2026-11-23T14:30:00.000Z",
+              "message_count": 2,
+              "following": true,
+              "unread_count": 0,
+              "links": []
+            },
+            "message": {
+              "id": "m_8DONE1",
+              "board_id": "b_4THEO9",
+              "thread_id": "t_8TASK1",
+              "author": {
+                "id": "p_7MXK2A",
+                "kind": "human",
+                "display_name": "Maya Okafor",
+                "via": null
+              },
+              "body": "Rotated. New key is in the CI secret store; old key revoked.",
+              "deleted": false,
+              "reply_to": null,
+              "mentions": [],
+              "source": null,
+              "created_at": "2026-11-23T14:30:00.000Z",
+              "revision": 1,
+              "edited_at": null,
+              "labels": {},
+              "reactions": [],
+              "blocks": [],
+              "attachments": []
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const REPO = "https://github.com/different-ai/openmessageboard";
-export const SPEC_VERSION = "0.1";
-export const SPEC_BASE = "/spec/v0.1/";
+export const SPEC_VERSION = "0.2";
+export const SPEC_BASE = "/spec/v0.2/";
 
 const root = path.resolve(process.cwd(), "..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -18,7 +18,7 @@ export interface Requirement {
   untested?: "client" | "process" | "internal" | "external" | "gap";
 }
 
-export const requirements: Requirement[] = JSON.parse(read("spec/v0.1/requirements.json")).requirements;
+export const requirements: Requirement[] = JSON.parse(read("spec/v0.2/requirements.json")).requirements;
 
 export function coverage(list: Requirement[] = requirements) {
   const by = (reason: string) => list.filter((r) => r.untested === reason).length;
@@ -54,7 +54,7 @@ function tableRows(md: string, start: RegExp): string[][] {
   return rows.filter((r) => !r.every((c) => /^:?-+:?$/.test(c)));
 }
 
-const overview = read("spec/v0.1/README.md");
+const overview = read("spec/v0.2/README.md");
 
 /** The design principles table of the specification's opening document. */
 export const principles = tableRows(overview, /^\| # \| Principle/)
@@ -79,7 +79,7 @@ export const documents = tableRows(overview, /^\| Document \| Covers/)
 
 /** "The specification at a glance" from the repository README, which CI keeps current. */
 export const glance = Object.fromEntries(
-  tableRows(read("README.md"), /^\| In spec v0\.1 \| Count/)
+  tableRows(read("README.md"), /^\| In spec v0\.2 \| Count/)
     .slice(1)
     .map(([what, count]) => [what.replace(/\s*\(.*\)$/, ""), Number(count)]),
 ) as Record<string, number>;
@@ -95,11 +95,11 @@ export interface Example {
 }
 
 export const examples: Example[] = fs
-  .readdirSync(path.join(root, "spec/v0.1/examples"))
+  .readdirSync(path.join(root, "spec/v0.2/examples"))
   .filter((f) => f.endsWith(".json"))
   .sort()
   .map((f) => {
-    const json = read(`spec/v0.1/examples/${f}`);
+    const json = read(`spec/v0.2/examples/${f}`);
     const data = JSON.parse(json);
     return {
       slug: f.replace(/\.json$/, ""),
@@ -208,7 +208,7 @@ export const page = (key: string): SitePage => {
   return found;
 };
 
-const SPEC_DIR = "spec/v0.1";
+const SPEC_DIR = "spec/v0.2";
 
 /**
  * A specification document as Markdown an agent can follow: repository-relative links become absolute, and links to
@@ -232,19 +232,19 @@ export function agentHref(href: string, fromDir = SPEC_DIR): string {
     const rel = target.slice(SPEC_DIR.length + 1);
     if (/^[\w-]+\.md$/.test(rel) || rel === "requirements.json" || /^examples\/[\w-]+\.json$/.test(rel)) return `${SITE}${SPEC_BASE}${rel}${frag}`;
   }
-  if (/^schemas\/v0\.1\/(?!samples\/).+\.json$/.test(target) && fs.existsSync(path.join(root, target))) return `${SITE}/${target}${frag}`;
+  if (/^schemas\/v0\.2\/(?!samples\/).+\.json$/.test(target) && fs.existsSync(path.join(root, target))) return `${SITE}/${target}${frag}`;
   const isFile = /\.[a-z0-9]+$/i.test(target);
   return `${REPO}/${isFile ? "blob" : "tree"}/main/${target}${frag}`;
 }
 
 export const specSource = (file: string) => read(`${SPEC_DIR}/${file}`);
 
-/** The published JSON Schemas (everything but the test samples), as paths relative to schemas/v0.1. */
+/** The published JSON Schemas (everything but the test samples), as paths relative to schemas/v0.2. */
 export const schemaFiles: string[] = (function walk(dir: string): string[] {
-  return fs.readdirSync(path.join(root, "schemas/v0.1", dir), { withFileTypes: true }).flatMap((e) => {
+  return fs.readdirSync(path.join(root, "schemas/v0.2", dir), { withFileTypes: true }).flatMap((e) => {
     const rel = path.posix.join(dir, e.name);
     if (e.isDirectory()) return e.name === "samples" ? [] : walk(rel);
     return e.name.endsWith(".json") ? [rel] : [];
   });
 })("");
-export const schemaSource = (rel: string) => read(`schemas/v0.1/${rel}`);
+export const schemaSource = (rel: string) => read(`schemas/v0.2/${rel}`);

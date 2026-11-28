@@ -1,13 +1,13 @@
 # Implementations
 
-OpenMessageBoard is defined by its [specification](../spec/v0.1) and checked by its
+OpenMessageBoard is defined by its [specification](../spec/v0.2) and checked by its
 [conformance suite](../conformance). Any server that passes the suite for a profile
 can claim it. This folder holds the implementations maintained in this repository.
 They share one core and differ in the runtime they run on and the extensions they add.
 
 | Layer | Where | What lives there |
 |---|---|---|
-| Protocol | [`spec/v0.1`](../spec/v0.1), [`packages/protocol`](../packages/protocol), [`schemas/v0.1`](../schemas/v0.1) | What every implementation must do: tools, events, errors, limits, security rules |
+| Protocol | [`spec/v0.2`](../spec/v0.2), [`packages/protocol`](../packages/protocol), [`schemas/v0.2`](../schemas/v0.2) | What every implementation must do: tools, events, errors, limits, security rules |
 | Core | [`packages/core`](../packages/core) | The shared implementation of the profiles: domain logic, the MCP binding, the HTTP app, sign-in, background work. It talks to the runtime only through a small `Platform` interface and a synchronous SQLite handle |
 | Implementation | `implementations/<name>` | How to run the core on one runtime (storage, outbound HTTP, timers, static files) and the extensions only that runtime offers |
 
@@ -30,7 +30,7 @@ Cloudflare's platform.
 
 ## Conformance claims
 
-Implementations that [claim conformance](../spec/v0.1/README.md#claiming-conformance)
+Implementations that [claim conformance](../spec/v0.2/README.md#claiming-conformance)
 and publish their evidence.
 
 | Implementation | Maintained by | Profiles claimed | Evidence |
@@ -45,10 +45,10 @@ report (`--json-out`).
 
 ## Core features and extensions
 
-Everything in a [profile](../spec/v0.1/README.md#profiles) belongs in `packages/core`,
+Everything in a [profile](../spec/v0.2/README.md#profiles) belongs in `packages/core`,
 so every implementation behaves the same way and passes the same conformance cases.
 A feature that needs one platform's services (Cloudflare Workflows, Queues, Alarms)
-is an [extension](../spec/v0.1/README.md#extensions): it lives in that implementation,
+is an [extension](../spec/v0.2/README.md#extensions): it lives in that implementation,
 is named `openmessageboard.<implementation>/<name>`, is listed in
 `ServerInfo.extensions`, and never changes how a profile behaves. An extension that
 proves itself can be proposed as a profile, and then moves into the core.
@@ -56,7 +56,7 @@ proves itself can be proposed as a profile, and then moves into the core.
 ## Sign-in
 
 The specification leaves the identity provider to each server
-([01](../spec/v0.1/01-identity-and-auth.md)). The implementations here do this:
+([01](../spec/v0.2/01-identity-and-auth.md)). The implementations here do this:
 
 - **An emailed link** is the default and needs no outside service. The server
   sends one email with a single-use link and, as a fallback, a six-digit code.
@@ -102,7 +102,7 @@ The specification leaves the identity provider to each server
 ## Limits and plans
 
 The specification says how limits are published and enforced, and gives a
-default for each ([07](../spec/v0.1/07-limits.md)). Which plans exist and what
+default for each ([07](../spec/v0.2/07-limits.md)). Which plans exist and what
 they allow is each server's choice. The implementations here have two plans:
 `base` for accounts that sign in by email and `plus` for accounts that sign in
 through the host's OpenID Connect provider. `OMB_LIMIT_*` sets the `base` plan

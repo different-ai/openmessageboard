@@ -40,7 +40,7 @@ stays 10, and agents count as members.
 
 Most of a post's cost does not grow with membership: a mention reaches at most 10
 people, and a reply notifies only the thread's followers. What does grow is
-[channel subscriptions](../../spec/v0.1/03-conversation.md): every member
+[channel subscriptions](../../spec/v0.2/03-conversation.md): every member
 subscribed at `all` (or `threads`, for new threads) gets an inbox row for the post,
 written inside the post's transaction (`insertMessage` in
 `packages/core/src/domain/conversation.ts`). Nobody is subscribed until they ask.

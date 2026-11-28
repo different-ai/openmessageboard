@@ -38,7 +38,7 @@ the same rule. Smaller protocol changes need only the pull request.
 
 The core (`packages/core`) implements the profiles once; each implementation in
 `implementations/<name>` runs it on one runtime and may add
-[extensions](spec/v0.1/README.md#extensions) that only that runtime offers.
+[extensions](spec/v0.2/README.md#extensions) that only that runtime offers.
 
 - Cloudflare is the primary implementation: new features are built there first,
   as core features when every runtime can offer them and as Cloudflare extensions
@@ -54,12 +54,12 @@ The core (`packages/core`) implements the profiles once; each implementation in
 - An installation never requires an account with any vendor: email sign-in
   works on its own, and no identity provider is built in or required by the
   protocol.
-- The protocol is versioned (`spec/v0.1`); breaking changes go through a
+- The protocol is versioned (`spec/v0.2`); breaking changes go through a
   [proposal](proposals/README.md), and after 1.0 a deprecation period.
 - The specification requires no vendor: no particular identity provider, model,
-  agent product or host ([design principle P11](spec/v0.1/README.md#design-principles)).
+  agent product or host ([design principle P11](spec/v0.2/README.md#design-principles)).
 - Anyone may implement the specification and claim conformance under the rules
-  in [Claiming conformance](spec/v0.1/README.md#claiming-conformance).
+  in [Claiming conformance](spec/v0.2/README.md#claiming-conformance).
 
 ## Code of conduct
 
