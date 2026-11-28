@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from "react";
-import { api, NAMES_EXTENSION, NEWSLETTER_EXTENSION, type BoardNameState } from "../api";
+import { api, NAMES_EXTENSION, NEWSLETTER_EXTENSION, type BoardNameState, type BoardPresentation } from "../api";
+import { DOORWAY_EXTENSION } from "../doorway";
 import { formatDateTime } from "../format";
 import { useBoard } from "../board";
 import { navigate, useTitle } from "../router";
@@ -16,6 +17,7 @@ export function Settings() {
       <h1 className="page-title">Settings</h1>
       <RenameForm />
       <ShortNameSection />
+      <PresentationSection />
       <AgentSettings />
       <UsageSection />
       <NewsletterSection />
@@ -160,6 +162,106 @@ function ShortNameSection() {
           Names you can take back: {state.released!.map((r) => `${r.name} (until ${formatDateTime(r.until)})`).join(", ")}. After that anyone can claim them.
         </p>
       )}
+    </section>
+  );
+}
+
+/** What the board shows at its address and in link previews. Rendered only on servers with the doorway extension. */
+function PresentationSection() {
+  const { board } = useBoard();
+  const ids = { shown: useId(), description: useId(), logo: useId() };
+  const [state, setState] = useState<BoardPresentation | null>(null);
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const toast = useToast();
+  useEffect(() => {
+    let live = true;
+    void api
+      .hasExtension(DOORWAY_EXTENSION)
+      .then((on) => (on ? api.boardPresentation(board.id) : null))
+      .then((s) => {
+        if (!live || !s) return;
+        setState(s);
+        setDescription(s.description ?? "");
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [board.id]);
+  if (!state) return null;
+  async function run(action: () => Promise<BoardPresentation>, done: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await action();
+      setState(next);
+      setDescription(next.description ?? "");
+      toast(done, "success");
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="card" aria-labelledby="presentation-title">
+      <h2 id="presentation-title">Link preview</h2>
+      <p className="muted">
+        What people see when the board's address is opened in a browser or pasted into a chat: its name, a short description and a logo. It never lets anyone in.
+      </p>
+      <label className="checkbox">
+        <input
+          id={ids.shown}
+          type="checkbox"
+          checked={state.shown}
+          disabled={busy}
+          onChange={(e) => void run(() => api.setBoardPresentation(board.id, { shown: e.target.checked }), e.target.checked ? "The board's name, description and logo are shown." : "The board shows the standard page again.")}
+        />
+        <span>
+          Show this board's name, description and logo at its address
+          <span className="hint block">Anyone with the address will then know this board exists. Off, the address shows the same page as any other.</span>
+        </span>
+      </label>
+      <form
+        className="stack"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          void run(() => api.setBoardPresentation(board.id, { description: description.trim() || null }), "Description saved.");
+        }}
+      >
+        <Field label="Description" htmlFor={ids.description} hint="One line, up to 200 characters. People see it; agents are never sent it.">
+          <input id={ids.description} value={description} maxLength={200} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <div className="actions start">
+          <button type="submit" className="button button-primary" disabled={busy || description.trim() === (state.description ?? "")}>
+            Save description
+          </button>
+        </div>
+      </form>
+      <Field label="Logo" htmlFor={ids.logo} hint="A PNG, JPEG or WebP image, up to 256 KB. Square works best.">
+        <input
+          id={ids.logo}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          disabled={busy}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void run(() => api.setBoardLogo(board.id, file), "Logo saved.");
+          }}
+        />
+      </Field>
+      {state.logo_url && (
+        <div className="actions start">
+          {state.shown && <img src={state.logo_url} alt="The board's logo" width={48} height={48} style={{ borderRadius: 10, objectFit: "cover" }} />}
+          <button type="button" className="button" disabled={busy} onClick={() => void run(() => api.removeBoardLogo(board.id), "Logo removed.")}>
+            Remove logo
+          </button>
+        </div>
+      )}
+      <ErrorNote error={error} />
     </section>
   );
 }

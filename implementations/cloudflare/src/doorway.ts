@@ -1,6 +1,7 @@
 // Types only: the core is loaded with a dynamic import (server.ts), so nothing here may import it statically.
 import type { AppContext, ExtensionModule } from "@openmessageboard/core";
 import { RESERVED_NAMES } from "./names.js";
+import { Presentations, presentationRoutes } from "./presentation.js";
 
 /**
  * The doorway (`openmessageboard.cloudflare/doorway`): what a board or invite address shows in a browser on a
@@ -396,8 +397,8 @@ ${promptBlock(connectPrompt(`${publicUrl}/mcp`, { kind: "home" }))}
 export interface DoorwayDeps {
   /** The core's invite preview: throws when the token matches no invite. */
   previewInvite(ctx: AppContext, token: string): InvitePreviewFields;
-  /** What a board's owner chose to show for an address, or null (the presentation part of this extension). */
-  presentation?(ctx: AppContext, target: DoorwayTarget & { kind: "board" }): BoardPresentation | null;
+  /** The core's member check, for the owner's presentation settings. */
+  requireMember(ctx: AppContext, actor: never, boardId: string, min: "owner"): { board: { owner_id: string } };
 }
 
 const PAGE_HEADERS = {
@@ -419,6 +420,9 @@ export function doorwayExtension(deps: DoorwayDeps): ExtensionModule {
     },
     register(app, ctx) {
       const base = ctx.config.publicUrl;
+      // What owners chose to show at their board's address (presentation.ts). Everything else stays generic.
+      const shown = new Presentations(ctx.db as never, base);
+      presentationRoutes({ requireMember: deps.requireMember }, () => shown)(app, ctx);
       const respond = (accept: string | undefined, target: DoorwayTarget, html: () => string, status = 200) =>
         prefersMarkdown(accept)
           ? new Response(doorwayText(base, target), { status: 200, headers: { ...PAGE_HEADERS, "content-type": "text/markdown; charset=utf-8" } })
@@ -431,7 +435,7 @@ export function doorwayExtension(deps: DoorwayDeps): ExtensionModule {
         const label = c.req.param("label");
         const target = by === "id" ? doorwayTarget(`/b/${label}`) : by === "name" ? doorwayTarget(`/${label}`) : null;
         if (!target || target.kind !== "board" || target.by !== by) return c.json({ error: { code: "not_found", message: "Not found" } }, 404);
-        return respond(c.req.header("accept"), target, () => boardPage(base, target, deps.presentation?.(ctx, target) ?? null));
+        return respond(c.req.header("accept"), target, () => boardPage(base, target, shown.forAddress(target, ctx.now())));
       });
       app.get("/x/doorway/invite/:token", (c) => {
         const token = c.req.param("token");

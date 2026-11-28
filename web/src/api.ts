@@ -164,14 +164,17 @@ const enc = encodeURIComponent;
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const multipart = body instanceof FormData;
-  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
+  // A file is sent as it is, with its own type.
+  const file = body instanceof Blob;
+  if (file) headers["Content-Type"] = body.type || "application/octet-stream";
+  else if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   let res: Response;
   try {
     res = await fetch(path, {
       method,
       credentials: "include",
       headers,
-      body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart || file ? body : JSON.stringify(body),
       signal,
     });
   } catch (e) {
@@ -232,6 +235,13 @@ export interface BoardNameState {
   released?: { name: string; until: string }[];
 }
 
+/** What a board's owner chose to show at its address (the doorway extension). */
+export interface BoardPresentation {
+  shown: boolean;
+  description: string | null;
+  logo_url: string | null;
+}
+
 /** The extension that lets people who sign in choose the newsletter. Servers without it never show the choice. */
 export const NEWSLETTER_EXTENSION = "openmessageboard.cloudflare/newsletter";
 let serverInfoCache: Promise<ServerInfo> | null = null;
@@ -257,6 +267,11 @@ export const api = {
   claimBoardName: (boardId: string, name: string) => put<BoardNameState>(`/x/names/boards/${boardId}`, { name }),
   releaseBoardName: (boardId: string) => del<BoardNameState>(`/x/names/boards/${boardId}`),
   keepBoardName: (boardId: string) => post<BoardNameState>(`/x/names/boards/${boardId}/keep`),
+  /** The doorway extension: what a board shows at its address. */
+  boardPresentation: (boardId: string) => get<BoardPresentation>(`/x/doorway/boards/${boardId}/presentation`),
+  setBoardPresentation: (boardId: string, change: { shown?: boolean; description?: string | null }) => put<BoardPresentation>(`/x/doorway/boards/${boardId}/presentation`, change),
+  setBoardLogo: (boardId: string, file: Blob) => put<BoardPresentation>(`/x/doorway/boards/${boardId}/logo`, file),
+  removeBoardLogo: (boardId: string) => del<BoardPresentation>(`/x/doorway/boards/${boardId}/logo`),
   /** The newsletter extension (only on servers that list it): the signed-in person's choice. */
   newsletter: () => get<{ subscribed: boolean }>("/x/newsletter/me"),
   setNewsletter: (subscribed: boolean) => request<{ subscribed: boolean }>("PUT", "/x/newsletter/me", { subscribed }),
