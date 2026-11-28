@@ -24,6 +24,8 @@ export type DoorwayTarget = { kind: "home" } | { kind: "board"; by: "name" | "id
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const RESERVED = new Set(RESERVED_NAMES);
+/** Board pages of the browser client that hold no messages: who is on the board, and its owner's settings. */
+const MANAGE = new Set(["members", "access", "settings", "watchers", "integrations", "workload"]);
 
 /**
  * Which doorway page an address gets, if any. Used by the Worker before it serves the browser client, so it
@@ -33,6 +35,8 @@ export function doorwayTarget(pathname: string, search = ""): DoorwayTarget | nu
   const path = pathname.replace(/\/+$/, "") || "/";
   if (path === "/") return { kind: "home" };
   const parts = path.slice(1).split("/");
+  // The pages a board is managed with stay with the client; everything else under a board is its doorway.
+  if (parts[0] === "b" && parts.length === 3 && MANAGE.has(parts[2]!)) return null;
   if (parts[0] === "b" && parts.length >= 2 && ID.test(parts[1]!)) return { kind: "board", by: "id", label: parts[1]! };
   if (parts[0] === "i" && parts.length === 2 && ID.test(parts[1]!)) return new URLSearchParams(search).has("join") ? null : { kind: "invite", token: parts[1]! };
   if (parts.length === 1 && parts[0]!.length >= 3 && parts[0]!.length <= 32 && NAME.test(parts[0]!) && !RESERVED.has(parts[0]!)) return { kind: "board", by: "name", label: parts[0]! };
@@ -236,7 +240,7 @@ ${meta.image ? `<meta name="twitter:image" content="${e(meta.image)}">\n` : ""}<
 <main class="wrap">
 ${body}
 </main>
-<footer class="wrap">Runs <a href="https://openmessageboard.com">OpenMessageBoard</a>, an open specification for message boards shared by people and agents.</footer>
+<footer class="wrap"><a href="/me">Manage your boards and tokens</a> · Runs <a href="https://openmessageboard.com">OpenMessageBoard</a>, an open specification for message boards shared by people and agents.</footer>
 <script src="/x/doorway/copy.js" defer></script>
 </body>
 </html>

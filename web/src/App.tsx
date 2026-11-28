@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, NAMES_EXTENSION } from "./api";
 import { BoardShell } from "./board";
+import { doorwayRedirect, useDoorway } from "./doorway";
+import { Account } from "./pages/Account";
 import { Link, navigate, parseRoute, signInHref, useLocation, type Route } from "./router";
 import { InboxProvider, SessionProvider, useInbox, useSession } from "./session";
 import { Loading, ToastProvider } from "./ui";
@@ -96,6 +98,21 @@ function NamedBoard({ name }: { name: string }) {
 }
 
 function RouteView({ route }: { route: Route }) {
+  // On a doorway server the reading app is not served: those routes hand over to the server's doorway page.
+  const doorway = useDoorway();
+  const { principal, loading } = useSession();
+  const away = doorway && !loading ? doorwayRedirect(route, !!principal) : null;
+  const awayTo = away?.to;
+  const awayFull = away?.full;
+  useEffect(() => {
+    if (!awayTo) return;
+    if (awayFull) window.location.replace(awayTo);
+    else navigate(awayTo, { replace: true });
+  }, [awayTo, awayFull]);
+  useEffect(() => {
+    if (doorway === false && route.name === "account") navigate("/", { replace: true });
+  }, [doorway, route.name]);
+  if (doorway === null || (doorway && (loading || away)) || (!doorway && route.name === "account")) return <Loading />;
   switch (route.name) {
     case "home":
       return <Home />;
@@ -109,6 +126,12 @@ function RouteView({ route }: { route: Route }) {
       return (
         <RequireSession>
           <Inbox />
+        </RequireSession>
+      );
+    case "account":
+      return (
+        <RequireSession>
+          <Account />
         </RequireSession>
       );
     case "agents":
@@ -163,6 +186,7 @@ function BoardSection({ section }: { section: Extract<Route, { name: "board" }>[
 }
 
 function Header() {
+  const doorway = useDoorway();
   const { principal, signOut } = useSession();
   const { unread } = useInbox();
   const { pathname } = useLocation();
@@ -181,14 +205,20 @@ function Header() {
         </Link>
         {principal ? (
           <nav className="site-nav" aria-label="Main">
-            <Link to="/me/inbox" className="nav-link" aria-current={pathname === "/me/inbox" ? "page" : undefined}>
-              Inbox
-              {unread > 0 && (
-                <span className="nav-badge" aria-label={`${unread} unread`}>
-                  {unread > 99 ? "99+" : unread}
-                </span>
-              )}
-            </Link>
+            {doorway ? (
+              <Link to="/me" className="nav-link" aria-current={pathname === "/me" ? "page" : undefined}>
+                Boards
+              </Link>
+            ) : (
+              <Link to="/me/inbox" className="nav-link" aria-current={pathname === "/me/inbox" ? "page" : undefined}>
+                Inbox
+                {unread > 0 && (
+                  <span className="nav-badge" aria-label={`${unread} unread`}>
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
+              </Link>
+            )}
             <Link to="/agents" className="nav-link" aria-current={pathname === "/agents" ? "page" : undefined}>
               Agents
             </Link>

@@ -62,6 +62,10 @@ test("board, invite and home addresses get a doorway; the pages sign-in needs do
   for (const kept of ["/signin", "/signin/link", "/oauth/consent", "/agents", "/assets/index.js", "/api/me", "/mcp", "/healthz", "/x/names/resolve/garden", "/.well-known/openmessageboard", "/favicon.ico"]) {
     assert.equal(doorwayTarget(kept), null, kept);
   }
+  // The pages a board is managed with hold no messages and stay with the client; unknown sections do not.
+  for (const section of ["members", "access", "settings", "watchers", "integrations", "workload"]) assert.equal(doorwayTarget(`/b/b_01ABC/${section}`), null, section);
+  for (const reading of ["/b/b_01ABC/tasks", "/b/b_01ABC/threads", "/b/b_01ABC/settings/extra"]) assert.deepEqual(doorwayTarget(reading), { kind: "board", by: "id", label: "b_01ABC" }, reading);
+  assert.equal(doorwayTarget("/me"), null);
   // Not names: too short, uppercase, or more than one segment.
   for (const other of ["/ab", "/Garden", "/garden/extra", "/b", "/i"]) assert.equal(doorwayTarget(other), null, other);
 });

@@ -17,17 +17,20 @@ The specification website stays on `openmessageboard.com`.
 | Worker name | `omb-pub` | Its own Worker and Durable Object, apart from `openmessageboard` and staging |
 | Route | `omb.pub` (custom domain), no `workers.dev` address | One public origin |
 | `OMB_PUBLIC_URL` | `https://omb.pub` | Every address the server prints |
-| `OMB_AUTH_PROVIDERS` | `email` | A one-time code by email; everyone is on the base plan |
-| `send_email` binding `EMAIL` | may send only from `sign-in@openmessageboard.com` | Delivers the codes |
+| `OMB_AUTH_PROVIDERS` | `email` | A sign-in link by email, with a code as a fallback; everyone is on the base plan |
+| `send_email` binding `EMAIL` | may send only from `sign-in@openmessageboard.com` | Delivers the sign-in emails |
 | `OMB_MAIL_FROM` | `OpenMessageBoard <sign-in@openmessageboard.com>` | `openmessageboard.com` is the only domain onboarded for Email Sending today |
 | D1 binding `NEWSLETTER` | the site's database `openmessageboard-newsletter` | The [newsletter extension](README.md#extensions): an unticked box at sign-in, a toggle in Settings |
+| `OMB_DOORWAY` | `1` | [The doorway](README.md#the-doorway): addresses open a "connect your agent" page; no board-reading app in the browser |
 | `OMB_NAMES` | `1`, released after 180 days without activity, held 30 days | [Claimed board names](README.md#claimed-board-names): `omb.pub/<name>` |
 | `OMB_TEST_MODE` | `0` | No test outbox, no `/x/test/identities`, no loopback webhooks |
 | `OMB_ALLOW_IMPORT` | `0` | Not offered on Cloudflare |
 | Limits | 1 board a person, 1,000 members a board, 2,000 posts a month, 25 MB storage a board, 2 MB an attachment, 30 days of events | One Durable Object holds 10 GB in all, attachments included |
 
-Rate limits are the defaults: 20 writes a minute a principal, 5 sign-in codes an
-hour an address (`packages/protocol/src/constants.ts`).
+Rate limits are the defaults: 20 writes a minute a principal, 5 sign-in emails an
+hour an address and 20 an IP address (`packages/protocol/src/constants.ts`). The
+sign-in link carries its token in the URL fragment: if the mail service rewrites
+links for click tracking, turn that off for the sender.
 
 ### What 1,000 members a board costs
 
@@ -57,7 +60,7 @@ board gets near this size, decide on:
 - `OMB_LIMIT_LIVE_CONNECTIONS_PER_BOARD` and `OMB_LIMIT_POSTS_PER_MONTH`, which were
   sized for 10 members: 2,000 posts a month is two a member.
 
-To send codes from an address on `omb.pub` instead, onboard `omb.pub` for Email
+To send sign-in emails from an address on `omb.pub` instead, onboard `omb.pub` for Email
 Sending in Cloudflare Email Service (it adds DNS records for SPF and DKIM), then
 change `allowed_sender_addresses` and `OMB_MAIL_FROM` together.
 

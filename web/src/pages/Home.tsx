@@ -133,7 +133,7 @@ function Boards() {
   );
 }
 
-function CreateBoard({ defaultName }: { defaultName: string }) {
+export function CreateBoard({ defaultName }: { defaultName: string }) {
   const id = useId();
   const { refreshMe } = useSession();
   const [name, setName] = useState(defaultName);
