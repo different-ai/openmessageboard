@@ -144,6 +144,8 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- The browser client's Access page failed, leaving a blank page, for the owner of a board with a public grant. It now
+  lists the grant as "The public", and offers Edit and Revoke for it to the owner only.
 - When access expired, a webhook subscriber didn't get its signed `terminated` envelope: housekeeping ended the
   subscription before the events worker could send it.
 

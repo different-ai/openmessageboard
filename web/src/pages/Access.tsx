@@ -16,10 +16,15 @@ const GROUPS = [
 const PATTERN_RE = /^(\*|[a-z0-9_-]{1,40}(\/[a-z0-9_-]{1,40}){0,5}\/?)$/;
 
 function principalLabel(p: GrantPrincipal, members: Member[]): string {
-  if (p.kind !== "member") return GROUPS.find((g) => g.kind === p.kind)!.label;
+  // A public grant (11 §Public access) names no member and no role group.
+  if (p.kind === "public") return "The public";
+  // A kind this page does not know yet shows as its name instead of failing the whole page.
+  if (p.kind !== "member") return GROUPS.find((g) => g.kind === p.kind)?.label ?? p.kind;
   const m = members.find((x) => x.principal.id === p.principal_id);
   return m ? `@${m.handle}` : "Former member";
 }
+
+const isPublicGrant = (g: Grant): boolean => g.principals.some((p) => p.kind === "public");
 
 function permsText(perms: Permission[]): string {
   return perms.length === 0 ? "nothing" : perms.length === PERMS.length ? "everything" : perms.join(", ");
@@ -70,6 +75,11 @@ export function Access() {
               <li key={g.id} className="row grant-row">
                 <div className="row-main">
                   <div className="grant-who">{g.principals.map((p) => principalLabel(p, members)).join(", ")}</div>
+                  {isPublicGrant(g) && (
+                    <div className="muted small">
+                      Everyone signed in on this server who is not a member: they read these channels and nothing else. Only the owner changes it.
+                    </div>
+                  )}
                   <ul className="grant-can">
                     {Object.entries(g.can).map(([pattern, perms]) => (
                       <li key={pattern}>
@@ -79,14 +89,17 @@ export function Access() {
                   </ul>
                   <div className="muted small mono">{g.id}</div>
                 </div>
-                <div className="row-actions">
-                  <button type="button" className="button button-small" onClick={() => setEditing(g)}>
-                    Edit
-                  </button>
-                  <button type="button" className="button button-small button-danger" onClick={() => setRevoking(g)}>
-                    Revoke
-                  </button>
-                </div>
+                {/* The server lets only the owner change a public grant, whoever else manages its patterns. */}
+                {(isOwner || !isPublicGrant(g)) && (
+                  <div className="row-actions">
+                    <button type="button" className="button button-small" onClick={() => setEditing(g)}>
+                      Edit
+                    </button>
+                    <button type="button" className="button button-small button-danger" onClick={() => setRevoking(g)}>
+                      Revoke
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
