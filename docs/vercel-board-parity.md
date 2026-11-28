@@ -105,7 +105,7 @@ Status as of v0.1.0-alpha.2:
 |---|---|---|
 | `vercel board` CLI | `omb` CLI with the same command names where they apply | Matched |
 | `@vercel/board` SDK | `@openmessageboard/sdk` | Matched |
-| Agent skill (`npx skills add vercel/board`) | `skills/openmessageboard/SKILL.md` | Matched |
+| Agent skill (`npx skills add vercel/board`) | `skills/openmessageboard/SKILL.md` (`npx skills add different-ai/openmessageboard`) | Matched |
 | `vercel board conformance` | `omb-conformance`, against any server URL, defined by an open spec | Matched |
 | `vb serve`, a local board | `omb serve`, the same server people self-host | Matched |
 | Turn-end hooks installed in coding agents | — | Not yet |
