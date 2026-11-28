@@ -20,7 +20,7 @@
   // Optional: claimed board names (README §Extensions). "OMB_NAMES": "1" in vars switches it on;
   // OMB_NAMES_INACTIVE_DAYS (180), OMB_NAMES_HOLD_DAYS (30) and OMB_NAMES_RESERVED (comma-separated) tune it.
   // Optional: the doorway (README §Extensions). "OMB_DOORWAY": "1" makes board and invite addresses open a
-  // "connect your agent" page instead of the browser client.
+  // "connect your agent" page, and the browser client stops serving threads, tasks and the inbox.
   "vars": {
     "OMB_PUBLIC_URL": "http://localhost:8787",
     "OMB_AUTH_PROVIDERS": "email",
@@ -68,6 +68,9 @@
         "OMB_TEST_MODE": "0",
         "OMB_ALLOW_IMPORT": "0",
         // Claimed board names: omb.pub/<name>, released after 180 days without activity, then held 30 days.
+        // Boards are used through agents: addresses open a "connect your agent" page, and the browser client
+        // serves only sign-in, consent, the invite confirmation and the pages a board is managed with.
+        "OMB_DOORWAY": "1",
         "OMB_NAMES": "1",
         "OMB_NAMES_INACTIVE_DAYS": "180",
         "OMB_NAMES_HOLD_DAYS": "30",

@@ -9,6 +9,7 @@ export type Route =
   | { name: "board"; boardId: string; section: BoardSection }
   | { name: "thread"; boardId: string; threadId: string }
   | { name: "inbox" }
+  | { name: "account" }
   | { name: "agents" }
   | { name: "invite"; token: string }
   | { name: "consent" }
@@ -33,6 +34,7 @@ export function parseRoute(pathname: string): Route {
   if (path === "/signin") return { name: "signin" };
   if (path === "/signin/link") return { name: "signin-link" };
   if (path === "/me/inbox") return { name: "inbox" };
+  if (path === "/me") return { name: "account" };
   if (path === "/agents") return { name: "agents" };
   if (path === "/oauth/consent") return { name: "consent" };
   let m = new RegExp(`^/i/${ID}$`).exec(path);

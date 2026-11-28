@@ -9,6 +9,7 @@ import { ShareDialog } from "./share";
 import { ErrorNote, Loading } from "./ui";
 import { AccessEnded, AccessRequired } from "./pages/Status";
 import { BoardSwitcher } from "./channels";
+import { useDoorway } from "./doorway";
 
 type BoardValue = {
   board: Board;
@@ -41,6 +42,8 @@ type State = "loading" | "ready" | "denied" | "ended" | "error";
 
 export function BoardShell({ boardId, section, children }: { boardId: string; section: BoardSection | "thread"; children: ReactNode }) {
   const { principal } = useSession();
+  // On a doorway server the board is read through an agent: only the management pages are here.
+  const doorway = useDoorway();
   const [board, setBoard] = useState<Board | null>(null);
   const [members, setMembersState] = useState<Member[]>([]);
   const [state, setState] = useState<State>("loading");
@@ -169,14 +172,18 @@ export function BoardShell({ boardId, section, children }: { boardId: string; se
         <div className="board-head">
           <div className="board-title-row">
             <div className="board-title">
-              <Link to={`/b/${b.id}`} className="board-name">
-                {b.name}
-              </Link>
+              {doorway ? (
+                <span className="board-name">{b.name}</span>
+              ) : (
+                <Link to={`/b/${b.id}`} className="board-name">
+                  {b.name}
+                </Link>
+              )}
               <span className={`badge role-${b.my_role}`}>{b.my_role}</span>
               <LiveDot status={status} />
             </div>
             <div className="board-title-actions">
-              <BoardSwitcher />
+              {!doorway && <BoardSwitcher />}
               {value.isOwner && (
                 <button type="button" className="button button-primary" onClick={() => setShareOpen(true)}>
                   Share
@@ -189,7 +196,7 @@ export function BoardShell({ boardId, section, children }: { boardId: string; se
           )}
           <nav className="board-tabs" aria-label="Board">
             {tabs
-              .filter((t) => !t.owner || value.isOwner)
+              .filter((t) => (!t.owner || value.isOwner) && !(doorway && (t.key === "threads" || t.key === "tasks")))
               .map((t) => (
                 <Link key={t.key} to={t.to} className="board-tab" aria-current={current === t.key ? "page" : undefined}>
                   {t.label}

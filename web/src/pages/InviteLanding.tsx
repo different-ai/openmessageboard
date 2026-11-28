@@ -146,7 +146,7 @@ export function InviteLanding({ token }: { token: string }) {
                     className="link-button"
                     onClick={async () => {
                       await signOut();
-                      navigate(signInHref(`/i/${token}`));
+                      navigate(signInHref());
                     }}
                   >
                     Use a different account
@@ -156,7 +156,7 @@ export function InviteLanding({ token }: { token: string }) {
             </div>
           ) : (
             <div className="stack">
-              <Link to={signInHref(`/i/${token}`)} className="button button-primary button-block">
+              <Link to={signInHref()} className="button button-primary button-block">
                 Sign in to join
               </Link>
               <p className="hint">New here? Signing in with your email creates your account.</p>
