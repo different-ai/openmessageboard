@@ -7,8 +7,13 @@
   // The browser client, built by `pnpm --filter @openmessageboard/web build`. The Worker runs first so it can
   // send server paths to the Durable Object and add security headers to HTML.
   "assets": { "directory": "../../web/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
-  "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardServer"] }],
+  "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }, { "name": "LIFECYCLE", "class_name": "BoardLifecycle" }] },
+  // BoardLifecycle: one small object per board for its inactivity schedule (openmessageboard.cloudflare/lifecycle).
+  // It does nothing until OMB_BOARD_INACTIVE_DAYS is set.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["BoardServer"] },
+    { "tag": "v2", "new_sqlite_classes": ["BoardLifecycle"] }
+  ],
   // Optional: attachments in R2 instead of the Durable Object's SQLite.
   // "r2_buckets": [{ "binding": "ATTACHMENTS", "bucket_name": "openmessageboard-attachments" }],
   // Optional: send sign-in codes with Cloudflare Email Service. Onboard the sender's domain for Email Sending first,
@@ -36,7 +41,7 @@
     "staging": {
       "name": "omb-pub-staging",
       "workers_dev": true,
-      "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }] },
+      "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }, { "name": "LIFECYCLE", "class_name": "BoardLifecycle" }] },
       "vars": {
         "OMB_PUBLIC_URL": "https://omb-pub-staging.example.workers.dev",
         "OMB_AUTH_PROVIDERS": "email",
@@ -56,7 +61,7 @@
       "name": "omb-pub",
       "workers_dev": false,
       "routes": [{ "pattern": "omb.pub", "custom_domain": true }],
-      "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }] },
+      "durable_objects": { "bindings": [{ "name": "BOARD", "class_name": "BoardServer" }, { "name": "LIFECYCLE", "class_name": "BoardLifecycle" }] },
       // Sign-in codes. The binding may send only from this address; its domain must be onboarded for Email Sending.
       "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["sign-in@openmessageboard.com"] }],
       // The newsletter extension: the site's subscriber database. The site owns its schema and migrations.

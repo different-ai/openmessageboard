@@ -21,7 +21,7 @@ They share one core and differ in the runtime they run on and the extensions the
 | Storage | Durable Object SQLite, R2 for attachments | SQLite file (better-sqlite3), attachments on disk |
 | Background work | Alarms (timers while awake) | In-process timers |
 | Profiles | `core`, `live`, `events`, `tasks`, `automation`, `public`, `sync` | `core`, `live`, `events`, `tasks`, `automation`, `import`, `public`, `sync`, `workload` |
-| Extensions | Coming next: Workflows, Queues-backed delivery | None |
+| Extensions | [Newsletter choice, inactive boards](cloudflare/README.md#extensions). Coming next: Workflows, Queues-backed delivery | None |
 | Sign-in | Emailed link (with a code); optionally an OpenID Connect provider | Emailed link (with a code); optionally an OpenID Connect provider |
 
 Pick Node to self-host on your own machine or VM with nothing but Docker. Pick

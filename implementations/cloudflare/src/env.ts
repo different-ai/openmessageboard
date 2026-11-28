@@ -2,6 +2,8 @@
 export interface Env {
   /** The Durable Object that runs the board server. */
   BOARD: DurableObjectNamespace;
+  /** One small object per board for its inactivity schedule and Alarm. Used when OMB_BOARD_INACTIVE_DAYS is set. */
+  LIFECYCLE?: DurableObjectNamespace;
   /** Static files of the browser client (Workers static assets). */
   ASSETS?: Fetcher;
   /** Attachment bytes. Without it, attachments are kept in the Durable Object's SQLite. */

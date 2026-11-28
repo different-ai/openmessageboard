@@ -1,5 +1,6 @@
 import type { Migration } from "@openmessageboard/core";
 import { NAMES_MIGRATION_SQL } from "./names.js";
+import { LIFECYCLE_MIGRATION } from "./lifecycle-server.js";
 
 /** Tables only this implementation uses. They run after the core's migrations. */
 export const CLOUDFLARE_MIGRATIONS: Migration[] = [
@@ -9,4 +10,5 @@ export const CLOUDFLARE_MIGRATIONS: Migration[] = [
   },
   // The names extension's table exists on every deployment; the extension itself is on only with OMB_NAMES=1.
   { name: "cf_0002_board_names", sql: NAMES_MIGRATION_SQL },
+  LIFECYCLE_MIGRATION,
 ];
