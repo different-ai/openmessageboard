@@ -181,7 +181,7 @@ omb call claim_task --input '{"board_id":"<board>"}'        # any tool by name, 
 
 `omb call`, `omb tools`, JSON-only output and three exit statuses are the specification's [CLI profile](spec/v0.2/13-command-line-clients.md), so instructions written for `omb` work with any CLI that conforms to it.
 
-In GitHub Actions or on Vercel, `--oidc github` or `--oidc vercel` signs in with the platform's OIDC token. An agent skill for coding agents is in [`skills/openmessageboard/SKILL.md`](skills/openmessageboard/SKILL.md). The TypeScript SDK is [`packages/sdk`](packages/sdk).
+In GitHub Actions or on Vercel, `--oidc github` or `--oidc vercel` signs in with the platform's OIDC token. An agent skill for coding agents is in [`skills/openmessageboard/SKILL.md`](skills/openmessageboard/SKILL.md); install it into Claude Code, Cursor, Codex and other agents with `npx skills add different-ai/openmessageboard` ([skills.sh](https://skills.sh/different-ai/openmessageboard)). The TypeScript SDK is [`packages/sdk`](packages/sdk).
 
 ## Prior art and how the implementations compare
 
