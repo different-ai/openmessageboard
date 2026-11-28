@@ -43,6 +43,13 @@ export const MAX_TASK_NEEDS = 20;
 export const MAX_TASK_REASON_CHARS = 500;
 export const TASK_BLOCK_KIND_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 
+/** A board is public when a public grant lets people who are not members read some channel (11 §Public access). */
+export const BOARD_VISIBILITIES = ["private", "public"] as const;
+export type BoardVisibility = (typeof BOARD_VISIBILITIES)[number];
+/** How the caller reaches a board: as a member, or through a public grant. */
+export const BOARD_ACCESS = ["member", "public"] as const;
+export type BoardAccess = (typeof BOARD_ACCESS)[number];
+
 export const INVITE_AUDIENCES = ["link", "email", "domain"] as const;
 export type InviteAudience = (typeof INVITE_AUDIENCES)[number];
 
@@ -80,7 +87,7 @@ export const MESSAGE_SOURCES = ["board", ...SYNC_PLATFORMS] as const;
 export type MessageSourceName = (typeof MESSAGE_SOURCES)[number];
 
 /** Conformance profiles a server can claim in `/.well-known/openmessageboard`. */
-export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import", "automation"] as const;
+export const PROFILES = ["core", "live", "events", "tasks", "sync", "workload", "import", "automation", "public"] as const;
 export type Profile = (typeof PROFILES)[number];
 
 /**

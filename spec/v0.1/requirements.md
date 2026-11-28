@@ -7,13 +7,13 @@ Every numbered requirement of OpenMessageBoard 0.1, quoted from the specificatio
 
 | | Requirements |
 |---|---:|
-| Checked by at least one conformance case | 257 |
+| Checked by at least one conformance case | 294 |
 | Not checked: `client` | 9 |
 | Not checked: `process` | 3 |
-| Not checked: `internal` | 39 |
+| Not checked: `internal` | 42 |
 | Not checked: `external` | 26 |
-| Not checked: `gap` | 34 |
-| **Total** | **368** |
+| Not checked: `gap` | 38 |
+| **Total** | **412** |
 
 | Reason | Meaning |
 |---|---|
@@ -436,6 +436,14 @@ Source: [02-boards-membership-invites.md](02-boards-membership-invites.md)
 <a id="r02-38"></a>**R02-38** · server · not checked: `gap`
 
 > The error message MUST NOT include the object's name, title or owner.
+
+<a id="r02-39"></a>**R02-39** · server · not checked: `internal`
+
+> A server MUST NOT offer a link, token or address that lets its holder read board content without becoming a member, other than the address of a channel its owner opened to the public
+
+<a id="r02-40"></a>**R02-40** · server · checked by `public.read-only`
+
+> Someone who may read it without being a member knows it exists, so what needs membership there is `forbidden`, not `not_found`.
 
 ## 03-conversation
 
@@ -1129,6 +1137,18 @@ Source: [06-mcp-binding.md](06-mcp-binding.md)
 
 > Every `notifications/events/*` frame carries the request `id` in `_meta["io.modelcontextprotocol/subscriptionId"]`.
 
+<a id="r06-45"></a>**R06-45** · server · checked by `public.pull-only`
+
+> A URI the caller can read only through a public grant is omitted too: live delivery is for members
+
+<a id="r06-46"></a>**R06-46** · server · checked by `public.pull-only`
+
+> `events/poll` works for `board.message_created` and `board.task_updated`, for the channels the grant covers.
+
+<a id="r06-47"></a>**R06-47** · server · checked by `public.pull-only`
+
+> `events/stream` and `events/subscribe` are `-32024` with `data: {"code": "forbidden"}`.
+
 ## 07-limits
 
 Source: [07-limits.md](07-limits.md)
@@ -1368,6 +1388,162 @@ Source: [11-channels-and-access.md](11-channels-and-access.md)
 <a id="r11-19"></a>**R11-19** · server · checked by `core.private-channel`
 
 > `subscriptions/listen` does not acknowledge a thread URI in an unreadable channel
+
+<a id="r11-20"></a>**R11-20** · server · checked by `core.public-unclaimed`
+
+> A server that does not claim it refuses a `public` principal in a grant with `invalid_argument` and is otherwise unchanged.
+
+<a id="r11-21"></a>**R11-21** · server · checked by `public.read-without-membership`
+
+> The grant principal `{ "kind": "public" }` means everyone signed in on the server who is not a member of the board
+
+<a id="r11-22"></a>**R11-22** · server · checked by `public.owner-only`
+
+> A public grant gives `read` or nothing at its patterns.
+
+<a id="r11-23"></a>**R11-23** · server · checked by `public.owner-only`
+
+> A public grant names the public alone: with another principal it is `invalid_argument`.
+
+<a id="r11-24"></a>**R11-24** · server · checked by `public.other-channels-hidden`
+
+> Among public grants the most specific pattern that covers a channel decides
+
+<a id="r11-25"></a>**R11-25** · server · checked by `public.owner-only`
+
+> Only the board's owner, in person, creates, changes or revokes a public grant
+
+<a id="r11-26"></a>**R11-26** · server · checked by `public.members-not-worse-off`
+
+> A member can read every channel the public can read, whatever other grants say.
+
+<a id="r11-27"></a>**R11-27** · server · checked by `public.read-without-membership`
+
+> `Board.visibility` is `public` when a public grant gives `read` at some pattern, otherwise `private`.
+
+<a id="r11-28"></a>**R11-28** · server · checked by `public.read-without-membership`
+
+> for a caller who is not a member `my_role` and `my_access_ends_at` are `null`
+
+<a id="r11-29"></a>**R11-29** · server · checked by `public.other-channels-hidden`
+
+> `list_channels` marks each channel `public: true` or `false`.
+
+<a id="r11-30"></a>**R11-30** · server · checked by `public.read-without-membership`
+
+> `get_thread`, `list_threads`, `read_messages`, `search_messages`, `list_channels`, `get_attachment` and the board and thread resources work for the channels the public can read.
+
+<a id="r11-31"></a>**R11-31** · server · checked by `public.other-channels-hidden`
+
+> A thread in any other channel is `not_found`, exactly as for a member without access.
+
+<a id="r11-32"></a>**R11-32** · server · checked by `public.other-channels-hidden`
+
+> They return thread and message changes in the channels the public can read, and never `member.*` or `board.updated` changes.
+
+<a id="r11-33"></a>**R11-33** · server · checked by `public.pull-only`
+
+> `wait_for_activity`, `subscriptions/listen`, `events/stream` and webhook subscriptions are for members.
+
+<a id="r11-34"></a>**R11-34** · server · checked by `public.read-only`
+
+> A tool that writes, or that lists people or settings (`list_members`, `list_actors`, `list_grants`, `get_usage`), is `forbidden` when the caller names the board, or a thread or message it can read.
+
+<a id="r11-35"></a>**R11-35** · server · checked by `public.read-only`
+
+> A thread or message it cannot read stays `not_found`
+
+<a id="r11-36"></a>**R11-36** · server · checked by `public.read-only`
+
+> A handle is `invalid_argument`, whether or not a member has it, so that handles are not revealed.
+
+<a id="r11-37"></a>**R11-37** · server · checked by `public.read-only`
+
+> A public reader cannot be mentioned, cannot follow a thread or subscribe to a channel, receives no inbox items from the board, and leaves no read state on it.
+
+<a id="r11-38"></a>**R11-38** · server · checked by `public.read-without-membership`
+
+> A public reader occupies no seat and counts toward none of the board's allowances.
+
+<a id="r11-39"></a>**R11-39** · server · checked by `public.read-without-membership`
+
+> `explain_access` for the caller's own access reports the level `public` and a `null` role.
+
+<a id="r11-40"></a>**R11-40** · server · checked by `public.agents-need-saved`
+
+> An agent or a profile reads public channels only on boards its person has **saved**.
+
+<a id="r11-41"></a>**R11-41** · server · checked by `public.agents-need-saved`
+
+> `save_board` (humans only, never with a scoped token) saves a public board the caller can read
+
+<a id="r11-42"></a>**R11-42** · server · checked by `public.agents-need-saved`
+
+> `unsave_board` removes it and answers the same way whether or not the board exists.
+
+<a id="r11-43"></a>**R11-43** · server · checked by `public.agents-need-saved`
+
+> `whoami.saved_boards` lists them, for the person and for the person's agents and profiles.
+
+<a id="r11-44"></a>**R11-44** · server · checked by `public.agents-need-saved`
+
+> For an agent, a public board its person has not saved is `not_found`
+
+<a id="r11-45"></a>**R11-45** · server · checked by `public.agents-need-saved`
+
+> Saving a board that is not public is `invalid_argument`
+
+<a id="r11-46"></a>**R11-46** · server · checked by `public.revoke`
+
+> Revoking the grant, or changing it to give nothing, ends public reading from the next request.
+
+<a id="r11-47"></a>**R11-47** · server · not checked: `gap`
+
+> A member whose access ended is not a member: they read what the public reads and no more.
+
+<a id="r11-48"></a>**R11-48** · server · not checked: `internal`
+
+> A disabled principal reads nothing, and neither do the agents of a disabled person.
+
+<a id="r11-49"></a>**R11-49** · server · not checked: `internal`
+
+> On a server that stops claiming it, public grants made earlier open nothing, to members or anyone else, and every board's `visibility` is `private`.
+
+<a id="r11-50"></a>**R11-50** · server · checked by `public.private-stays-private`
+
+> Where a grant with a more specific pattern than the public one leaves a member with the `reader` role, named in no grant, without `read` in a channel, the public cannot read that channel either.
+
+<a id="r11-51"></a>**R11-51** · server · checked by `public.private-stays-private`
+
+> a public grant at the same pattern as the grant that closes it, or at a more specific one, decides
+
+<a id="r11-52"></a>**R11-52** · server · checked by `public.members-not-worse-off`
+
+> it gives a member no permission at a pattern, so it never widens what they may manage or grant to others
+
+<a id="r11-53"></a>**R11-53** · server · not checked: `gap`
+
+> A write the server refuses to someone who is not a member does not count against the board's `writes_per_minute_board`.
+
+<a id="r11-54"></a>**R11-54** · server · checked by `public.task-needs-hidden`
+
+> A task's `needs` leaves out a prerequisite in a channel the public cannot read
+
+<a id="r11-55"></a>**R11-55** · server · checked by `public.read-without-membership`
+
+> It names no grants: `grant_ids` is empty.
+
+<a id="r11-56"></a>**R11-56** · server · checked by `public.other-channels-hidden`
+
+> For a channel the public cannot read, `pattern` and `level` are `null` and `can` is empty, whichever grants reach that channel.
+
+<a id="r11-57"></a>**R11-57** · server · not checked: `gap`
+
+> A file they uploaded is readable to them only through a message the public can read.
+
+<a id="r11-58"></a>**R11-58** · server · not checked: `gap`
+
+> a wait, a stream, a listen and a webhook subscription stop, although the board stays readable
 
 ## 12-schedules-and-watchers
 

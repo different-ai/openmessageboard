@@ -22,7 +22,7 @@ import type { AppContext } from "../context.js";
 import { read } from "../context.js";
 import type { DB } from "../db/index.js";
 import { OmbError, invalid, notFound } from "../errors.js";
-import { requireMember } from "./access.js";
+import { activeMembership, requireMember, requireReader } from "./access.js";
 import { decodeCursor, encodeCursor } from "./cursors.js";
 import type { Actor, EventRow, MessageRow } from "./model.js";
 import { CHANNEL_FILTER_PATTERN, MAX_CHANNEL_CHARS, TASK_STATE_LABEL } from "@openmessageboard/protocol";
@@ -96,6 +96,12 @@ export function resolveMember(ctx: AppContext, actor: Actor, boardId: string, ra
   const v = raw.trim().replace(/^@/, "");
   if (!v) throw invalid(`${field} can't be empty`);
   if (v === "me") return actor.id;
+  // Handles are for members: someone reading through a public grant names a principal by ID, so that the answer
+  // cannot be used to find out which handles the board's members have.
+  if (!activeMembership(ctx, boardId, actor)) {
+    if (PRINCIPAL_ID.test(v)) return v;
+    throw invalid(`${field}: name a principal by its ID`, { field });
+  }
   const memberByHandle = (handle: string) =>
     (ctx.db.prepare("SELECT principal_id FROM memberships WHERE board_id = ? AND handle = ?").get(boardId, handle) as { principal_id: string } | undefined)?.principal_id;
   const byHandle = memberByHandle(v.toLowerCase()) ?? memberByHandle(v);
@@ -124,7 +130,8 @@ function authorsOf(ctx: AppContext, principalId: string): string[] {
 /** Whether the viewer can read the channel of a thread on the board. */
 function canReadThread(ctx: AppContext, viewer: Actor, boardId: string, threadId: string): boolean {
   const row = ctx.db.prepare("SELECT channel FROM threads WHERE id = ? AND board_id = ?").get(threadId, boardId) as { channel: string } | undefined;
-  return !!row && ChannelAccess.load(ctx, boardId, viewer).can(row.channel, "read");
+  // Reader access: the callers' own gates decide who gets this far (members, or the public on the read paths).
+  return !!row && ChannelAccess.loadReader(ctx, boardId, viewer).can(row.channel, "read");
 }
 
 /**
@@ -230,7 +237,7 @@ function messageCriteriaSql(f: ResolvedFilter, params: unknown[], m = "m", t = "
 
 /** Keeps rows whose thread (alias `t`) is in a channel the viewer can read, the rule `boardChanges` uses. */
 export function threadAccessSql(ctx: AppContext, viewer: Actor, boardId: string, threadAlias: string, params: unknown[]): string {
-  return readableSql(`${threadAlias}.channel`, ChannelAccess.load(ctx, boardId, viewer).readableChannels(ctx), params);
+  return readableSql(`${threadAlias}.channel`, ChannelAccess.loadReader(ctx, boardId, viewer).readableChannels(ctx), params);
 }
 
 function purgedUpto(ctx: AppContext): number {
@@ -348,9 +355,12 @@ export function filteredEventRows(
   }
   if (f.channel) sql += ` AND t.id IS NOT NULL${channelFilterSql("t.channel", f.channel, params)}`;
   if (needsMessage) sql += messageCriteriaSql(f, params);
-  // Changes in channels the viewer can't read are left out; changes without a thread are board-wide.
-  const access = threadAccessSql(ctx, viewer, boardId, "t", params);
-  if (access) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${access}))`;
+  // Changes in channels the viewer can't read are left out; changes without a thread are board-wide, and
+  // board-wide changes (who joined, what the owner changed) are for members, never for the public.
+  const access = ChannelAccess.loadReader(ctx, boardId, viewer);
+  const readable = access.readableChannels(ctx);
+  if (access.publicReader) sql += ` AND t.id IS NOT NULL${readableSql("t.channel", readable ?? [], params)}`;
+  else if (readable !== null) sql += ` AND (e.thread_id IS NULL OR (t.id IS NOT NULL${readableSql("t.channel", readable, params)}))`;
   sql += " ORDER BY e.seq LIMIT ?";
   params.push(limit);
   return { rows: ctx.db.prepare(sql).all(...params) as EventRow[], windowEnd };
@@ -379,7 +389,8 @@ export interface ReadMessagesInput extends FilterInput {
 /** read_messages: matching messages on a board, oldest first. */
 export function readMessages(ctx: AppContext, actor: Actor, boardId: string, input: ReadMessagesInput): { messages: Message[]; cursor: string; has_more: boolean } {
   return read(ctx, () => {
-    requireMember(ctx, actor, boardId);
+    // Open to the public for the channels a public grant covers (11 §Public access).
+    requireReader(ctx, actor, boardId);
     if (input.after !== undefined && input.before !== undefined) throw invalid("Pass after or before, not both");
     ensureSqlFunctions(ctx.db);
     const f = resolveFilter(ctx, actor, boardId, { ...input, types: undefined });

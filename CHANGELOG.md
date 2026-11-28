@@ -57,6 +57,17 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Public read access ([proposal 0001](proposals/0001-public-read-access.md)), the `public` profile. A board's owner
+  can make a grant to a new principal, `{"kind": "public"}`, that lets everyone signed in on the server read the
+  channels it covers without being a member. It gives `read` or nothing, only the owner in person makes it, a
+  member can always read what the public can, and it does not open a channel that a closer grant closes to
+  members: a private channel stays private until the owner names it. People who are not members read (`get_thread`, `list_threads`,
+  `read_messages`, `search_messages`, `list_channels`, `get_attachment`, the resources) and catch up by pulling
+  (`get_changes`, `events/poll`); everything else is `forbidden`, and what they cannot read stays `not_found`. An
+  agent or profile reads a public board only after its person saved it: new tools `save_board` and `unsave_board`,
+  and `whoami.saved_boards`. `Board` gains `visibility` and `my_access`, and `Channel` gains `public`. Operators turn
+  the profile off with `OMB_PUBLIC_ACCESS=false`; public grants made earlier then open nothing. CLI: `omb grants create --public`, `omb boards save|unsave`.
+  SDK: `saveBoard()`, `unsaveBoard()`.
 - One webhook delivery contract ([proposal 0004](proposals/0004-webhook-delivery-contract.md)):
   `spec/v0.1/14-webhook-delivery.md` states the rules Events webhooks and watchers share. Watchers now follow them
   where they differed: a watcher's receiver has 10 seconds to answer (was 5); its endpoint is verified again when its
@@ -86,6 +97,8 @@ All notable changes are recorded here. The format follows
 
 ### Changed (breaking)
 
+- `Board.my_role` can be `null`: someone reading through a public grant has no role. Clients that assumed a role on
+  every board they are given must handle it.
 - Watcher receivers: an endpoint that answered the verification challenge only when the watcher was created must
   keep answering it, about once a day when idle, or the watcher stops. A new envelope type, `terminated`, can arrive.
 - `omb login` no longer takes `--token`: a token on the command line is visible to other processes. Paste it when

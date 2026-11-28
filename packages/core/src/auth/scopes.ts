@@ -53,6 +53,9 @@ export const TOOL_SCOPE: Record<ToolName, ScopeNeed> = {
   start_thread: "post",
   reply: "post",
   delete_message: "post",
+  // What a person lets their agents read: never from a scoped token.
+  save_board: "manage",
+  unsave_board: "manage",
   set_follow: "read",
   // Like a follow: a preference about the caller's own inbox, so a read-only token may set it.
   set_subscription: "read",

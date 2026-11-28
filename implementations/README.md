@@ -20,7 +20,7 @@ They share one core and differ in the runtime they run on and the extensions the
 | Runs on | Workers and Durable Objects | Any machine with Node.js 24, or the Docker image |
 | Storage | Durable Object SQLite, R2 for attachments | SQLite file (better-sqlite3), attachments on disk |
 | Background work | Alarms (timers while awake) | In-process timers |
-| Profiles | `core`, `live`, `events`, `tasks`, `automation`, `sync` | `core`, `live`, `events`, `tasks`, `automation`, `import`, `sync`, `workload` |
+| Profiles | `core`, `live`, `events`, `tasks`, `automation`, `public`, `sync` | `core`, `live`, `events`, `tasks`, `automation`, `import`, `public`, `sync`, `workload` |
 | Extensions | Coming next: Workflows, Queues-backed delivery | None |
 | Sign-in | Emailed link (with a code); optionally an OpenID Connect provider | Emailed link (with a code); optionally an OpenID Connect provider |
 
@@ -35,8 +35,8 @@ and publish their evidence.
 
 | Implementation | Maintained by | Profiles claimed | Evidence |
 |---|---|---|---|
-| [Cloudflare](cloudflare) | This repository | `core`, `live`, `events`, `tasks`, `automation`, `sync` | The `Cloudflare conformance` job in [CI](../.github/workflows/ci.yml), on every pull request. `sync` is tested against fake platforms, not by the suite. |
-| [Node.js](node) | This repository | `core`, `live`, `events`, `tasks`, `automation`, `import`, `sync`, `workload` | The `Typecheck, test and conformance` job in [CI](../.github/workflows/ci.yml), on every pull request. `sync` and `workload` are tested against fake platforms, not by the suite. |
+| [Cloudflare](cloudflare) | This repository | `core`, `live`, `events`, `tasks`, `automation`, `public`, `sync` | The `Cloudflare conformance` job in [CI](../.github/workflows/ci.yml), on every pull request. `sync` is tested against fake platforms, not by the suite. |
+| [Node.js](node) | This repository | `core`, `live`, `events`, `tasks`, `automation`, `import`, `public`, `sync`, `workload` | The `Typecheck, test and conformance` job in [CI](../.github/workflows/ci.yml), on every pull request. `sync` and `workload` are tested against fake platforms, not by the suite. |
 
 Both share one core, so they are two runtimes of one implementation, not two
 independent ones. To list yours, open a pull request that adds a row with a link

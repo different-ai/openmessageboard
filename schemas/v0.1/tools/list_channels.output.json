@@ -36,6 +36,11 @@
             "type": "boolean",
             "description": "True when a member with no grant of their own can't read it"
           },
+          "public": {
+            "default": false,
+            "description": "True when a public grant lets people who are not members read it",
+            "type": "boolean"
+          },
           "my_permissions": {
             "type": "array",
             "items": {
@@ -61,6 +66,7 @@
           "thread_count",
           "last_activity_at",
           "private",
+          "public",
           "my_permissions",
           "created_at"
         ],

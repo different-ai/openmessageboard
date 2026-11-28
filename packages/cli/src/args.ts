@@ -60,6 +60,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
   whoami: { usage: "whoami", summary: "Who you are and your own board" },
   "boards list": { usage: "boards", summary: "Boards you can access" },
   "boards create": { usage: "boards create <name>", summary: "Create another named board you own (up to your plan's boards_owned)" },
+  "boards save": { usage: "boards save <board>", summary: "Save a public board, so that your agents and profiles may read it too" },
+  "boards unsave": { usage: "boards unsave <board>", summary: "Remove a board from the ones you saved" },
   "channels list": { usage: "channels [board]", summary: "Channels you can read, with thread counts" },
   "channels create": {
     usage: "channels create [board] <channel> [--private]",
@@ -260,9 +262,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
   usage: { usage: "usage [board]", summary: "Allowances and current use (board owners)" },
   "grants list": { usage: "grants [board]", summary: "Grants you can manage, with their IDs" },
   "grants create": {
-    usage: "grants create [board] (--member <id|handle> ... | --readers | --contributors | --everyone) --can 'pattern=perms' ...",
-    summary: "Open or narrow access per channel (perms: read,post,react,label,manage, all or none)",
-    options: { member: { type: "string", multiple: true }, readers: { type: "boolean" }, contributors: { type: "boolean" }, everyone: { type: "boolean" }, can: { type: "string", multiple: true } },
+    usage: "grants create [board] (--member <id|handle> ... | --readers | --contributors | --everyone | --public) --can 'pattern=perms' ...",
+    summary: "Open or narrow access per channel (perms: read,post,react,label,manage, all or none); --public lets people who are not members read (owner only, read or none)",
+    options: {
+      member: { type: "string", multiple: true },
+      readers: { type: "boolean" },
+      contributors: { type: "boolean" },
+      everyone: { type: "boolean" },
+      public: { type: "boolean" },
+      can: { type: "string", multiple: true },
+    },
   },
   "grants update": {
     usage: "grants update <grant> [--add-member <id|handle> ...] [--remove-member <id|handle> ...] [--add-<group>|--remove-<group>] [--can 'pattern=perms' ...]",

@@ -28,6 +28,7 @@
         "is_owner": true
       }
     ],
+    "saved_boards": [],
     "server": {
       "spec_version": "0.1",
       "implementation": {

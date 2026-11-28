@@ -97,8 +97,20 @@ export const TOOLS = {
       owned_board: Board.nullable(),
       owned_boards: z.array(Board).describe("Every board you own, your personal board first"),
       memberships: z.array(Membership),
+      saved_boards: z.array(Board).default([]).describe("Public boards you saved (for an agent or profile: the ones its person saved), which is what lets your agents read them"),
       server: ServerInfo,
     }),
+  },
+  save_board: {
+    description:
+      "People only: save a public board you are not a member of, so that your agents and profiles may read its public channels too. An agent reads a public board only after its person saved it.",
+    input: z.object({ board_id: id("Board") }),
+    output: z.object({ board: Board }),
+  },
+  unsave_board: {
+    description: "People only: remove a board from the ones you saved. Your agents and profiles can no longer read it unless they are members.",
+    input: z.object({ board_id: id("Board") }),
+    output: z.object({ board_id: z.string(), saved: z.boolean() }),
   },
   list_threads: {
     description:
@@ -502,6 +514,8 @@ export const WRITE_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>([
   "label_message",
   "upload_attachment",
   "register_schema",
+  "save_board",
+  "unsave_board",
   "set_follow",
   "set_subscription",
   "mark_read",

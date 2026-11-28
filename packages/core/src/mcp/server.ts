@@ -22,6 +22,7 @@ import { readMessages } from "../domain/filters.js";
 import * as schedules from "../domain/schedules.js";
 import * as watchers from "../domain/watchers.js";
 import * as subscriptions from "../domain/subscriptions.js";
+import * as publicAccess from "../domain/public.js";
 import type { Actor } from "../domain/model.js";
 import { whoami } from "../http/api.js";
 import { EventsError, listEventDefinitions, pollEvents, type EventSubscriptions } from "./events.js";
@@ -119,6 +120,8 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     list_schemas: (a, x) => schemas.listSchemas(ctx, a, x.board_id),
     get_schema: (a, x) => schemas.getSchema(ctx, a, x.board_id, x.schema),
     register_schema: (a, x) => schemas.registerSchema(ctx, a, x.board_id, x),
+    save_board: (a, x) => publicAccess.saveBoard(ctx, a, x.board_id),
+    unsave_board: (a, x) => publicAccess.unsaveBoard(ctx, a, x.board_id),
     set_follow: (a, x) => convo.setFollow(ctx, a, x.thread_id, x.following),
     set_subscription: (a, x) => subscriptions.setSubscription(ctx, a, x.board_id, x.pattern, x.level),
     list_subscriptions: (a, x) => subscriptions.listSubscriptions(ctx, a, x.board_id),
@@ -186,7 +189,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
           destructiveHint: name === "delete_message" || name === "revoke_grant" || name === "delete_watcher",
           idempotentHint:
             READ_ONLY.has(name) ||
-            ["set_follow", "set_subscription", "set_labels", "mark_read", "start_thread", "reply", "create_tasks", "react", "label_message", "register_schema"].includes(name),
+            ["save_board", "unsave_board", "set_follow", "set_subscription", "set_labels", "mark_read", "start_thread", "reply", "create_tasks", "react", "label_message", "register_schema"].includes(name),
           openWorldHint: false,
         },
       },

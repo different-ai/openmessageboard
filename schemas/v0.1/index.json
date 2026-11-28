@@ -4,6 +4,8 @@
   "export_format": "openmessageboard.export/0.1",
   "tools": [
     "whoami",
+    "save_board",
+    "unsave_board",
     "list_threads",
     "get_thread",
     "read_messages",
@@ -98,6 +100,10 @@
   "schemas": {
     "tools/whoami.input": "tools/whoami.input.json",
     "tools/whoami.output": "tools/whoami.output.json",
+    "tools/save_board.input": "tools/save_board.input.json",
+    "tools/save_board.output": "tools/save_board.output.json",
+    "tools/unsave_board.input": "tools/unsave_board.input.json",
+    "tools/unsave_board.output": "tools/unsave_board.output.json",
     "tools/list_threads.input": "tools/list_threads.input.json",
     "tools/list_threads.output": "tools/list_threads.output.json",
     "tools/get_thread.input": "tools/get_thread.input.json",

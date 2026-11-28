@@ -17,7 +17,7 @@ import type { AppContext } from "../context.js";
 import type { BoardRow, InboxRow, InviteRow, MembershipRow, MessageRow, PrincipalRow, ThreadRow } from "./model.js";
 import { boardLimits } from "./plans.js";
 import { messageExtras } from "./message-extras.js";
-import { ChannelAccess } from "./grants.js";
+import { ChannelAccess, hasPublicRead, loadGrants } from "./grants.js";
 
 /** Resolves principal references in bulk; agents carry their owner as `via`. */
 export function principalRefs(ctx: AppContext, ids: Iterable<string | null | undefined>): Map<string, PrincipalRef> {
@@ -53,7 +53,8 @@ export function refOf(ctx: AppContext, id: string): PrincipalRef {
   return principalRefs(ctx, [id]).get(id)!;
 }
 
-export function presentBoard(ctx: AppContext, b: BoardRow, m: MembershipRow): Board {
+/** `m` is null for someone reading through a public grant, who has no membership. */
+export function presentBoard(ctx: AppContext, b: BoardRow, m: MembershipRow | null): Board {
   const limits = boardLimits(ctx, b.id);
   return {
     id: b.id,
@@ -61,8 +62,10 @@ export function presentBoard(ctx: AppContext, b: BoardRow, m: MembershipRow): Bo
     url: boardUrl(ctx.config.publicUrl, b.id),
     owner: refOf(ctx, b.owner_id),
     is_personal: b.is_personal === 1,
-    my_role: m.role,
-    my_access_ends_at: m.access_ends_at,
+    visibility: ctx.config.publicAccess && hasPublicRead(loadGrants(ctx, b.id)) ? "public" : "private",
+    my_role: m ? m.role : null,
+    my_access: m ? "member" : "public",
+    my_access_ends_at: m ? m.access_ends_at : null,
     created_at: b.created_at,
     settings: {
       members_can_add_agents: b.members_can_add_agents === 1,
@@ -168,12 +171,14 @@ function taskDetails(ctx: AppContext, rows: ThreadRow[], viewerId: string | null
     const channelOf = new Map(rows.map((t) => [t.id, t.channel]));
     const viewer = viewerId ? (ctx.db.prepare("SELECT * FROM principals WHERE id = ?").get(viewerId) as PrincipalRow | undefined) : undefined;
     const access = new Map<string, ChannelAccess>();
-    const readable = (boardId: string, channel: string): boolean => {
-      if (!viewer) return false;
+    const accessOn = (boardId: string): ChannelAccess | undefined => {
+      if (!viewer) return undefined;
       let a = access.get(boardId);
-      if (!a) access.set(boardId, (a = ChannelAccess.load(ctx, boardId, { id: viewer.id, kind: viewer.kind, ownerId: viewer.owner_id, profile: viewer.profile_name ?? null })));
-      return a.can(channel, "read");
+      // Reader access: whoever got as far as being shown this task, as a member or through a public grant.
+      if (!a) access.set(boardId, (a = ChannelAccess.loadReader(ctx, boardId, { id: viewer.id, kind: viewer.kind, ownerId: viewer.owner_id, profile: viewer.profile_name ?? null })));
+      return a;
     };
+    const readable = (boardId: string, channel: string): boolean => accessOn(boardId)?.can(channel, "read") ?? false;
     for (const r of ctx.db
       .prepare(
         `SELECT n.task_id, p.id, p.board_id, p.channel, p.title, p.task_state FROM task_needs n JOIN threads p ON p.id = n.needs_id
@@ -182,6 +187,9 @@ function taskDetails(ctx: AppContext, rows: ThreadRow[], viewerId: string | null
       .all(...taskIds) as { task_id: string; id: string; board_id: string; channel: string; title: string; task_state: TaskState }[]) {
       const list = needs.get(r.task_id) ?? [];
       const shown = r.channel === channelOf.get(r.task_id) || readable(r.board_id, r.channel);
+      // A member sees that a prerequisite exists, without its title. Someone who is not a member is told nothing
+      // about a task they cannot read, not even its ID or state.
+      if (!shown && accessOn(r.board_id)?.publicReader) continue;
       list.push({ thread_id: r.id, title: shown ? r.title : "", state: r.task_state });
       needs.set(r.task_id, list);
     }

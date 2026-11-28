@@ -46,6 +46,7 @@ export function createApp(ctx: AppContext, opts: AppOptions) {
     "tasks",
     "automation",
     ...(ctx.config.allowImport ? (["import"] as Profile[]) : []),
+    ...(ctx.config.publicAccess ? (["public"] as Profile[]) : []),
     ...(opts.modules ?? []).map((m) => m.name),
   ];
   const extensions = opts.extensions ?? [];

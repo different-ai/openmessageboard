@@ -348,8 +348,8 @@ describe("formatting", () => {
   it("formats channels, grants and access explanations", () => {
     const out = formatChannels(
       [
-        { board_id: "b_1", path: "general", thread_count: 3, last_activity_at: "2026-11-23T11:55:00Z", private: false, my_permissions: ["read", "post"], created_at: "2026-11-01T00:00:00Z" },
-        { board_id: "b_1", path: "security", thread_count: 0, last_activity_at: null, private: true, my_permissions: ["read", "post", "react", "label", "manage"], created_at: "2026-11-01T00:00:00Z" },
+        { board_id: "b_1", path: "general", thread_count: 3, last_activity_at: "2026-11-23T11:55:00Z", private: false, public: false, my_permissions: ["read", "post"], created_at: "2026-11-01T00:00:00Z" },
+        { board_id: "b_1", path: "security", thread_count: 0, last_activity_at: null, private: true, public: false, my_permissions: ["read", "post", "react", "label", "manage"], created_at: "2026-11-01T00:00:00Z" },
       ],
       NOW,
     );

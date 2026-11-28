@@ -22,11 +22,11 @@ import { read, tx } from "../context.js";
 import { OmbError, forbidden, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, currentMonth, getBoardRow, holderId, nextMonthStart, nowIso, requireChannelPermission, requireMember, requireThread } from "./access.js";
+import { activeMembership, currentMonth, getBoardRow, holderId, nextMonthStart, nowIso, requireChannelPermission, requireMember, requireReader, requireThread, requireThreadReader } from "./access.js";
 import { canChangeMessage, coveredPrincipalIds } from "./profiles.js";
 import { recordEvent } from "./boards.js";
 import { encodeCursor, encodePage, decodePage } from "./cursors.js";
-import type { Actor, BoardRow, MessageRow, ThreadRow } from "./model.js";
+import type { Actor, BoardRow, MembershipRow, MessageRow, ThreadRow } from "./model.js";
 import { presentMessage, presentMessages, presentThread, presentThreads } from "./present.js";
 import { boardLimits } from "./plans.js";
 import { resolveTextMentions } from "./mentions.js";
@@ -212,11 +212,16 @@ export function usageWarnings(ctx: AppContext, boardId: string): AllowanceUsage[
   return out.length ? out : undefined;
 }
 
+/**
+ * Counts a write against its principal and its board. Called before the access check, so only a member's writes
+ * count against the board: someone who is not one is refused a moment later, and must not be able to use up the
+ * board's writes on the way (11 §Public access: a public reader costs the board nothing).
+ */
 export function checkWriteRate(ctx: AppContext, actor: Actor, boardId: string, opts?: WriteOptions): void {
   if (opts?.internal) return;
   const r = ctx.config.rateLimits;
   if (actor.kind !== "integration") ctx.rate.hit(`w:p:${holderId(actor)}`, r.writes_per_minute_principal, 60_000);
-  ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
+  if (actor.kind === "integration" || activeMembership(ctx, boardId, actor)) ctx.rate.hit(`w:b:${boardId}`, r.writes_per_minute_board, 60_000);
 }
 
 // ---------- inbox ----------
@@ -541,9 +546,15 @@ export function deleteMessage(ctx: AppContext, actor: Actor, messageId: string):
   const result = tx(ctx, (emit) => {
     const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId) as MessageRow | undefined;
     if (!row) throw notFound("Message");
-    const { membership } = requireMember(ctx, actor, row.board_id, "reader", "Message");
-    const channel = (ctx.db.prepare("SELECT channel FROM threads WHERE id = ?").get(row.thread_id) as { channel: string }).channel;
-    if (!ChannelAccess.load(ctx, row.board_id, actor).can(channel, "read")) throw notFound("Message");
+    // The thread's rules: a member who can read its channel. Someone reading it through a public grant is told
+    // `forbidden`; anyone else, `not_found`.
+    let membership: MembershipRow;
+    try {
+      ({ membership } = requireThread(ctx, actor, row.thread_id));
+    } catch (e) {
+      if (e instanceof OmbError && e.code === "not_found") throw notFound("Message");
+      throw e;
+    }
     const ownerId = (ctx.db.prepare("SELECT owner_id FROM principals WHERE id = ?").get(row.author_id) as { owner_id: string | null } | undefined)?.owner_id ?? null;
     if (!canChangeMessage(actor, { id: row.author_id, owner_id: ownerId }, membership.role)) {
       throw forbidden(actor.profile ? "A profile can delete only what it wrote" : "You can delete your own messages; owners can delete any");
@@ -578,8 +589,11 @@ export function getThread(
   threadId: string,
   page: { page_cursor?: string | undefined; limit?: number | undefined } = {},
 ): { thread: Thread; messages: Message[]; next_page_cursor: string | null; as_of: string } {
+  let member = true;
   const out = read(ctx, () => {
-    const { thread } = requireThread(ctx, actor, threadId);
+    // Open to the public where a public grant covers the thread's channel (11 §Public access).
+    const { thread, membership } = requireThreadReader(ctx, actor, threadId);
+    member = membership !== null;
     const limit = Math.min(page.limit ?? 50, 200);
     const after = decodePage(page.page_cursor, `msgs:${thread.id}`);
     const rows = (
@@ -599,9 +613,12 @@ export function getThread(
       as_of: boardCursor(ctx, thread.board_id),
     };
   });
-  ctx.db
-    .prepare("INSERT INTO read_markers (principal_id, thread_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT(principal_id, thread_id) DO UPDATE SET last_read_at = excluded.last_read_at")
-    .run(actor.id, threadId, nowIso(ctx));
+  // Someone reading through a public grant leaves nothing behind on the board, not even a read marker.
+  if (member) {
+    ctx.db
+      .prepare("INSERT INTO read_markers (principal_id, thread_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT(principal_id, thread_id) DO UPDATE SET last_read_at = excluded.last_read_at")
+      .run(actor.id, threadId, nowIso(ctx));
+  }
   out.thread.unread_count = 0;
   return out;
 }
@@ -635,11 +652,12 @@ export function labelClauses(labels: Record<string, string> | undefined, params:
 
 export function listThreads(ctx: AppContext, actor: Actor, boardId: string, input: ListThreadsInput = {}): { threads: Thread[]; next_page_cursor: string | null; as_of: string } {
   return read(ctx, () => {
-    requireMember(ctx, actor, boardId);
+    // Open to the public: the channels a public grant covers, and nothing else (11 §Public access).
+    const reader = requireReader(ctx, actor, boardId);
     const limit = Math.min(input.limit ?? 25, 100);
     const params: unknown[] = [boardId];
     let sql = "SELECT t.* FROM threads t WHERE t.board_id = ?";
-    sql += readableSql("t.channel", ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx), params);
+    sql += readableSql("t.channel", reader.channels.readableChannels(ctx), params);
     sql += channelFilterSql("t.channel", input.channel, params);
     if (input.filter === "following") {
       sql += " AND EXISTS (SELECT 1 FROM follows f WHERE f.thread_id = t.id AND f.principal_id = ?)";

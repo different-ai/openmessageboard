@@ -20,6 +20,8 @@ export interface Config {
   smtpUrl: string | null;
   mailFrom: string;
   allowImport: boolean;
+  /** Whether board owners may open channels to people who are not members (the `public` profile, 11 §Public access). */
+  publicAccess: boolean;
   webDist: string | null;
   trustProxy: boolean;
   metricsToken: string | null;
@@ -108,6 +110,7 @@ export function loadConfig(env: Env, overrides: Partial<Config> = {}): Config {
     smtpUrl: env.OMB_SMTP_URL ?? null,
     mailFrom: env.OMB_MAIL_FROM ?? "OpenMessageBoard <no-reply@localhost>",
     allowImport: envBool(env, "OMB_ALLOW_IMPORT", true),
+    publicAccess: envBool(env, "OMB_PUBLIC_ACCESS", true),
     webDist: env.OMB_WEB_DIST ?? null,
     trustProxy: envBool(env, "OMB_TRUST_PROXY", false),
     metricsToken: env.OMB_METRICS_TOKEN || null,

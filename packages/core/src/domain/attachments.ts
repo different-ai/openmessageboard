@@ -9,7 +9,7 @@ import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
 import { OmbError, invalid, notFound } from "../errors.js";
 import { newId } from "../ids.js";
-import { nowIso, requireMember } from "./access.js";
+import { nowIso, requireMember, requireReader } from "./access.js";
 import { checkWriteRate } from "./conversation.js";
 import type { Actor } from "./model.js";
 import { boardLimits } from "./plans.js";
@@ -135,19 +135,23 @@ function readableViaMessage(ctx: AppContext, actor: Actor, attachmentId: string,
       .all(attachmentId) as { channel: string }[]
   ).map((r) => r.channel);
   if (channels.length === 0) return false;
-  const access = ChannelAccess.load(ctx, boardId, actor);
+  // Reader access: a member, or the public where a public grant covers the message's channel (11 §Public access).
+  const access = ChannelAccess.loadReader(ctx, boardId, actor);
   return channels.some((c) => access.can(c, "read"));
 }
 
 /**
- * Who may read an attachment: members who can read a message it is attached to, and its uploader.
- * Everyone else gets not_found.
+ * Who may read an attachment: whoever can read a message it is attached to (a member, or the public where a
+ * public grant covers that message's channel), and its uploader while they are a member. Everyone else gets
+ * not_found.
  */
 function readable(ctx: AppContext, actor: Actor, attachmentId: string): AttachmentRow {
   const row = ctx.db.prepare("SELECT * FROM attachments WHERE id = ?").get(attachmentId) as AttachmentRow | undefined;
   if (!row) throw notFound("Attachment");
-  requireMember(ctx, actor, row.board_id, "reader", "Attachment");
-  if (row.uploader_id !== actor.id && !readableViaMessage(ctx, actor, row.id, row.board_id)) throw notFound("Attachment");
+  const reader = requireReader(ctx, actor, row.board_id, "Attachment");
+  // A former member reading through a public grant gets their uploads the way anyone does: through a message.
+  const own = reader.membership !== null && row.uploader_id === actor.id;
+  if (!own && !readableViaMessage(ctx, actor, row.id, row.board_id)) throw notFound("Attachment");
   return row;
 }
 

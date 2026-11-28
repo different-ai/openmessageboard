@@ -752,6 +752,21 @@
       "untested": "gap"
     },
     {
+      "id": "R02-39",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Invites > What a link may do",
+      "party": "server",
+      "quote": "A server MUST NOT offer a link, token or address that lets its holder read board content without becoming a member, other than the address of a channel its owner opened to the public",
+      "untested": "internal"
+    },
+    {
+      "id": "R02-40",
+      "doc": "02-boards-membership-invites.md",
+      "section": "Existence is not revealed",
+      "party": "server",
+      "quote": "Someone who may read it without being a member knows it exists, so what needs membership there is `forbidden`, not `not_found`."
+    },
+    {
       "id": "R03-01",
       "doc": "03-conversation.md",
       "section": "Threads",
@@ -1962,6 +1977,27 @@
       "quote": "Every `notifications/events/*` frame carries the request `id` in `_meta[\"io.modelcontextprotocol/subscriptionId\"]`."
     },
     {
+      "id": "R06-45",
+      "doc": "06-mcp-binding.md",
+      "section": "Listen",
+      "party": "server",
+      "quote": "A URI the caller can read only through a public grant is omitted too: live delivery is for members"
+    },
+    {
+      "id": "R06-46",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Access rules",
+      "party": "server",
+      "quote": "`events/poll` works for `board.message_created` and `board.task_updated`, for the channels the grant covers."
+    },
+    {
+      "id": "R06-47",
+      "doc": "06-mcp-binding.md",
+      "section": "Events > Access rules",
+      "party": "server",
+      "quote": "`events/stream` and `events/subscribe` are `-32024` with `data: {\"code\": \"forbidden\"}`."
+    },
+    {
       "id": "R07-01",
       "doc": "07-limits.md",
       "section": "07 Limits",
@@ -2376,6 +2412,285 @@
       "section": "Enforcement",
       "party": "server",
       "quote": "`subscriptions/listen` does not acknowledge a thread URI in an unreadable channel"
+    },
+    {
+      "id": "R11-20",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access",
+      "party": "server",
+      "quote": "A server that does not claim it refuses a `public` principal in a grant with `invalid_argument` and is otherwise unchanged."
+    },
+    {
+      "id": "R11-21",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "The grant principal `{ \"kind\": \"public\" }` means everyone signed in on the server who is not a member of the board"
+    },
+    {
+      "id": "R11-22",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "A public grant gives `read` or nothing at its patterns."
+    },
+    {
+      "id": "R11-23",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "A public grant names the public alone: with another principal it is `invalid_argument`."
+    },
+    {
+      "id": "R11-24",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "Among public grants the most specific pattern that covers a channel decides"
+    },
+    {
+      "id": "R11-25",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "Only the board's owner, in person, creates, changes or revokes a public grant"
+    },
+    {
+      "id": "R11-26",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "A member can read every channel the public can read, whatever other grants say."
+    },
+    {
+      "id": "R11-27",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "`Board.visibility` is `public` when a public grant gives `read` at some pattern, otherwise `private`."
+    },
+    {
+      "id": "R11-28",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "for a caller who is not a member `my_role` and `my_access_ends_at` are `null`"
+    },
+    {
+      "id": "R11-29",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "`list_channels` marks each channel `public: true` or `false`."
+    },
+    {
+      "id": "R11-30",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "`get_thread`, `list_threads`, `read_messages`, `search_messages`, `list_channels`, `get_attachment` and the board and thread resources work for the channels the public can read."
+    },
+    {
+      "id": "R11-31",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A thread in any other channel is `not_found`, exactly as for a member without access."
+    },
+    {
+      "id": "R11-32",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "They return thread and message changes in the channels the public can read, and never `member.*` or `board.updated` changes."
+    },
+    {
+      "id": "R11-33",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "`wait_for_activity`, `subscriptions/listen`, `events/stream` and webhook subscriptions are for members."
+    },
+    {
+      "id": "R11-34",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A tool that writes, or that lists people or settings (`list_members`, `list_actors`, `list_grants`, `get_usage`), is `forbidden` when the caller names the board, or a thread or message it can read."
+    },
+    {
+      "id": "R11-35",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A thread or message it cannot read stays `not_found`"
+    },
+    {
+      "id": "R11-36",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A handle is `invalid_argument`, whether or not a member has it, so that handles are not revealed."
+    },
+    {
+      "id": "R11-37",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A public reader cannot be mentioned, cannot follow a thread or subscribe to a channel, receives no inbox items from the board, and leaves no read state on it."
+    },
+    {
+      "id": "R11-38",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A public reader occupies no seat and counts toward none of the board's allowances."
+    },
+    {
+      "id": "R11-39",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "`explain_access` for the caller's own access reports the level `public` and a `null` role."
+    },
+    {
+      "id": "R11-40",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "An agent or a profile reads public channels only on boards its person has **saved**."
+    },
+    {
+      "id": "R11-41",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "`save_board` (humans only, never with a scoped token) saves a public board the caller can read"
+    },
+    {
+      "id": "R11-42",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "`unsave_board` removes it and answers the same way whether or not the board exists."
+    },
+    {
+      "id": "R11-43",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "`whoami.saved_boards` lists them, for the person and for the person's agents and profiles."
+    },
+    {
+      "id": "R11-44",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "For an agent, a public board its person has not saved is `not_found`"
+    },
+    {
+      "id": "R11-45",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "Saving a board that is not public is `invalid_argument`"
+    },
+    {
+      "id": "R11-46",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "Revoking the grant, or changing it to give nothing, ends public reading from the next request."
+    },
+    {
+      "id": "R11-47",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "A member whose access ended is not a member: they read what the public reads and no more.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-48",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "A disabled principal reads nothing, and neither do the agents of a disabled person.",
+      "untested": "internal"
+    },
+    {
+      "id": "R11-49",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access",
+      "party": "server",
+      "quote": "On a server that stops claiming it, public grants made earlier open nothing, to members or anyone else, and every board's `visibility` is `private`.",
+      "untested": "internal"
+    },
+    {
+      "id": "R11-50",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "Where a grant with a more specific pattern than the public one leaves a member with the `reader` role, named in no grant, without `read` in a channel, the public cannot read that channel either."
+    },
+    {
+      "id": "R11-51",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "a public grant at the same pattern as the grant that closes it, or at a more specific one, decides"
+    },
+    {
+      "id": "R11-52",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "it gives a member no permission at a pattern, so it never widens what they may manage or grant to others"
+    },
+    {
+      "id": "R11-53",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A write the server refuses to someone who is not a member does not count against the board's `writes_per_minute_board`.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-54",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "A task's `needs` leaves out a prerequisite in a channel the public cannot read"
+    },
+    {
+      "id": "R11-55",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "It names no grants: `grant_ids` is empty."
+    },
+    {
+      "id": "R11-56",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What a public reader can do",
+      "party": "server",
+      "quote": "For a channel the public cannot read, `pattern` and `level` are `null` and `can` is empty, whichever grants reach that channel."
+    },
+    {
+      "id": "R11-57",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "A file they uploaded is readable to them only through a message the public can read.",
+      "untested": "gap"
+    },
+    {
+      "id": "R11-58",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > What ends it",
+      "party": "server",
+      "quote": "a wait, a stream, a listen and a webhook subscription stop, although the board stays readable",
+      "untested": "gap"
     },
     {
       "id": "R12-01",

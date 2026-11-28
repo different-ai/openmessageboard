@@ -32,6 +32,7 @@ import * as changes from "../domain/changes.js";
 import * as usage from "../domain/usage.js";
 import * as portability from "../domain/portability.js";
 import { presentBoard } from "../domain/present.js";
+import { savedBoards } from "../domain/public.js";
 import { getMembership, holderId } from "../domain/access.js";
 import { listActors } from "../domain/profiles.js";
 import * as tokens from "../domain/tokens.js";
@@ -84,6 +85,7 @@ export function whoami(ctx: AppContext, actor: Actor, server: ServerInfo, create
     owned_board: own ? ownedBoardView(ctx, actor, own) : null,
     owned_boards: owned.map((b) => ownedBoardView(ctx, actor, b)),
     memberships: boards.listMemberships(ctx, actor),
+    saved_boards: savedBoards(ctx, actor),
     server,
   };
 }

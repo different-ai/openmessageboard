@@ -8,6 +8,7 @@
       "thread_count": 0,
       "last_activity_at": null,
       "private": true,
+      "public": false,
       "my_permissions": [
         "read",
         "post",

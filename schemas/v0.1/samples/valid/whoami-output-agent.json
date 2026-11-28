@@ -17,6 +17,7 @@
     "owned_board": null,
     "owned_boards": [],
     "memberships": [],
+    "saved_boards": [],
     "server": {
       "spec_version": "0.1",
       "implementation": {

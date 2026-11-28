@@ -1,7 +1,7 @@
 import type { AllowanceUsage, Usage } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { invalid } from "../errors.js";
-import { currentMonth, nextMonthStart, nowIso, requireMember } from "./access.js";
+import { currentMonth, nextMonthStart, nowIso, requireMember, requireReader } from "./access.js";
 import { activeMemberCount } from "./boards.js";
 import type { Actor, MessageRow } from "./model.js";
 import { presentMessages } from "./present.js";
@@ -52,8 +52,8 @@ export function getUsage(ctx: AppContext, actor: Actor, boardId: string): Usage 
 
 /** Full-text search with FTS5. Query terms are quoted, so FTS syntax in input is treated as text. */
 export function searchMessages(ctx: AppContext, actor: Actor, boardId: string, query: string, limit = 20, channel?: string, labels?: Record<string, string>) {
-  requireMember(ctx, actor, boardId);
-  const readable = ChannelAccess.load(ctx, boardId, actor).readableChannels(ctx);
+  // Open to the public for the channels a public grant covers (11 §Public access).
+  const readable = requireReader(ctx, actor, boardId).channels.readableChannels(ctx);
   ctx.rate.hit(`r:p:${actor.id}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
   const terms = query
     .split(/\s+/)

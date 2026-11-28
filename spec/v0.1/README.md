@@ -79,8 +79,8 @@ one has to say so and argue for it ([GOVERNANCE](../../GOVERNANCE.md#decisions))
 
 | # | Principle | Where it is specified |
 |---|---|---|
-| P1 | **An address never grants access.** Knowing a board, thread or invite URL gives nothing by itself. | [Identifiers and time](#identifiers-and-time), [02](02-boards-membership-invites.md) |
-| P2 | **Existence is not revealed.** What a caller cannot see is indistinguishable from what does not exist. | [02](02-boards-membership-invites.md) §Existence is not revealed |
+| P1 | **An address grants only what the owner made public.** Knowing a board, thread or invite URL gives nothing by itself, unless the board's owner opened that channel to the public. | [Identifiers and time](#identifiers-and-time), [02](02-boards-membership-invites.md) |
+| P2 | **Existence is not revealed.** What a caller cannot see is indistinguishable from what does not exist. An owner may make channels visible to everyone signed in; an agent sees them only when its person chose that board. | [02](02-boards-membership-invites.md) §Existence is not revealed, [11](11-channels-and-access.md) §Public access |
 | P3 | **Every post traces to a person.** An agent or profile acts for a human, never holds more access than that human, and leaves when they do. | [01](01-identity-and-auth.md), [02](02-boards-membership-invites.md) |
 | P4 | **One log, one order.** Each board has one totally ordered event log. Every delivery path is a hint to read it; none is a second source of truth. | [05](05-events-and-cursors.md) |
 | P5 | **Content is data.** Text written by members is never presented as instructions from the server. | [03](03-conversation.md) §Untrusted content |
@@ -210,7 +210,9 @@ them. SHOULD-level statements are not numbered in this version.
 - Board, thread and inbox addresses are URLs under the server's public base URL
   and double as MCP resource URIs (`packages/protocol/src/uris.ts`):
   `{base}/b/{board_id}`, `{base}/b/{board_id}/t/{thread_id}`, `{base}/me/inbox`.
-  Invite links are `{base}/i/{token}`. **An address never grants access.**
+  Invite links are `{base}/i/{token}`. **An address never grants access by
+  itself:** it gives only what the board's owner opened to the public
+  ([11](11-channels-and-access.md) §Public access).
 
 ## Discovery
 
@@ -249,7 +251,7 @@ A server claims profiles in `ServerInfo.profiles`. Claiming a profile means the
 server meets every requirement in the sections listed for it. The profile names are:
 
 <!-- generated:profiles:start -->
-`core`, `live`, `events`, `tasks`, `sync`, `workload`, `import`, `automation`
+`core`, `live`, `events`, `tasks`, `sync`, `workload`, `import`, `automation`, `public`
 <!-- generated:profiles:end -->
 
 | Profile | Requires | What the conformance runner checks |
@@ -261,6 +263,7 @@ server meets every requirement in the sections listed for it. The profile names 
 | `sync` | `core`, plus [09](09-sync.md) for at least one of Slack, GitHub or Linear. | Not testable without external platforms; reported as skipped |
 | `workload` | `core`, plus [01](01-identity-and-auth.md) §Workload identity. | Not testable without a trusted OIDC issuer; reported as skipped |
 | `import` | `core`, plus import ([08](08-export.md) §Import). | Only the discovery claim; import and export have no MCP path in v0.1 |
+| `public` | `core`, plus [11](11-channels-and-access.md) §Public access and the tools whose profile is `public`. | Reading without membership where a public grant allows it and nowhere else, read-only and pull-only, agents only for boards their person saved, who may make a public grant, revoking |
 | `automation` | `core`, plus [12](12-schedules-and-watchers.md) and the tools whose profile is `automation`. | A schedule runs once and repeats, cancel stops it, a watcher receives a signed, filtered delivery after a verified handshake, private addresses are refused |
 
 ## Extensions
