@@ -53,7 +53,7 @@ export class BoardServer extends DurableObject<Env> {
     super(ctx, env);
     this.lifecycle = env.LIFECYCLE ? lifecycleSettings(env) : null;
     this.ready = ctx.blockConcurrencyWhile(async () => {
-      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }, { notFound }, { previewInvite }, { exportBoard }, { limitsFor }] = await loadCore();
+      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }, { notFound, OmbError }, { previewInvite }, { exportBoard }, { limitsFor }] = await loadCore();
       this.mintTestIdentities = mintTestIdentities;
       const sqlite = new DurableSqlite(ctx.storage);
       const db = sqlite.asDb();
@@ -65,7 +65,7 @@ export class BoardServer extends DurableObject<Env> {
       const nameRules = namesOptions(stringVars(env));
       if (nameRules) this.names = namesExtension(nameRules, { requireMember: requireMember as never, notFound: () => notFound("Board"), mailer: () => mailer });
       const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : []), ...(doorwayEnabled(stringVars(env)) ? [doorwayExtension({ previewInvite, requireMember: requireMember as never })] : [])];
-      if (this.lifecycle) extensions.push(lifecycleExtension({ settings: this.lifecycle, core: { exportBoard, limitsFor }, nudge: (boardId) => this.nudgeLifecycle(boardId) }));
+      if (this.lifecycle) extensions.push(lifecycleExtension({ settings: this.lifecycle, core: { exportBoard, limitsFor, error: (code, message) => new OmbError(code, message) }, nudge: (boardId) => this.nudgeLifecycle(boardId) }));
       this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: (ctx) => (mailer = mail(ctx)), features: { extensions } });
       this.booted.start();
       // A new board starts with its owner joining it: that is when its lifecycle object first hears of it.

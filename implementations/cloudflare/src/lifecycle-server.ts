@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS cf_owner_seen (principal_id TEXT PRIMARY KEY, seen_at
 export interface LifecycleCore {
   exportBoard(ctx: AppContext, actor: never, boardId: string): unknown;
   limitsFor(ctx: AppContext, principalId: string): { boards_owned: number };
+  /** The core's error for a tool to throw (`OmbError`). */
+  error(code: "not_found" | "forbidden" | "quota_exceeded", message: string): Error;
 }
 
 interface BoardFacts {
@@ -183,6 +185,57 @@ function page(title: string, body: string, status = 200): Response {
   });
 }
 
+type Caller = { id: string; kind: string; ownerId?: string | null; profile?: string | null; scope?: unknown };
+type Refusal = "unauthenticated" | "forbidden" | "not_found";
+const REFUSALS: Record<Refusal, string> = {
+  unauthenticated: "Sign in or send a bearer token",
+  forbidden: "Only the board's owner, or a profile acting for them, can do this",
+  not_found: "Board not found",
+};
+
+/**
+ * The person a caller speaks for in lifecycle matters: themselves, or for a profile its person (a profile acts with
+ * its person's access). An agent of its own is a separate member and a scoped token is limited on purpose: neither
+ * has a say over whether a board exists.
+ */
+function personOf(actor: Caller): string | null {
+  if (actor.scope) return null;
+  if (actor.profile) return actor.ownerId ?? null;
+  return actor.kind === "human" ? actor.id : null;
+}
+
+/** Why this caller may not act on this board, or null. Anyone but the owner gets `not_found`, as for any board they can't see. */
+function whyNot(ctx: AppContext, actor: Caller | null, boardId: string): Refusal | null {
+  if (!actor) return "unauthenticated";
+  const person = personOf(actor);
+  if (!person) return "forbidden";
+  const row = ctx.db.prepare("SELECT owner_id FROM boards WHERE id = ?").get(boardId) as { owner_id: string } | undefined;
+  return row && row.owner_id === person && !boardSnapshot(ctx, boardId).disabled ? null : "not_found";
+}
+
+const inDays = (ms: number) => Math.round((ms / 86_400_000) * 1000) / 1000;
+
+function boardView(ctx: AppContext, settings: LifecycleSettings, boardId: string) {
+  const s = boardSnapshot(ctx, boardId);
+  return {
+    id: s.board_id,
+    name: s.name,
+    state: s.deactivated_at ? "deactivated" : "active",
+    active_at: s.active_at,
+    // The earliest it can happen: a board always gets its reminders first, which can move this later.
+    deactivates_at: s.deactivated_at ? null : new Date(Date.parse(s.active_at) + settings.inactiveMs).toISOString(),
+    deactivated_at: s.deactivated_at,
+  };
+}
+
+/** A person's own boards, the deactivated ones included. Board names are member content, returned as data. */
+function ownBoards(ctx: AppContext, settings: LifecycleSettings, person: string) {
+  const rows = ctx.db
+    .prepare("SELECT b.id FROM boards b LEFT JOIN cf_board_lifecycle l ON l.board_id = b.id WHERE b.owner_id = ? AND (b.disabled_at IS NULL OR l.deactivated_at IS NOT NULL) ORDER BY b.created_at")
+    .all(person) as { id: string }[];
+  return { inactive_days: inDays(settings.inactiveMs), reminder_days: settings.reminderMs.map(inDays), boards: rows.map((r) => boardView(ctx, settings, r.id)) };
+}
+
 export interface LifecycleExtensionOptions {
   settings: LifecycleSettings;
   core: LifecycleCore;
@@ -197,12 +250,60 @@ export interface LifecycleExtensionOptions {
  */
 export function lifecycleExtension(opts: LifecycleExtensionOptions): ExtensionModule {
   const { settings, core, nudge } = opts;
-  const days = (ms: number) => Math.round((ms / 86_400_000) * 1000) / 1000;
+  const days = inDays;
   return {
     id: LIFECYCLE_EXTENSION_ID,
     info: {
       version: "0.1.0",
       description: `Boards with no post and no owner sign-in for ${days(settings.inactiveMs)} days are deactivated, after reminder emails to the owner. Nothing is deleted, and the owner can reactivate the board.`,
+    },
+    // For agents and the CLI (`omb call`): the same three actions as the routes, under the same rule. They need
+    // `manage`, which no scoped token has. Descriptions are fixed server text; results carry the caller's own boards.
+    tools: (z) => {
+      const boardId = z.object({ board_id: z.string().describe("The board's ID, as lifecycle_boards lists it") });
+      const mine = (ctx: AppContext, actor: Caller, id: string) => {
+        const why = whyNot(ctx, actor, id);
+        if (why) throw core.error(why === "unauthenticated" ? "forbidden" : why, REFUSALS[why]);
+      };
+      const act = async (ctx: AppContext, actor: Caller, action: LinkAction, id: string) => {
+        mine(ctx, actor, id);
+        const out = action === "keep" ? keepBoard(ctx, id) : reactivateBoard(ctx, core, id);
+        if (!out.ok) throw core.error(out.code, out.message);
+        await nudge(id).catch(() => {});
+        return { board: boardView(ctx, settings, id) };
+      };
+      return [
+        {
+          name: "lifecycle_boards",
+          description:
+            "List the boards your person owns with their inactivity state: active or deactivated, the last activity, and when an active board would be deactivated. Deactivated boards appear only here: the other tools answer not_found for them until they are reactivated. Only the owner, or a profile acting for them, may call this.",
+          input: z.object({}),
+          scope: "manage",
+          readOnly: true,
+          handler(ctx, actor) {
+            const person = personOf(actor as Caller);
+            if (!person) throw core.error("forbidden", REFUSALS.forbidden);
+            return ownBoards(ctx, settings, person);
+          },
+        },
+        {
+          name: "lifecycle_keep",
+          description: "Keep an active board from being deactivated for inactivity: the inactivity period starts again now. Only the board's owner, or a profile acting for them, may call this. Call it when the owner asks for it.",
+          input: boardId,
+          scope: "manage",
+          readOnly: false,
+          handler: (ctx, actor, args) => act(ctx, actor as Caller, "keep", String(args.board_id)),
+        },
+        {
+          name: "lifecycle_reactivate",
+          description:
+            "Reactivate a board that was deactivated for inactivity. Its messages and members were kept and are available again at once. Fails with quota_exceeded if the owner's plan has no room for the board. Only the board's owner, or a profile acting for them, may call this. Call it when the owner asks for it.",
+          input: boardId,
+          scope: "manage",
+          readOnly: false,
+          handler: (ctx, actor, args) => act(ctx, actor as Caller, "reactivate", String(args.board_id)),
+        },
+      ];
     },
     register(app, ctx) {
       const base = ctx.config.publicUrl.replace(/\/$/, "");
@@ -238,41 +339,16 @@ export function lifecycleExtension(opts: LifecycleExtensionOptions): ExtensionMo
         });
       }
 
-      // For the signed-in owner. A scoped token, an agent or a profile has no say over a board's lifecycle, and
-      // anyone but the owner gets `not_found`, as for any board they can't see.
-      const ownerOf = (c: { get(key: "actor"): { id: string; kind: string; profile?: string | null; scope?: unknown } | null }, boardId: string): "unauthenticated" | "forbidden" | "not_found" | null => {
-        const actor = c.get("actor");
-        if (!actor) return "unauthenticated";
-        if (actor.kind !== "human" || actor.profile || actor.scope) return "forbidden";
-        const row = ctx.db.prepare("SELECT owner_id FROM boards WHERE id = ?").get(boardId) as { owner_id: string } | undefined;
-        return row && row.owner_id === actor.id && !boardSnapshot(ctx, boardId).disabled ? null : "not_found";
-      };
-      const refuse = (c: { json(body: unknown, status: 401 | 403 | 404): Response }, why: "unauthenticated" | "forbidden" | "not_found") =>
-        c.json(
-          { error: { code: why, message: why === "unauthenticated" ? "Sign in or send a bearer token" : why === "forbidden" ? "Only the board's owner, signed in as themselves, can do this" : "Board not found" } },
-          why === "unauthenticated" ? 401 : why === "forbidden" ? 403 : 404,
-        );
-      const view = (boardId: string) => {
-        const s = boardSnapshot(ctx, boardId);
-        return {
-          id: s.board_id,
-          name: s.name,
-          state: s.deactivated_at ? "deactivated" : "active",
-          active_at: s.active_at,
-          // The earliest it can happen: a board always gets its reminders first, which can move this later.
-          deactivates_at: s.deactivated_at ? null : new Date(Date.parse(s.active_at) + settings.inactiveMs).toISOString(),
-          deactivated_at: s.deactivated_at,
-        };
-      };
+      const ownerOf = (c: { get(key: "actor"): Caller | null }, boardId: string) => whyNot(ctx, c.get("actor"), boardId);
+      const refuse = (c: { json(body: unknown, status: 401 | 403 | 404): Response }, why: Refusal) => c.json({ error: { code: why, message: REFUSALS[why] } }, why === "unauthenticated" ? 401 : why === "forbidden" ? 403 : 404);
+      const view = (boardId: string) => boardView(ctx, settings, boardId);
 
       app.get("/x/lifecycle/boards", (c) => {
         const actor = c.get("actor");
         if (!actor) return refuse(c, "unauthenticated");
-        if (actor.kind !== "human" || actor.profile || actor.scope) return refuse(c, "forbidden");
-        const rows = ctx.db
-          .prepare("SELECT b.id FROM boards b LEFT JOIN cf_board_lifecycle l ON l.board_id = b.id WHERE b.owner_id = ? AND (b.disabled_at IS NULL OR l.deactivated_at IS NOT NULL) ORDER BY b.created_at")
-          .all(actor.id) as { id: string }[];
-        return c.json({ inactive_days: days(settings.inactiveMs), reminder_days: settings.reminderMs.map(days), boards: rows.map((r) => view(r.id)) });
+        const person = personOf(actor);
+        if (!person) return refuse(c, "forbidden");
+        return c.json(ownBoards(ctx, settings, person));
       });
       for (const action of ["keep", "reactivate"] as const) {
         app.post(`/x/lifecycle/boards/:boardId/${action}`, async (c) => {

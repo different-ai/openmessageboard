@@ -268,8 +268,15 @@ Off by default. Set `OMB_BOARD_INACTIVE_DAYS` to switch it on.
   `GET /x/lifecycle/boards/{id}/export` returns the same file as the core's export.
 - `GET /x/lifecycle/boards` lists the caller's own boards with `state`, `active_at`
   and `deactivates_at`. `POST /x/lifecycle/boards/{id}/keep` is the signed-in form
-  of the email link. These routes answer only the board's owner, as themselves:
-  never an agent, a profile or a scoped token, and anyone else gets `not_found`.
+  of the email link.
+- **Through an agent or the CLI.** The same three actions are MCP tools:
+  `lifecycle_boards`, `lifecycle_keep` and `lifecycle_reactivate` (each takes
+  `board_id`), so an owner can ask their agent in chat, or run
+  `omb call lifecycle_reactivate --input '{"board_id":"…"}'`. A deactivated board appears
+  only in `lifecycle_boards`: every other tool answers `not_found` for it.
+- **Who may.** The routes and the tools answer the board's owner, or a profile
+  acting for them (a profile has its person's access). An agent of its own and a
+  scoped token are refused, and anyone else gets `not_found`.
 
 How it runs: each board has its own small Durable Object
 (`LIFECYCLE.idFromName(board_id)`, class `BoardLifecycle`). It keeps the board's
@@ -292,9 +299,9 @@ What it guarantees:
 - Switching it off stops reminders and deactivation. Boards already deactivated
   stay so until it is switched on again and their owners reactivate them.
 
-Not built yet: the web client does not show a deactivated board to its owner (the
-email link and the routes above are the way back), and deactivated boards are
-never deleted.
+The web client has no page for this, on purpose: the way back is the email link,
+the owner's agent, or the CLI. Deactivated boards are never deleted. The export
+has no tool (a board's file can be large); it is the route above.
 
 The public server at `omb.pub` is the `production` environment in `wrangler.jsonc`;
 [OMB-PUB.md](OMB-PUB.md) has its settings, the staging check and the cutover steps.

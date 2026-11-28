@@ -7,6 +7,8 @@ import { bootServer, loadConfig, type AppContext, type Booted } from "@openmessa
 import { mintTestIdentities } from "@openmessageboard/core/domain/test-identities";
 import { exportBoard } from "@openmessageboard/core/domain/portability";
 import { limitsFor } from "@openmessageboard/core/domain/plans";
+import { OmbError } from "@openmessageboard/core/errors";
+import { z } from "zod";
 // The real core on the Node runtime's SQLite: the same domain code and SQL the Worker runs.
 import { migrate, openDatabase } from "../../node/src/db/index.ts";
 import { nodePlatform } from "../../node/src/platform.ts";
@@ -16,12 +18,13 @@ import { LIFECYCLE_MIGRATION, boardSnapshot, deactivateIfInactive, isSynced, lif
 const DAY = 86_400_000;
 const BASE = "http://omb.test";
 const settings = lifecycleSettings({ OMB_BOARD_INACTIVE_DAYS: "90" })!;
-const core = { exportBoard, limitsFor } as unknown as LifecycleCore;
+const core = { exportBoard, limitsFor, error: (code: never, message: string) => new OmbError(code, message) } as unknown as LifecycleCore;
 
+const nudged: string[] = [];
+const extension = lifecycleExtension({ settings, core, nudge: async (id) => void nudged.push(id) });
 let booted: Booted;
 let ctx: AppContext;
 let offset = 0;
-const nudged: string[] = [];
 let tokens: Record<string, Record<string, string>>;
 
 before(async () => {
@@ -33,7 +36,7 @@ before(async () => {
     config,
     db,
     platform: nodePlatform(dir),
-    features: { sync: false, extensions: [lifecycleExtension({ settings, core, nudge: async (id) => void nudged.push(id) })] },
+    features: { sync: false, extensions: [extension] },
     now: () => new Date(Date.now() + offset),
   });
   ctx = booted.ctx;
@@ -319,4 +322,85 @@ test("cookie-authenticated actions must come from the server's own pages", async
   assert.equal((await call("POST", `/x/lifecycle/boards/${boardId}/keep`, { cookie, origin: "https://elsewhere.example" })).status, 403);
   assert.equal((await call("POST", `/x/lifecycle/boards/${boardId}/keep`, { cookie, origin: BASE })).status, 200);
   assert.equal((await call("GET", `/x/lifecycle/boards/${boardId}/export`, { cookie })).status, 200);
+});
+
+// ---------- the same actions for agents and the CLI, as MCP tools ----------
+
+/** One MCP call over HTTP, as an MCP client or `omb call` makes it. */
+async function mcp(as: string, method: string, params: Record<string, unknown>, extra: Record<string, string> = {}): Promise<any> {
+  const res = await booted.app.request(`${BASE}/mcp`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${tokens[as]!.token}`, "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18", ...extra },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const text = await res.text();
+  const data = text.startsWith("{") ? text : (text.split("\n").find((l) => l.startsWith("data:")) ?? "").slice(5);
+  return JSON.parse(data);
+}
+const toolCall = async (as: string, name: string, args: Record<string, unknown> = {}, extra: Record<string, string> = {}) => {
+  const out = await mcp(as, "tools/call", { name, arguments: args }, extra);
+  const result = out.result ?? {};
+  const body = result.structuredContent ?? (result.content?.[0]?.text ? JSON.parse(result.content[0].text) : null);
+  return { error: result.isError === true || !!out.error, body, raw: out };
+};
+
+test("the tools are listed after the specification's, need manage, and say who may call them", async () => {
+  const tools = extension.tools!(z as never);
+  assert.deepEqual(tools.map((t) => [t.name, t.scope, t.readOnly]), [["lifecycle_boards", "manage", true], ["lifecycle_keep", "manage", false], ["lifecycle_reactivate", "manage", false]]);
+  const listed = (await mcp("owner", "tools/list", {})).result.tools.map((t: any) => t.name);
+  assert.deepEqual(listed.slice(-3), ["lifecycle_boards", "lifecycle_keep", "lifecycle_reactivate"]);
+});
+
+test("over MCP the owner sees a deactivated board, reactivates it and keeps it; nobody else can", async () => {
+  offset = 0;
+  const boardId = await ownBoard("owner");
+  await post("owner", boardId, "Before");
+  offset = 500 * DAY;
+  assert.ok(deactivateIfInactive(ctx, settings, boardId).deactivated_at);
+
+  const mine = await toolCall("owner", "lifecycle_boards");
+  assert.equal(mine.error, false, JSON.stringify(mine.raw));
+  assert.deepEqual(mine.body.boards.map((b: any) => [b.id, b.state]), [[boardId, "deactivated"]]);
+  assert.equal(mine.body.inactive_days, 90);
+
+  // A member, and the member's view of their own boards: the deactivated board is not theirs to see or touch.
+  assert.ok(!JSON.stringify((await toolCall("maya", "lifecycle_boards")).body).includes(boardId));
+  const stranger = await toolCall("maya", "lifecycle_reactivate", { board_id: boardId });
+  assert.equal(stranger.error, true);
+  assert.match(JSON.stringify(stranger.raw), /not_found/);
+  // An agent of its own (not a profile) has no say, even its owner's.
+  const agent = await toolCall("agent", "lifecycle_boards");
+  assert.equal(agent.error, true);
+  assert.match(JSON.stringify(agent.raw), /forbidden/);
+  assert.ok(boardSnapshot(ctx, boardId).deactivated_at);
+
+  nudged.length = 0;
+  const back = await toolCall("owner", "lifecycle_reactivate", { board_id: boardId });
+  assert.equal(back.error, false, JSON.stringify(back.raw));
+  assert.equal(back.body.board.state, "active");
+  assert.deepEqual(nudged, [boardId]);
+  assert.equal((await call("GET", `/api/boards/${boardId}/threads`, { as: "maya" })).status, 200);
+
+  offset = 550 * DAY;
+  const kept = await toolCall("owner", "lifecycle_keep", { board_id: boardId });
+  assert.equal(kept.error, false, JSON.stringify(kept.raw));
+  assert.ok(Math.abs(Date.parse(kept.body.board.active_at) - (Date.now() + offset)) < 5000);
+  assert.equal((await toolCall("maya", "lifecycle_keep", { board_id: boardId })).error, true);
+});
+
+test("a profile acts for its person: the owner's profile may reactivate, with the person's access", async () => {
+  offset = 600 * DAY;
+  const boardId = await ownBoard("maya");
+  offset = 700 * DAY;
+  assert.ok(deactivateIfInactive(ctx, settings, boardId).deactivated_at);
+  // Maya's token, writing as her agent "release-agent" (the OMB-Profile header).
+  const asProfile = { "omb-profile": "release-agent" };
+  const listed = await toolCall("maya", "lifecycle_boards", {}, asProfile);
+  assert.equal(listed.error, false, JSON.stringify(listed.raw));
+  assert.ok(listed.body.boards.some((b: any) => b.id === boardId && b.state === "deactivated"));
+  const back = await toolCall("maya", "lifecycle_reactivate", { board_id: boardId }, asProfile);
+  assert.equal(back.error, false, JSON.stringify(back.raw));
+  assert.equal(boardSnapshot(ctx, boardId).deactivated_at, null);
+  // The same profile has no say over somebody else's board.
+  assert.equal((await toolCall("maya", "lifecycle_keep", { board_id: await ownBoard("owner") }, asProfile)).error, true);
 });

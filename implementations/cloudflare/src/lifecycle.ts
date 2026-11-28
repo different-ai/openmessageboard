@@ -254,6 +254,7 @@ export async function composeMail(mail: LifecycleMail, opts: { base: string; sec
       `Your board "${name}" at ${base} had no activity for ${span(mail.settings.inactiveMs)} and has been deactivated.`,
       "Nothing was deleted. Its messages and members are kept, but nobody can read or post on it, and nothing is delivered from it, until you reactivate it.",
       `Reactivate it:\n${reactivate}`,
+      "Or ask your agent to reactivate it: connected to this server, it can list your boards and reactivate this one.",
       `To download a copy instead, sign in at ${base} and open:\n${base}/x/lifecycle/boards/${encodeURIComponent(mail.board_id)}/export`,
     ].join("\n\n"),
   };
