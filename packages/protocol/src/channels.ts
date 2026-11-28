@@ -125,6 +125,15 @@ export type AccessExplanation = z.infer<typeof AccessExplanation>;
 
 const id = (what: string) => z.string().min(1).describe(`${what} ID`);
 
+/**
+ * The second half of an approval (06 §Tool errors): a call answered `approval_required` is repeated with
+ * `approved: true` once the caller's person has agreed to it. Ignored where no approval is asked for.
+ */
+export const Approved = z
+  .boolean()
+  .optional()
+  .describe("Send true only after this call was answered approval_required and the person you act for agreed to it in this conversation");
+
 /** Tools for channels, named boards and grants. Listed after the core tools, in this order. */
 export const CHANNEL_TOOLS = {
   list_channels: {
@@ -150,21 +159,24 @@ export const CHANNEL_TOOLS = {
   },
   create_grant: {
     description:
-      "Open or narrow access per channel. The most specific pattern decides, then the closest principal (member, then role group, then everyone); grants tied there add up, and the board role caps the result. Needs manage at every pattern.",
+      "Open or narrow access per channel. The most specific pattern decides, then the closest principal (member, then role group, then everyone); grants tied there add up, and the board role caps the result. Needs manage at every pattern. A grant to the public is for the board's owner, or an agent or profile acting for the owner: an agent is first answered approval_required, asks its person, and repeats the call with approved: true.",
     input: z.object({
       board_id: id("Board"),
       principals: z.array(GrantPrincipal).min(1).max(MAX_GRANT_PRINCIPALS),
       can: GrantCanInput,
+      approved: Approved,
     }),
     output: z.object({ grant: Grant }),
   },
   update_grant: {
-    description: "Add or remove a grant's principals, or replace what it gives (can). Needs manage at its patterns.",
+    description:
+      "Add or remove a grant's principals, or replace what it gives (can). Needs manage at its patterns. Changing a public grant follows create_grant: an agent is first answered approval_required.",
     input: z.object({
       grant_id: id("Grant"),
       add: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
       remove: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
       can: GrantCanInput.optional(),
+      approved: Approved,
     }),
     output: z.object({ grant: Grant }),
   },

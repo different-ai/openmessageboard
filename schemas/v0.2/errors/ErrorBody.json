@@ -10,6 +10,7 @@
         "unauthenticated",
         "not_found",
         "forbidden",
+        "approval_required",
         "access_ended",
         "invalid_argument",
         "idempotency_conflict",

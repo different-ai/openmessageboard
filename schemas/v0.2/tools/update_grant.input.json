@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openmessageboard:schemas:v0.2:tools/update_grant.input",
   "title": "update_grant input",
-  "description": "Add or remove a grant's principals, or replace what it gives (can). Needs manage at its patterns.",
+  "description": "Add or remove a grant's principals, or replace what it gives (can). Needs manage at its patterns. Changing a public grant follows create_grant: an agent is first answered approval_required.",
   "type": "object",
   "properties": {
     "grant_id": {
@@ -199,6 +199,10 @@
         ]
       },
       "description": "Pattern → 'all', 'none' or a list of read, post, react, label, manage (up to 20 patterns)"
+    },
+    "approved": {
+      "description": "Send true only after this call was answered approval_required and the person you act for agreed to it in this conversation",
+      "type": "boolean"
     }
   },
   "required": [

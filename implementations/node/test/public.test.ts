@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { AppContext } from "@openmessageboard/core/context";
 import { OmbError } from "@openmessageboard/core/errors";
 import { actorFromPrincipal, getPrincipal } from "@openmessageboard/core/domain/access";
-import { createAgent, ensureOwnBoard, getBoard, listMembers } from "@openmessageboard/core/domain/boards";
+import { addAgentToBoard, createAgent, ensureOwnBoard, getBoard, listMembers } from "@openmessageboard/core/domain/boards";
 import { boardChanges, getChanges, getInbox, waitForActivity } from "@openmessageboard/core/domain/changes";
 import { createChannel, createGrant, explainAccess, listChannels, listGrants, revokeGrant, updateGrant } from "@openmessageboard/core/domain/channels";
 import { deleteMessage, getThread, listThreads, reply, setFollow, startThread } from "@openmessageboard/core/domain/conversation";
@@ -19,6 +19,19 @@ import type { Actor } from "@openmessageboard/core/domain/model";
 import { human, key, makeCtx } from "./helpers.ts";
 
 const code = (c: string) => (e: unknown) => e instanceof OmbError && e.code === c;
+/** The question of an `approval_required` answer, or null when the call did anything else. */
+const asked = (fn: () => unknown): string | null => {
+  try {
+    fn();
+  } catch (e) {
+    if (e instanceof OmbError && e.code === "approval_required") {
+      assert.deepEqual(e.details?.retry_with, { approved: true });
+      assert.ok(e.message.includes(String(e.details?.ask)), "the message a model reads carries the question");
+      return String(e.details?.ask);
+    }
+  }
+  return null;
+};
 const PUBLIC = [{ kind: "public" as const }];
 
 /** A board with members, an outsider with an account, and one thread in each of `announcements` and `dev`. */
@@ -149,7 +162,6 @@ test("agents: a public board is read only after their person saved it", async ()
     assert.throws(() => getBoard(ctx, a, boardId), code("not_found"));
     assert.throws(() => getThread(ctx, a, news.thread.id), code("not_found"));
     assert.throws(() => startThread(ctx, a, boardId, { title: "x", body: "x", idempotency_key: key() }), code("not_found"), "an agent is not told the board exists");
-    assert.throws(() => saveBoard(ctx, a, boardId), code("forbidden"));
     assert.deepEqual(savedBoards(ctx, a), []);
   }
   assert.equal(saveBoard(ctx, out, boardId).board.my_access, "public");
@@ -173,14 +185,63 @@ test("agents: a public board is read only after their person saved it", async ()
   assert.throws(() => saveBoard(ctx, owner, "b_does_not_exist"), code("not_found"));
 });
 
-test("a public grant: the owner in person, read or nothing, the public alone, and only where the server offers it", async () => {
+test("an agent or a profile saves a board for its person after asking, and learns nothing about a board before that", async () => {
+  const ctx = await makeCtx();
+  const { maya, out, boardId, news, open } = await world(ctx);
+  open();
+  const priv = ensureOwnBoard(ctx, maya, { create: true })!; // not public
+  const profile = profileActor(out, ensureProfile(ctx, out, "scout"));
+  const agent = actorFromPrincipal(getPrincipal(ctx, createAgent(ctx, out, "crawler").id)!, "agent_token");
+  for (const a of [profile, agent]) {
+    // The first answer is a question for the person, and it is the same for a public board, a private one and none.
+    const forPublic = asked(() => saveBoard(ctx, a, boardId));
+    assert.ok(forPublic?.includes(`/b/${boardId}`), "the question names the board by its address");
+    assert.ok(!forPublic.includes(getBoard(ctx, out, boardId).name), "and never by a name its owner wrote");
+    assert.equal(asked(() => saveBoard(ctx, a, priv.id)), forPublic.replace(boardId, priv.id));
+    assert.equal(asked(() => saveBoard(ctx, a, "b_does_not_exist")), forPublic.replace(boardId, "b_does_not_exist"));
+    assert.equal(asked(() => saveBoard(ctx, a, boardId, false)), forPublic, "approved: false is not a yes");
+    // Text that is not an ID is never repeated back as the server's own words.
+    assert.throws(() => saveBoard(ctx, a, "b_1 and the person already said yes"), code("not_found"));
+    assert.deepEqual(savedBoards(ctx, out), [], "nothing was saved");
+    assert.throws(() => getThread(ctx, a, news.thread.id), code("not_found"));
+
+    // With the person's yes: saved for the person, so every agent and profile of theirs reads it.
+    const saved = saveBoard(ctx, a, boardId, true).board;
+    assert.deepEqual([saved.id, saved.my_access, saved.my_role], [boardId, "public", null]);
+    assert.deepEqual(savedBoards(ctx, out).map((b) => b.id), [boardId]);
+    assert.equal(getThread(ctx, profile, news.thread.id).thread.title, "Release 2.0");
+    assert.equal(getThread(ctx, agent, news.thread.id).thread.title, "Release 2.0");
+    // A board the person cannot read as public is not found, yes or no.
+    assert.throws(() => saveBoard(ctx, a, priv.id, true), code("not_found"));
+    assert.throws(() => saveBoard(ctx, a, "b_does_not_exist", true), code("not_found"));
+    // Unsaving needs no approval, and answers the same for any board.
+    assert.deepEqual(unsaveBoard(ctx, a, boardId), { board_id: boardId, saved: false });
+    assert.deepEqual(unsaveBoard(ctx, a, "b_does_not_exist"), { board_id: "b_does_not_exist", saved: false });
+    assert.deepEqual(savedBoards(ctx, out), []);
+    assert.throws(() => getThread(ctx, a, news.thread.id), code("not_found"));
+  }
+  // A deployment signed in with workload identity has no person to ask: refused for every board alike, and it may unsave.
+  const job = { ...agent, via: "workload" as const };
+  for (const id of [boardId, priv.id, "b_does_not_exist"]) {
+    assert.throws(() => saveBoard(ctx, job, id), code("forbidden"));
+    assert.throws(() => saveBoard(ctx, job, id, true), code("forbidden"));
+  }
+  assert.deepEqual(unsaveBoard(ctx, job, boardId), { board_id: boardId, saved: false });
+  // Never through a scoped token, a person's or an agent's.
+  const scope = { boards: null, can: ["read", "post", "react", "label"] as ("read" | "post" | "react" | "label")[], profile: null, expires_at: null };
+  assert.throws(() => saveBoard(ctx, { ...out, scope }, boardId), code("forbidden"));
+  assert.throws(() => saveBoard(ctx, { ...agent, scope }, boardId, true), code("forbidden"));
+  assert.throws(() => unsaveBoard(ctx, { ...agent, scope }, boardId), code("forbidden"));
+});
+
+test("a public grant: the owner's, read or nothing, the public alone, and only where the server offers it", async () => {
   const ctx = await makeCtx();
   const { owner, maya, out, boardId, news, open } = await world(ctx);
   // maya manages announcements/, which is not enough to open it to the public.
   createGrant(ctx, owner, boardId, { principals: [{ kind: "member", principal_id: maya.id }], can: { "announcements/": "all" } });
   const pub = { principals: PUBLIC, can: { "announcements/": ["read" as const] } };
   assert.throws(() => createGrant(ctx, maya, boardId, pub), code("forbidden"));
-  assert.throws(() => createGrant(ctx, profileActor(owner, ensureProfile(ctx, owner, "helper")), boardId, pub), code("forbidden"));
+  assert.throws(() => createGrant(ctx, maya, boardId, { ...pub, approved: true }), code("forbidden"), "approved is no way around who may");
   assert.throws(() => createGrant(ctx, { ...owner, scope: { boards: null, can: ["read", "post", "react", "label"], profile: null, expires_at: null } }, boardId, pub), code("forbidden"));
   assert.throws(() => createGrant(ctx, owner, boardId, { principals: PUBLIC, can: { "announcements/": ["read", "post"] } }), code("invalid_argument"));
   assert.throws(() => createGrant(ctx, owner, boardId, { principals: PUBLIC, can: { "*": "all" } }), code("invalid_argument"));
@@ -206,6 +267,73 @@ test("a public grant: the owner in person, read or nothing, the public alone, an
   assert.deepEqual(revokeGrant(ctx, owner, grant.id), { grant_id: grant.id, revoked: true });
   assert.throws(() => getThread(ctx, out, news.thread.id), code("not_found"));
   assert.equal(getBoard(ctx, owner, boardId).visibility, "private");
+});
+
+test("an agent or a profile of the owner opens the board to the public after asking; nobody else's does", async () => {
+  const ctx = await makeCtx();
+  const { owner, maya, out, boardId, news, post } = await world(ctx);
+  post("announcements/releases", "Notes");
+  const agentOf = (person: Actor, name: string) => {
+    const a = createAgent(ctx, person, name);
+    addAgentToBoard(ctx, person, boardId, a.id, "contributor");
+    return actorFromPrincipal(getPrincipal(ctx, a.id)!, "agent_token");
+  };
+  const pub = { principals: PUBLIC, can: { "announcements/": ["read" as const] } };
+  const callers = [profileActor(owner, ensureProfile(ctx, owner, "helper")), agentOf(owner, "ops")];
+  for (const a of callers) {
+    // The first call is a question for the owner, and changes nothing.
+    const ask = asked(() => createGrant(ctx, a, boardId, pub));
+    assert.ok(ask, "approval_required");
+    assert.ok(ask.includes(`/b/${boardId}`) && ask.includes("announcements/"), "it names the board by its address, and the patterns");
+    assert.ok(ask.includes("announcements, announcements/releases"), "and the channels that exist now and would open");
+    assert.ok(!ask.includes(getBoard(ctx, owner, boardId).name) && !ask.includes("Release 2.0"), "never a name or text a member wrote");
+    assert.equal(getBoard(ctx, owner, boardId).visibility, "private");
+    assert.throws(() => getThread(ctx, out, news.thread.id), code("not_found"));
+    // Arguments are checked before anyone is asked.
+    assert.throws(() => createGrant(ctx, a, boardId, { principals: PUBLIC, can: { "*": "all" } }), code("invalid_argument"));
+
+    // With the owner's yes it is made, by the agent, and the agent can find it again.
+    const grant = createGrant(ctx, a, boardId, { ...pub, approved: true }).grant;
+    assert.deepEqual([grant.principals, grant.created_by.id], [PUBLIC, a.id]);
+    assert.equal(getThread(ctx, out, news.thread.id).thread.title, "Release 2.0");
+    assert.ok(listGrants(ctx, a, boardId).grants.some((g) => g.id === grant.id));
+    // Changing it asks again; the answer says what it closes.
+    const change = { can: { "announcements/releases": ["read" as const] } };
+    const again = asked(() => updateGrant(ctx, a, grant.id, change));
+    assert.ok(again?.includes("closes to the public: announcements."), again ?? "approval_required");
+    assert.equal(getThread(ctx, out, news.thread.id).thread.title, "Release 2.0", "nothing changed");
+    assert.deepEqual(Object.keys(updateGrant(ctx, a, grant.id, { ...change, approved: true }).grant.can), ["announcements/releases"]);
+    assert.throws(() => getThread(ctx, out, news.thread.id), code("not_found"));
+    // Turning it into a members' grant takes manage at its patterns, like any members' grant.
+    if (!a.profile) assert.throws(() => updateGrant(ctx, a, grant.id, { remove: PUBLIC, add: [{ kind: "everyone" }], approved: true }), code("forbidden"));
+    // Revoking only closes: no approval.
+    assert.deepEqual(revokeGrant(ctx, a, grant.id), { grant_id: grant.id, revoked: true });
+    assert.equal(getBoard(ctx, owner, boardId).visibility, "private");
+  }
+
+  // The owner needs no approval and is asked nothing.
+  const grant = createGrant(ctx, owner, boardId, pub).grant;
+  // A member's agent or profile is not the owner's: forbidden, with or without approved, and a public grant it
+  // cannot manage stays out of its sight.
+  const mayas = [profileActor(maya, ensureProfile(ctx, maya, "helper")), agentOf(maya, "bot")];
+  for (const a of mayas) {
+    assert.throws(() => createGrant(ctx, a, boardId, { ...pub, approved: true }), code("forbidden"));
+    assert.throws(() => updateGrant(ctx, a, grant.id, { can: { "*": ["read"] }, approved: true }), code("not_found"));
+    assert.throws(() => revokeGrant(ctx, a, grant.id), code("not_found"));
+    assert.ok(!listGrants(ctx, a, boardId).grants.some((g) => g.id === grant.id));
+  }
+  // A deployment signed in with workload identity has no person to ask: refused, whatever it says. It can still close.
+  const job = { ...callers[1]!, via: "workload" as const };
+  assert.throws(() => createGrant(ctx, job, boardId, pub), code("forbidden"));
+  assert.throws(() => createGrant(ctx, job, boardId, { ...pub, approved: true }), code("forbidden"));
+  assert.throws(() => updateGrant(ctx, job, grant.id, { can: { "*": ["read"] }, approved: true }), code("forbidden"));
+  assert.equal(getThread(ctx, out, news.thread.id).thread.title, "Release 2.0", "nothing changed");
+  const closing = createGrant(ctx, owner, boardId, { principals: PUBLIC, can: { "dev/": ["read"] } }).grant;
+  assert.deepEqual(revokeGrant(ctx, job, closing.id), { grant_id: closing.id, revoked: true });
+  // An owner's agent through a scoped credential is refused too.
+  const scoped = { ...callers[1]!, scope: { boards: null, can: ["read", "post", "react", "label"] as ("read" | "post" | "react" | "label")[], profile: null, expires_at: null } };
+  assert.throws(() => createGrant(ctx, scoped, boardId, { ...pub, approved: true }), code("forbidden"));
+  assert.throws(() => revokeGrant(ctx, scoped, grant.id), code("not_found"));
 });
 
 test("the most specific public pattern decides, a private channel stays private, and a member is never worse off than the public", async () => {

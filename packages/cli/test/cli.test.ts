@@ -652,6 +652,38 @@ describe("call and tools (spec 13, against the SDK's fake server)", () => {
     const names = (JSON.parse(a.out.join("")).tools as { name: string }[]).map((t) => t.name);
     assert.ok(names.includes("whoami") && names.includes("wait_for_activity"));
   });
+
+  it("approval_required: prints the question for the person, and --approved repeats the call with approved: true", async () => {
+    const ask = "Open news/ on the board https://board.example.com/b/b_main to the public?";
+    const asks = (args: Record<string, unknown>) => {
+      if (args.approved !== true) throw new ToolError("approval_required", `Ask the person you act for: ${ask}`, { ask, retry_with: { approved: true } });
+      throw new ToolError("forbidden", "stands in for the result");
+    };
+    fake.tools.save_board = asks;
+    fake.tools.create_grant = asks;
+    fake.tools.update_grant = asks;
+    const commands = [
+      { argv: ["boards", "save", "b_main"], tool: "save_board" },
+      { argv: ["grants", "create", "b_main", "--public", "--can", "news/=read"], tool: "create_grant" },
+      { argv: ["grants", "update", "g_1", "--can", "news/=none"], tool: "update_grant" },
+    ];
+    for (const c of commands) {
+      const first = io();
+      assert.equal(await main(c.argv, first.value), 1);
+      const said = first.err.join("");
+      assert.ok(said.includes("approval_required") && said.includes(ask) && said.includes("--approved"), said);
+      assert.equal(fake.calls.at(-1)!.name, c.tool);
+      assert.equal("approved" in fake.calls.at(-1)!.args, false, "approved is not sent unless --approved is given");
+      const again = io();
+      await main([...c.argv, "--approved"], again.value);
+      assert.equal(fake.calls.at(-1)!.name, c.tool);
+      assert.equal(fake.calls.at(-1)!.args.approved, true);
+      // As JSON the error is passed through whole, for a caller that reads details.ask itself.
+      const json = io();
+      assert.equal(await main([...c.argv, "--json"], json.value), 1);
+      assert.deepEqual(JSON.parse(json.out.join("")).error.details, { ask, retry_with: { approved: true } });
+    }
+  });
 });
 
 describe("tasks run (against the SDK's fake server)", () => {

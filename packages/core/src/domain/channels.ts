@@ -13,16 +13,17 @@ import {
   type GrantCanInput,
   type GrantPrincipal,
   type Permission,
+  boardUrl,
 } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
-import { OmbError, forbidden, invalid, notFound } from "../errors.js";
+import { OmbError, approvalRequired, forbidden, invalid, noPersonToAsk, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
-import { activeMembership, getPrincipal, nowIso, requireMember, requireReader } from "./access.js";
+import { activeMembership, getBoardRow, getPrincipal, nowIso, requireMember, requireReader } from "./access.js";
 import { requireScope } from "../auth/scopes.js";
 import { recordEvent } from "./boards.js";
-import { ChannelAccess, ROLE_CAP, decide, isPublicGrant, maskOf, parseGrant, permsOf, publicDecision, type GrantRow, type ParsedGrant } from "./grants.js";
+import { ChannelAccess, ROLE_CAP, decide, isPublicGrant, maskOf, parseGrant, permsOf, publicDecision, publicMask, type GrantRow, type ParsedGrant } from "./grants.js";
 import type { Actor } from "./model.js";
 import { principalRefs, refOf } from "./present.js";
 
@@ -139,23 +140,79 @@ const principalKey = (p: GrantPrincipal) => (p.kind === "member" ? `member:${p.p
 
 const READ_ONLY_MASK = maskOf(["read"]);
 
-/** Whether the caller is the board's owner in person: not an agent or a profile, and not through a scoped token. */
-const isOwnerInPerson = (actor: Actor, access: ChannelAccess): boolean => isOwner(access) && actor.kind === "human" && !actor.scope;
+const OWNER_ONLY = "Only the board's owner, or an agent or profile acting for the owner, can change what is open to the public";
+
+/**
+ * Who may change a public grant (11 §Public grants): the board's owner (`owner`), or an agent or profile that acts
+ * for the owner (`for_owner`), which first needs the owner's approval. Opening a board to people who are not
+ * members changes who can learn that it exists, so `manage` at a pattern is not enough, and a scoped token never
+ * may (its tools are refused before this is reached; checked here as well).
+ * - A profile resolves as its person, so it holds the owner role.
+ * - An agent never holds the owner role: it is a member in its own right, and acts for the person it belongs to.
+ */
+function publicGrantCaller(ctx: AppContext, actor: Actor, boardId: string, access: ChannelAccess): "owner" | "for_owner" | null {
+  if (actor.scope || !access.isMember) return null;
+  if (actor.kind === "human") return isOwner(access) ? "owner" : null;
+  if (actor.kind !== "agent" || !actor.ownerId) return null;
+  return getBoardRow(ctx, boardId)?.owner_id === actor.ownerId ? "for_owner" : null;
+}
+
+const MAX_CHANNELS_IN_ASK = 20;
+
+/**
+ * The question an agent puts to the owner before a public grant is made or changed: the board's address, the
+ * patterns, and the existing channels it opens or closes. Server text only (principle P5): no board name and no
+ * message text. `after` is the board's grants as they would be.
+ */
+function publicGrantAsk(ctx: AppContext, boardId: string, before: ParsedGrant[], after: ParsedGrant[], can: Iterable<[string, number]>): string {
+  const paths = (ctx.db.prepare("SELECT path FROM channels WHERE board_id = ? ORDER BY path").all(boardId) as { path: string }[]).map((r) => r.path);
+  const opens = paths.filter((p) => publicMask(after, p) !== 0 && publicMask(before, p) === 0);
+  const closes = paths.filter((p) => publicMask(after, p) === 0 && publicMask(before, p) !== 0);
+  const list = (items: string[]) => items.slice(0, MAX_CHANNELS_IN_ASK).join(", ") + (items.length > MAX_CHANNELS_IN_ASK ? ` and ${items.length - MAX_CHANNELS_IN_ASK} more` : "");
+  const read = [...can].filter(([, mask]) => mask !== 0).map(([pattern]) => pattern);
+  const none = [...can].filter(([, mask]) => mask === 0).map(([pattern]) => pattern);
+  const what = read.length ? `Open ${read.join(", ")}${none.length ? ` (leaving out ${none.join(", ")})` : ""}` : `Close ${none.join(", ")}`;
+  return [
+    `${what} on the board ${boardUrl(ctx.config.publicUrl, boardId)} to the public?`,
+    read.length ? "Everyone signed in on this server, member or not, could then read every thread there, including what is already posted." : "",
+    opens.length ? `Channels it opens now: ${list(opens)}.` : read.length ? "No channel that exists now is opened by it." : "",
+    closes.length ? `Channels it closes to the public: ${list(closes)}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 /**
  * The rules for a grant that names the public (11 §Public access): the server offers public access, the grant
- * names the public alone, it gives `read` or nothing, and only the board's owner, in person, makes or changes it.
- * Opening a board to people who are not members changes who can learn that it exists, so `manage` is not enough.
+ * names the public alone, it gives `read` or nothing, and only the board's owner makes or changes it, themselves
+ * or through an agent or profile of theirs. An agent or profile needs the owner's approval: without
+ * `approved: true` the call is answered `approval_required` and changes nothing. `after` builds the board's
+ * grants as they would be, for the question.
  */
-function assertPublicGrant(ctx: AppContext, actor: Actor, access: ChannelAccess, principals: GrantPrincipal[], can: Iterable<[string, number]>): void {
-  if (!principals.some((p) => p.kind === "public")) return;
+function assertPublicGrant(
+  ctx: AppContext,
+  actor: Actor,
+  boardId: string,
+  access: ChannelAccess,
+  principals: GrantPrincipal[],
+  can: Iterable<[string, number]>,
+  approved: boolean | undefined,
+  after: () => ParsedGrant[],
+): void {
   if (!ctx.config.publicAccess) throw invalid("This server does not offer public access", { reason: "public_not_offered" });
-  if (!isOwnerInPerson(actor, access)) throw forbidden("Only the board's owner, in person, can open it to the public");
+  const caller = publicGrantCaller(ctx, actor, boardId, access);
+  if (!caller) throw forbidden(OWNER_ONLY);
   if (principals.length !== 1) throw invalid("A public grant names the public alone; give members a grant of their own");
-  for (const [pattern, mask] of can) {
+  const list = [...can];
+  for (const [pattern, mask] of list) {
     if ((mask & ~READ_ONLY_MASK) !== 0) throw invalid(`A public grant gives read or nothing; at ${pattern} it names ${permsOf(mask & ~READ_ONLY_MASK).join(", ")}`);
   }
+  if (caller !== "for_owner") return;
+  if (actor.via === "workload") throw noPersonToAsk();
+  if (approved !== true) throw approvalRequired(publicGrantAsk(ctx, boardId, access.grants, after(), list));
 }
+
+const namesPublic = (principals: GrantPrincipal[]): boolean => principals.some((p) => p.kind === "public");
 
 function normalizePrincipals(ctx: AppContext, boardId: string, list: GrantPrincipal[]): GrantPrincipal[] {
   const seen = new Map<string, GrantPrincipal>();
@@ -211,14 +268,38 @@ function insertGrant(ctx: AppContext, boardId: string, actorId: string, principa
   return getGrantRow(ctx, id)!;
 }
 
-/** Grants the caller can manage: every grant for the owner, otherwise those whose every pattern the caller manages. */
+/**
+ * Whether the caller may change or revoke an existing grant. A public grant is the owner's (or an agent or profile
+ * of the owner's); any other grant needs `manage` at every pattern. A grant the caller could not even list is
+ * `not_found`; a public grant it can see and may not change is `forbidden`.
+ */
+function assertCanReach(ctx: AppContext, actor: Actor, access: ChannelAccess, grant: ParsedGrant): void {
+  const manages = canManageAll(access, grant.can.map(([p]) => p));
+  if (!isPublicGrant(grant)) {
+    if (!manages) throw notFound("Grant");
+    return;
+  }
+  if (publicGrantCaller(ctx, actor, grant.row.board_id, access)) return;
+  throw manages ? forbidden(OWNER_ONLY) : notFound("Grant");
+}
+
+/**
+ * Grants the caller can manage: every grant for the owner, otherwise those whose every pattern the caller manages,
+ * and for an agent or profile of the owner the public grants, which it may change with the owner's approval.
+ */
 export function listGrants(ctx: AppContext, actor: Actor, boardId: string): { grants: Grant[] } {
   requireMember(ctx, actor, boardId);
   const access = ChannelAccess.load(ctx, boardId, actor);
-  return { grants: presentGrants(ctx, access.grants.filter((g) => canManageAll(access, g.can.map(([p]) => p)))) };
+  const forPublic = publicGrantCaller(ctx, actor, boardId, access) !== null;
+  return { grants: presentGrants(ctx, access.grants.filter((g) => (forPublic && isPublicGrant(g)) || canManageAll(access, g.can.map(([p]) => p)))) };
 }
 
-export function createGrant(ctx: AppContext, actor: Actor, boardId: string, input: { principals: GrantPrincipal[]; can: GrantCanInput }): { grant: Grant } {
+export function createGrant(
+  ctx: AppContext,
+  actor: Actor,
+  boardId: string,
+  input: { principals: GrantPrincipal[]; can: GrantCanInput; approved?: boolean | undefined },
+): { grant: Grant } {
   hitWriteRate(ctx, actor, boardId);
   return tx(ctx, (emit) => {
     requireMember(ctx, actor, boardId);
@@ -226,8 +307,11 @@ export function createGrant(ctx: AppContext, actor: Actor, boardId: string, inpu
     const can = normalizeCan(input.can);
     if (input.principals.length === 0) throw invalid("A grant needs at least one principal");
     const principals = normalizePrincipals(ctx, boardId, input.principals);
-    assertCanManage(access, can.keys(), can);
-    assertPublicGrant(ctx, actor, access, principals, can);
+    // A public grant goes by the owner's authority, not by `manage` at its patterns.
+    if (namesPublic(principals)) {
+      const proposed: ParsedGrant = { row: { id: "", board_id: boardId, principals: "", can: "", created_by: actor.id, created_at: "", updated_at: "" }, principals, can: [...can] };
+      assertPublicGrant(ctx, actor, boardId, access, principals, can, input.approved, () => [...access.grants, proposed]);
+    } else assertCanManage(access, can.keys(), can);
     const row = insertGrant(ctx, boardId, actor.id, principals, can);
     grantsChanged(ctx, emit, boardId, actor.id);
     return { grant: presentGrants(ctx, [parseGrant(row)])[0]! };
@@ -238,7 +322,7 @@ export function updateGrant(
   ctx: AppContext,
   actor: Actor,
   grantId: string,
-  input: { add?: GrantPrincipal[] | undefined; remove?: GrantPrincipal[] | undefined; can?: GrantCanInput | undefined },
+  input: { add?: GrantPrincipal[] | undefined; remove?: GrantPrincipal[] | undefined; can?: GrantCanInput | undefined; approved?: boolean | undefined },
 ): { grant: Grant } {
   const boardId = getGrantRow(ctx, grantId)?.board_id;
   if (boardId) hitWriteRate(ctx, actor, boardId);
@@ -248,17 +332,21 @@ export function updateGrant(
     requireMember(ctx, actor, row.board_id, "reader", "Grant");
     const access = ChannelAccess.load(ctx, row.board_id, actor);
     const current = parseGrant(row);
-    const currentPatterns = current.can.map(([p]) => p);
-    if (!canManageAll(access, currentPatterns)) throw notFound("Grant");
-    if (isPublicGrant(current) && !isOwnerInPerson(actor, access)) throw forbidden("Only the board's owner, in person, can change a public grant");
+    assertCanReach(ctx, actor, access, current);
     const can = input.can ? normalizeCan(input.can) : null;
-    if (can) assertCanManage(access, can.keys(), can);
     const removing = new Set((input.remove ?? []).map(principalKey));
     const kept = current.principals.filter((p) => !removing.has(principalKey(p)));
     const principals = input.add?.length ? normalizePrincipals(ctx, row.board_id, [...kept, ...input.add]) : kept;
     if (principals.length === 0) throw invalid("A grant needs at least one principal; revoke it instead");
     if (principals.length > MAX_GRANT_PRINCIPALS) throw invalid(`A grant can name up to ${MAX_GRANT_PRINCIPALS} principals`);
-    assertPublicGrant(ctx, actor, access, principals, can ?? current.can);
+    const nextCan: [string, number][] = can ? [...can] : current.can;
+    if (namesPublic(principals)) {
+      const next: ParsedGrant = { row: current.row, principals, can: nextCan };
+      assertPublicGrant(ctx, actor, row.board_id, access, principals, nextCan, input.approved, () => access.grants.map((g) => (g.row.id === row.id ? next : g)));
+    } else if (can || isPublicGrant(current)) {
+      // A public grant turned into a members' grant is a members' grant: it needs `manage` like any other.
+      assertCanManage(access, nextCan.map(([pattern]) => pattern), new Map(nextCan));
+    }
     ctx.db
       .prepare("UPDATE grants SET principals = ?, can = ?, updated_at = ? WHERE id = ?")
       .run(JSON.stringify(principals), can ? canJson(can) : row.can, nowIso(ctx), row.id);
@@ -275,9 +363,8 @@ export function revokeGrant(ctx: AppContext, actor: Actor, grantId: string): { g
     if (!row) throw notFound("Grant");
     requireMember(ctx, actor, row.board_id, "reader", "Grant");
     const access = ChannelAccess.load(ctx, row.board_id, actor);
-    const current = parseGrant(row);
-    if (!canManageAll(access, current.can.map(([p]) => p))) throw notFound("Grant");
-    if (isPublicGrant(current) && !isOwnerInPerson(actor, access)) throw forbidden("Only the board's owner, in person, can revoke a public grant");
+    // Revoking a public grant needs no approval: it only closes.
+    assertCanReach(ctx, actor, access, parseGrant(row));
     ctx.db.prepare("DELETE FROM grants WHERE id = ?").run(row.id);
     grantsChanged(ctx, emit, row.board_id, actor.id);
     return { grant_id: row.id, revoked: true };

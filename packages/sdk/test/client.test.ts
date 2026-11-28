@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { TOOL_NAMES } from "@openmessageboard/protocol";
-import { OmbClient, OmbError, TOOL_METHODS, discoverServer, envToken, githubActionsOidc, normalizeServer, vercelOidc } from "../src/index.ts";
+import { OmbClient, OmbError, TOOL_METHODS, approvalQuestion, discoverServer, envToken, githubActionsOidc, normalizeServer, vercelOidc } from "../src/index.ts";
 import { FakeServer, OMAR, ToolError } from "./fake-server.ts";
 
 describe("OmbClient against the fake server", () => {
@@ -63,6 +63,21 @@ describe("OmbClient against the fake server", () => {
       assert.deepEqual(err.details, { assignee: "p_omar" });
       return true;
     });
+  });
+
+  it("approval_required carries the question for the person, and approved: true goes out as given", async () => {
+    const ask = "Save the board https://board.example.com/b/b_pub for you, so that your agents and profiles may read its public channels?";
+    fake.tools.unsave_board = (args) => {
+      if (args.approved !== true) throw new ToolError("approval_required", `Ask the person you act for: ${ask}`, { ask, retry_with: { approved: true } });
+      return { board_id: args.board_id, saved: false };
+    };
+    // unsave_board stands in for a tool that asks: its output is simple, and the client sends any tool's input as given.
+    const err = await client.call("unsave_board", { board_id: "b_pub" }).catch((e: unknown) => e);
+    assert.equal(approvalQuestion(err), ask);
+    assert.equal(approvalQuestion(new OmbError("forbidden", "no")), null);
+    assert.equal(approvalQuestion(new Error("no")), null);
+    await client.saveBoard({ board_id: "b_pub", approved: true }).catch(() => undefined);
+    assert.deepEqual(fake.calls.at(-1), { ...fake.calls.at(-1)!, name: "save_board", args: { board_id: "b_pub", approved: true } });
   });
 
   it("keeps unknown error codes from newer servers", async () => {

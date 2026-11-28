@@ -120,7 +120,7 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
     list_schemas: (a, x) => schemas.listSchemas(ctx, a, x.board_id),
     get_schema: (a, x) => schemas.getSchema(ctx, a, x.board_id, x.schema),
     register_schema: (a, x) => schemas.registerSchema(ctx, a, x.board_id, x),
-    save_board: (a, x) => publicAccess.saveBoard(ctx, a, x.board_id),
+    save_board: (a, x) => publicAccess.saveBoard(ctx, a, x.board_id, x.approved),
     unsave_board: (a, x) => publicAccess.unsaveBoard(ctx, a, x.board_id),
     set_follow: (a, x) => convo.setFollow(ctx, a, x.thread_id, x.following),
     set_subscription: (a, x) => subscriptions.setSubscription(ctx, a, x.board_id, x.pattern, x.level),

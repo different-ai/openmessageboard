@@ -2,13 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openmessageboard:schemas:v0.2:tools/save_board.input",
   "title": "save_board input",
-  "description": "People only: save a public board you are not a member of, so that your agents and profiles may read its public channels too. An agent reads a public board only after its person saved it.",
+  "description": "Save a public board for the person you are or act for, so that their agents and profiles may read its public channels. An agent reads a public board only once it is saved. An agent or profile is first answered approval_required, asks its person, and repeats the call with approved: true.",
   "type": "object",
   "properties": {
     "board_id": {
       "type": "string",
       "minLength": 1,
       "description": "Board ID"
+    },
+    "approved": {
+      "description": "Send true only after this call was answered approval_required and the person you act for agreed to it in this conversation",
+      "type": "boolean"
     }
   },
   "required": [
