@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import type { AppContext, AppEnv } from "@openmessageboard/core";
 import { CLOUDFLARE_MIGRATIONS } from "../src/migrations.ts";
 import { doorwayExtension, doorwayRoute, doorwayTarget } from "../src/doorway.ts";
 import { DESCRIPTION_MAX, LOGO_MAX_BYTES, cleanDescription, sniffLogo } from "../src/presentation.ts";
+import { ACCENTS, accentStyle } from "../src/doorway.ts";
 
 const URL_ = "https://omb.example";
 const NOW = new Date("2027-01-01T00:00:00Z");
@@ -13,6 +15,8 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70]);
 const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 86, 80, 56, 32]);
 const SVG = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+const TOKEN = "Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MA";
+const PREVIEW = { board_name: "Garden <club>", inviter: "Maya", role: "contributor", audience: "link", join_by: null, access_ends_at: null, status: "active" } as const;
 const BROWSER = "text/html,application/xhtml+xml,*/*;q=0.8";
 
 type TestActor = { id: string; kind: string; via: string; scope?: unknown } | null;
@@ -23,7 +27,9 @@ function setup() {
     CREATE TABLE boards (id TEXT PRIMARY KEY, name TEXT NOT NULL, owner_id TEXT NOT NULL, disabled_at TEXT);
     INSERT INTO boards (id, name, owner_id) VALUES ('b_maya', 'Garden <club>', 'maya'), ('b_noor', 'Noor''s board', 'noor');
   `);
-  for (const name of ["cf_0002_board_names", "cf_0003_board_presentation"]) sqlite.exec(CLOUDFLARE_MIGRATIONS.find((m) => m.name === name)!.sql);
+  sqlite.exec("CREATE TABLE invites (id TEXT PRIMARY KEY, board_id TEXT NOT NULL, token_hash TEXT NOT NULL)");
+  sqlite.prepare("INSERT INTO invites (id, board_id, token_hash) VALUES ('inv_1', 'b_maya', ?)").run(createHash("sha256").update(TOKEN).digest("hex"));
+  for (const name of ["cf_0002_board_names", "cf_0003_board_presentation", "cf_0004_board_presentation_accent"]) sqlite.exec(CLOUDFLARE_MIGRATIONS.find((m) => m.name === name)!.sql);
   sqlite.exec(`INSERT INTO cf_board_names (name, board_id, owner_id, state, claimed_at, last_active_at) VALUES
     ('garden', 'b_maya', 'maya', 'active', '${NOW.toISOString()}', '${NOW.toISOString()}'),
     ('private-one', 'b_noor', 'noor', 'active', '${NOW.toISOString()}', '${NOW.toISOString()}'),
@@ -37,8 +43,9 @@ function setup() {
   };
   const members: Record<string, string[]> = { b_maya: ["maya", "omar"], b_noor: ["noor"] };
   const ext = doorwayExtension({
-    previewInvite: () => {
-      throw new Error("no invites here");
+    previewInvite: (_ctx, token) => {
+      if (token !== TOKEN) throw new Error("Invite not found");
+      return PREVIEW;
     },
     requireMember: ((_: AppContext, a: { id: string }, boardId: string) => {
       const owner = (sqlite.prepare("SELECT owner_id FROM boards WHERE id = ?").get(boardId) as { owner_id: string } | undefined)?.owner_id;
@@ -59,7 +66,7 @@ function setup() {
     json: async (method: string, path: string, body?: unknown) => {
       actor = who;
       const res = await app.request(path, { method, ...(body !== undefined ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}) });
-      return { status: res.status, body: (await res.json()) as { shown?: boolean; description?: string | null; logo_url?: string | null; error?: { code: string; message: string } } };
+      return { status: res.status, body: (await res.json()) as { shown?: boolean; description?: string | null; logo_url?: string | null; accent?: string | null; accents?: { name: string; label: string; color: string }[]; error?: { code: string; message: string } } };
     },
     upload: async (path: string, bytes: Uint8Array, type = "image/png") => {
       actor = who;
@@ -201,5 +208,53 @@ test("only the owner, as a person with their own sign-in, changes how a board is
     assert.equal((await t.as(who).upload(LOGO, PNG)).status, status);
     assert.equal((await t.as(who).json("DELETE", LOGO)).status, status);
   }
-  assert.deepEqual((await t.as(maya).json("GET", SETTINGS)).body, { shown: false, description: null, logo_url: null });
+  const initial = (await t.as(maya).json("GET", SETTINGS)).body;
+  assert.deepEqual([initial.shown, initial.description, initial.logo_url, initial.accent], [false, null, null, null]);
+});
+
+test("an accent colour is a name from a fixed palette, and only palette values reach the stylesheet", async () => {
+  const t = setup();
+  const state = (await t.as(maya).json("GET", SETTINGS)).body;
+  assert.deepEqual(state.accents!.map((a) => a.name), Object.keys(ACCENTS));
+  assert.ok(state.accents!.every((a) => /^#[0-9a-f]{6}$/.test(a.color)));
+  assert.equal(accentStyle(null), "");
+  assert.equal(accentStyle("no-such"), "");
+  assert.equal(accentStyle("constructor"), "");
+  assert.match(accentStyle("green"), /^:root\{--accent:#1c7a46;.*prefers-color-scheme:dark.*--accent:#6fcf97/);
+  // Anything that is not a palette name is refused, so nothing typed can become CSS.
+  for (const bad of ["#ff0000", "red;}body{display:none", "Green", "", 7, {}]) {
+    const res = await t.as(maya).json("PUT", SETTINGS, { accent: bad });
+    assert.deepEqual([res.status, res.body.error?.code], [400, "invalid_argument"], JSON.stringify(bad));
+  }
+  assert.equal((await t.as(maya).json("PUT", SETTINGS, { accent: "green" })).body.accent, "green");
+  // Other settings leave the colour alone, and null goes back to the default.
+  assert.equal((await t.as(maya).json("PUT", SETTINGS, { description: "A club" })).body.accent, "green");
+  assert.equal((await t.as(maya).json("PUT", SETTINGS, { accent: null })).body.accent, null);
+});
+
+test("the colour styles a shown board's page, and never a board that keeps the generic page", async () => {
+  const t = setup();
+  const generic = (await t.page("/garden")).body;
+  await t.as(maya).json("PUT", SETTINGS, { accent: "green" });
+  assert.equal((await t.page("/garden")).body, generic);
+  await t.as(maya).json("PUT", SETTINGS, { shown: true });
+  const styled = (await t.page("/garden")).body;
+  assert.ok(styled.includes(accentStyle("green")));
+  assert.ok(!(await t.page("/private-one")).body.includes("#1c7a46"));
+  // The text an agent reads has no colour in it.
+  assert.doesNotMatch((await t.page("/garden", "text/markdown")).body, /#1c7a46|accent/);
+});
+
+test("the colour styles the board's invite page, without adding the logo or description to it", async () => {
+  const t = setup();
+  const plain = (await t.page(`/i/${TOKEN}`)).body;
+  assert.ok(!plain.includes("#6d3fe0"));
+  await t.as(maya).json("PUT", SETTINGS, { accent: "violet", description: "A club for gardeners" });
+  await t.as(maya).upload(LOGO, PNG);
+  const styled = (await t.page(`/i/${TOKEN}`)).body;
+  // Only the stylesheet differs: the invite still shows just the allowed preview.
+  assert.equal(styled.replace(accentStyle("violet"), ""), plain);
+  assert.doesNotMatch(styled, /A club for gardeners|<img|b_maya/);
+  // An unknown token gets the plain "not valid" page.
+  assert.ok(!(await t.page("/i/nosuchtoken0000000000")).body.includes("#6d3fe0"));
 });
