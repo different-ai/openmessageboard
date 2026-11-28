@@ -82,7 +82,7 @@ export class BoardServer extends DurableObject<Env> {
     const response = await booted.app.fetch(request);
     if (this.lifecycle) {
       // The owner signing in is activity. The session row is the record; this keeps it after the session is gone.
-      if (request.method === "POST" && url.pathname.startsWith("/api/auth/") && response.ok) recordSignIns(booted.ctx);
+      if (request.method === "POST" && (url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/sign-in/")) && response.ok) recordSignIns(booted.ctx);
       if (this.lifecycleBacklog || this.lifecycleNew.size) this.ctx.waitUntil(this.syncLifecycles());
     }
     this.ctx.waitUntil(this.scheduleWake());

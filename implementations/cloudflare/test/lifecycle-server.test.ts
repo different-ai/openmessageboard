@@ -106,7 +106,7 @@ test("the owner signing in is activity, and still counts after signing out", asy
   const before = boardSnapshot(ctx, boardId).active_at;
 
   const json = { "content-type": "application/json", origin: BASE };
-  const send = await booted.app.request(`${BASE}/api/auth/email-otp/send-verification-otp`, { method: "POST", headers: json, body: JSON.stringify({ email, type: "sign-in" }) });
+  const send = await booted.app.request(`${BASE}/api/sign-in/start`, { method: "POST", headers: json, body: JSON.stringify({ email }) });
   assert.equal(send.status, 200, await send.clone().text());
   const code = (await call("GET", `/api/test/outbox?email=${encodeURIComponent(email)}`)).json.messages[0].code;
   await new Promise((r) => setTimeout(r, 20));
@@ -312,7 +312,7 @@ test("cookie-authenticated actions must come from the server's own pages", async
   const boardId = await ownBoard("quota");
   const json = { "content-type": "application/json", origin: BASE };
   const email = "quota@example.test";
-  await booted.app.request(`${BASE}/api/auth/email-otp/send-verification-otp`, { method: "POST", headers: json, body: JSON.stringify({ email, type: "sign-in" }) });
+  await booted.app.request(`${BASE}/api/sign-in/start`, { method: "POST", headers: json, body: JSON.stringify({ email }) });
   const code = (await call("GET", `/api/test/outbox?email=${encodeURIComponent(email)}`)).json.messages[0].code;
   const signedIn = await booted.app.request(`${BASE}/api/auth/sign-in/email-otp`, { method: "POST", headers: json, body: JSON.stringify({ email, otp: code }) });
   const cookie = signedIn.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
