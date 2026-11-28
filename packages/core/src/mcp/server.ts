@@ -1,6 +1,7 @@
 import { McpServer, ProtocolError, ResourceTemplate, type ServerContext } from "@modelcontextprotocol/server";
 import { TOOLS, TOOL_NAMES, EVENTS_EXTENSION_ID, boardUrl, inboxUrl, threadUrl, parseResourceUri, type ToolName, type ServerInfo } from "@openmessageboard/protocol";
 import { z } from "zod";
+import type { ExtensionTool } from "../http/util.js";
 import type { AppContext } from "../context.js";
 import { OmbError, invalid, toOmbError } from "../errors.js";
 import * as boards from "../domain/boards.js";
@@ -82,6 +83,8 @@ export interface McpDeps {
   ctx: AppContext;
   serverInfo: () => ServerInfo;
   events: EventSubscriptions;
+  /** Tools from the implementation's extensions, listed and called after the specification's. */
+  extensionTools?: ExtensionTool[];
 }
 
 export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpServer {
@@ -190,9 +193,39 @@ export function createMcpServer(deps: McpDeps, era: "legacy" | "modern"): McpSer
       ((args: unknown, sctx: ServerContext) => runTool(name, args, sctx)) as never,
     );
   }
+  // Extension tools (spec README §Extensions): after the specification's, under the same rules.
+  const extensionTools = new Map<string, ExtensionTool>();
+  for (const tool of deps.extensionTools ?? []) {
+    if ((TOOL_NAMES as string[]).includes(tool.name) || extensionTools.has(tool.name)) throw new Error(`Extension tool name "${tool.name}" is already used`);
+    extensionTools.set(tool.name, tool);
+  }
+  const runExtensionTool = async (tool: ExtensionTool, args: unknown, sctx: ServerContext) => {
+    try {
+      const actor = actorOf(sctx);
+      const parsed = tool.input.safeParse(args ?? {});
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+        throw new OmbError("invalid_argument", issues.map((i) => `${i.path || "arguments"}: ${i.message}`).join("; "), { issues });
+      }
+      requireScope(actor, tool.scope);
+      if (tool.readOnly) ctx.rate.hit(`r:p:${holderId(actor)}`, ctx.config.rateLimits.reads_per_minute_principal, 60_000);
+      return ok(await tool.handler(ctx, actor, parsed.data as Record<string, unknown>));
+    } catch (e) {
+      return fail(e);
+    }
+  };
+  for (const tool of extensionTools.values()) {
+    server.registerTool(
+      tool.name,
+      { description: tool.description, inputSchema: tool.input, annotations: { readOnlyHint: tool.readOnly, destructiveHint: false, idempotentHint: tool.readOnly, openWorldHint: false } },
+      ((args: unknown, sctx: ServerContext) => runExtensionTool(tool, args, sctx)) as never,
+    );
+  }
   // Validate arguments ourselves so a bad argument gets the structured `invalid_argument` error the spec requires,
   // rather than the SDK's plain-text input validation message. Registered after the tools, so this handler wins.
   server.server.setRequestHandler("tools/call", async (request, sctx) => {
+    const extension = extensionTools.get(request.params.name);
+    if (extension) return runExtensionTool(extension, request.params.arguments, sctx) as never;
     const name = request.params.name as ToolName;
     if (!(TOOL_NAMES as string[]).includes(name)) throw new ProtocolError(-32602, `Unknown tool: ${request.params.name}`);
     return runTool(name, request.params.arguments, sctx) as never;

@@ -302,6 +302,8 @@ type RouteActor = { id: string; kind: string; via: string; scope?: unknown } | n
 export interface NamesDeps {
   /** The core's member check: throws `not_found` for a non-member, `forbidden` below the role. */
   requireMember(ctx: AppContext, actor: never, boardId: string, min: "reader" | "owner"): { board: { owner_id: string } };
+  /** The core's `not_found` error for a board, so the tool answers exactly as the core does. */
+  notFound(): Error;
   /** The sender for warnings. */
   mailer(): Mailer | null;
 }
@@ -385,6 +387,28 @@ export function namesExtension(opts: NamesOptions, deps: NamesDeps): NamesExtens
         return c.json({ board_id: boardId });
       });
     },
+    // For agents: MCP tools take board IDs, so an agent told "open the board garden" needs to turn the name into
+    // one. Same rule as the route: a name nobody holds and a board the caller can't read get the same answer.
+    tools: (z) => [
+      {
+        name: "name_resolve",
+        description:
+          "Find a board by its short name (the last part of an address such as https://example.com/garden). Returns the board's ID for the other tools. Answers not_found unless you are a member of that board.",
+        input: z.object({ name: z.string().describe("The board's short name: lowercase letters, digits and hyphens") }),
+        scope: "read",
+        readOnly: true,
+        handler(ctx, actor, args) {
+          const boardId = of(ctx).resolve(String(args.name).trim().toLowerCase(), ctx.now());
+          if (!boardId) throw deps.notFound();
+          try {
+            deps.requireMember(ctx, actor as never, boardId, "reader");
+          } catch {
+            throw deps.notFound();
+          }
+          return { board_id: boardId };
+        },
+      },
+    ],
     async sweep(ctx) {
       const mailer = deps.mailer();
       for (const notice of of(ctx).sweep(ctx.now())) {

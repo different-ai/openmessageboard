@@ -18,6 +18,7 @@ const loadCore = () =>
     import("./migrations.js"),
     import("@openmessageboard/core/domain/test-identities"),
     import("@openmessageboard/core/domain/access"),
+    import("@openmessageboard/core/errors"),
   ]);
 
 /** How long an idle object may sleep before checking for work that isn't in the due-time tables. */
@@ -37,7 +38,7 @@ export class BoardServer extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.ready = ctx.blockConcurrencyWhile(async () => {
-      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }] = await loadCore();
+      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }, { notFound }] = await loadCore();
       this.mintTestIdentities = mintTestIdentities;
       const sqlite = new DurableSqlite(ctx.storage);
       const db = sqlite.asDb();
@@ -47,7 +48,7 @@ export class BoardServer extends DurableObject<Env> {
       let mailer: Mailer | null = null;
       const mail = createMailer(env, createOutboxMailer);
       const nameRules = namesOptions(stringVars(env));
-      if (nameRules) this.names = namesExtension(nameRules, { requireMember: requireMember as never, mailer: () => mailer });
+      if (nameRules) this.names = namesExtension(nameRules, { requireMember: requireMember as never, notFound: () => notFound("Board"), mailer: () => mailer });
       const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : [])];
       this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: (ctx) => (mailer = mail(ctx)), features: { extensions } });
       this.booted.start();
