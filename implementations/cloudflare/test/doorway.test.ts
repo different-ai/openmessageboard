@@ -28,9 +28,14 @@ function setup(previews: Record<string, InvitePreviewFields> = { [TOKEN]: PREVIE
       if (!p) throw new Error("Invite not found");
       return p;
     },
+    requireMember: (() => {
+      throw new Error("not a member");
+    }) as never,
   });
   const app = new Hono<AppEnv>();
-  ext.register(app, { config: { publicUrl: URL_ } } as AppContext);
+  // No board shows a presentation here (presentation.test.ts covers those that do).
+  const db = { prepare: () => ({ get: () => undefined, all: () => [], run: () => undefined }) };
+  ext.register(app, { config: { publicUrl: URL_ }, db, now: () => new Date("2027-01-01T00:00:00Z") } as unknown as AppContext);
   // What the Worker does: an address a person would type becomes the extension's internal route.
   const open = async (path: string, accept = BROWSER) => {
     const [pathname, search = ""] = path.split("?");

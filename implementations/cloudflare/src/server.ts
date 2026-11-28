@@ -64,7 +64,7 @@ export class BoardServer extends DurableObject<Env> {
       const mail = createMailer(env, createOutboxMailer);
       const nameRules = namesOptions(stringVars(env));
       if (nameRules) this.names = namesExtension(nameRules, { requireMember: requireMember as never, notFound: () => notFound("Board"), mailer: () => mailer });
-      const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : []), ...(doorwayEnabled(stringVars(env)) ? [doorwayExtension({ previewInvite })] : [])];
+      const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : []), ...(doorwayEnabled(stringVars(env)) ? [doorwayExtension({ previewInvite, requireMember: requireMember as never })] : [])];
       if (this.lifecycle) extensions.push(lifecycleExtension({ settings: this.lifecycle, core: { exportBoard, limitsFor }, nudge: (boardId) => this.nudgeLifecycle(boardId) }));
       this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: (ctx) => (mailer = mail(ctx)), features: { extensions } });
       this.booted.start();

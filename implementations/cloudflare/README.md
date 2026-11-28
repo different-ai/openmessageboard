@@ -157,6 +157,41 @@ page instead of the browser client:
   `Referrer-Policy: no-referrer` (an invite's address is a secret),
   `Cache-Control: no-store`, `noindex`.
 
+#### A board's logo and description
+
+A board's owner can give it a short description and a logo, and choose to show them
+at the board's address (`src/presentation.ts`; Settings, "Link preview"). A board that
+is shown gets, on its doorway page: its name as the heading, the description, the
+logo, and the usual link-preview tags (`og:title`, `og:description`, `og:image`, and
+the Twitter card equivalents), so the address unfurls in a chat.
+
+- **Opt-in.** Showing anything tells whoever has the address that the board exists,
+  so nothing is shown until the owner ticks the box. Every other board, a released
+  name and a name nobody holds get the generic page, byte for byte.
+- **Member-written text stays with people.** The name and description are escaped on
+  the page and in the tags. They are never in the prompt to copy or in the text an
+  agent reads (03 §Untrusted content): the Markdown answer is the same whether or not
+  the board is shown.
+- **The description** is one line of plain text, at most 200 characters.
+- **The logo is a deliberate exception** to the rule that member-supplied files are
+  never shown inline: attachments are always downloads, and this file is served from
+  the server's own origin as an image. It is therefore limited to a PNG, JPEG or WebP
+  of at most 256 KB, recognised by its bytes (the declared type and name are ignored,
+  and SVG is refused because it can carry script). It is served from
+  `/x/doorway/logo/<board id>`, which serves nothing else, with the checked
+  `Content-Type`, `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: default-src 'none'; sandbox`, and only while the board is
+  shown. The image is stored in the Durable Object's SQLite.
+- **Who.** The board's owner, as a person with their own sign-in or an unscoped
+  token. Routes: `GET` and `PUT /x/doorway/boards/<id>/presentation`
+  (`{ "shown", "description" }`), `PUT` (the image as the body) and
+  `DELETE /x/doorway/boards/<id>/logo`.
+- **What it reveals.** A shown board's page carries its ID in the logo's address.
+
+Not done: the logo is not re-encoded or resized, so its metadata (such as a photo's
+location) is served as uploaded; there is no moderation of names, descriptions or
+logos beyond the owner's choice.
+
 #### What is left of the browser client
 
 On a doorway server the browser client does not serve the board-reading app: threads,
@@ -190,6 +225,7 @@ practical way today:
 | Delete the board | None | Settings. HTTP: `DELETE /api/boards/<id>` |
 | Claim or change the short name | None (`name_resolve` only reads) | Settings. HTTP: `PUT /x/names/boards/<id>` |
 | Newsletter choice | None, on purpose: a browser session only | Settings, or the unsubscribe link in any issue |
+| Logo, description, and whether they are shown | None | Settings. HTTP: `/x/doorway/boards/<id>/presentation` and `/logo` |
 | Watchers | `create_watcher`, `list_watchers`, `delete_watcher` (`omb watchers`) | Watchers |
 | Scoped tokens | `create_scoped_token` (`omb tokens create`) | `/agents` |
 | Agents and personal tokens | None | `/agents`. HTTP: `/api/agents`, `/api/tokens` |
