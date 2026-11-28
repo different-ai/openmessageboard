@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { createMailer } from "./mailer.js";
 import { newsletterExtension } from "./newsletter.js";
+import { doorwayEnabled, doorwayExtension } from "./doorway.js";
 import { namesExtension, namesOptions, type NamesExtension } from "./names.js";
 import type { Booted, ExtensionModule, Mailer } from "@openmessageboard/core";
 import { DurableSqlite } from "./sqlite.js";
@@ -19,6 +20,7 @@ const loadCore = () =>
     import("@openmessageboard/core/domain/test-identities"),
     import("@openmessageboard/core/domain/access"),
     import("@openmessageboard/core/errors"),
+    import("@openmessageboard/core/domain/invites"),
   ]);
 
 /** How long an idle object may sleep before checking for work that isn't in the due-time tables. */
@@ -38,7 +40,7 @@ export class BoardServer extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.ready = ctx.blockConcurrencyWhile(async () => {
-      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }, { notFound }] = await loadCore();
+      const [{ bootServer, loadConfig, migrate, createOutboxMailer }, { cloudflarePlatform }, { CLOUDFLARE_MIGRATIONS }, { mintTestIdentities }, { requireMember }, { notFound }, { previewInvite }] = await loadCore();
       this.mintTestIdentities = mintTestIdentities;
       const sqlite = new DurableSqlite(ctx.storage);
       const db = sqlite.asDb();
@@ -49,7 +51,7 @@ export class BoardServer extends DurableObject<Env> {
       const mail = createMailer(env, createOutboxMailer);
       const nameRules = namesOptions(stringVars(env));
       if (nameRules) this.names = namesExtension(nameRules, { requireMember: requireMember as never, notFound: () => notFound("Board"), mailer: () => mailer });
-      const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : [])];
+      const extensions: ExtensionModule[] = [...(env.NEWSLETTER ? [newsletterExtension(env.NEWSLETTER)] : []), ...(this.names ? [this.names] : []), ...(doorwayEnabled(stringVars(env)) ? [doorwayExtension({ previewInvite })] : [])];
       this.booted = await bootServer({ config, db, platform: cloudflarePlatform(env, sqlite), mailer: (ctx) => (mailer = mail(ctx)), features: { extensions } });
       this.booted.start();
       await this.scheduleWake();

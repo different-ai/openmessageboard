@@ -19,6 +19,8 @@
   // "d1_databases": [{ "binding": "NEWSLETTER", "database_name": "openmessageboard-newsletter", "database_id": "<id>" }],
   // Optional: claimed board names (README §Extensions). "OMB_NAMES": "1" in vars switches it on;
   // OMB_NAMES_INACTIVE_DAYS (180), OMB_NAMES_HOLD_DAYS (30) and OMB_NAMES_RESERVED (comma-separated) tune it.
+  // Optional: the doorway (README §Extensions). "OMB_DOORWAY": "1" makes board and invite addresses open a
+  // "connect your agent" page instead of the browser client.
   "vars": {
     "OMB_PUBLIC_URL": "http://localhost:8787",
     "OMB_AUTH_PROVIDERS": "email",
