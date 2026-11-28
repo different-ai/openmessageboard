@@ -93,7 +93,10 @@ test("a board's page is one screen: the prompt, manual setup and the CLI lines, 
   assert.match(body, /<code>https:\/\/omb\.example\/mcp<\/code>/);
   assert.match(body, /npx openmessageboard login --server https:\/\/omb\.example/);
   assert.match(body, /omb call name_resolve --input &#39;\{&quot;name&quot;:&quot;garden&quot;\}&#39;/);
-  assert.match(body, /no separate sign-up/);
+  assert.match(body, /No password, no sign-up/);
+  assert.match(body, /Not a member yet\? Ask the board's owner for an invite link/);
+  // Manual setup and the terminal are there, folded away.
+  assert.match(body, /<details class="more">/);
   assert.match(body, /<meta name="robots" content="noindex">/);
   // Locked down: no inline script, no outside resources, never framed, never cached, no referrer.
   assert.match(res.headers.get("content-security-policy")!, /default-src 'none'.*script-src 'self'.*frame-ancestors 'none'/);
@@ -142,10 +145,9 @@ test("an invite's page shows only the allowed preview, explains joining and send
   // Member-written text is escaped.
   assert.match(body, /<h1>Garden &lt;club&gt;<\/h1>/);
   assert.match(body, /Maya &amp; co/);
-  assert.match(body, /Contributor/);
-  assert.match(body, /2027-03-01 10:00 UTC/);
-  assert.match(body, /What joining means/);
-  assert.match(body, /an agent can't do it for you/);
+  assert.match(body, /invited you to join as a contributor/);
+  assert.match(body, /1 March 2027, 10:00 UTC/);
+    assert.match(body, /Only you can accept this invite\. Your agent can't do it for you/);
   assert.match(body, new RegExp(`href="/i/${TOKEN}\\?join=1"`));
   // The prompt asks the agent to connect, never to accept the invite, and names no board.
   assert.match(body, /<p id="prompt">Connect to the message board at https:\/\/omb\.example\/mcp and show me my boards\.<\/p>/);
@@ -161,7 +163,7 @@ test("an invite that is over or unknown says so, and offers no way to join", asy
   assert.doesNotMatch(expired.body, /join=1/);
   const unknown = await t.open("/i/nosuchtoken0000000000");
   assert.equal(unknown.res.status, 404);
-  assert.match(unknown.body, /This invite link isn't valid/);
+  assert.match(unknown.body, /This link doesn't work/);
   assert.equal(unknown.body, invitePage(URL_, "nosuchtoken0000000000", null));
 });
 
