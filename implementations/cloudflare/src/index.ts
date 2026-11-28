@@ -1,11 +1,18 @@
 import { SERVER_PATHS, WEB_CSP, isServerPath } from "@openmessageboard/core/http/paths";
-import type { Env } from "./env.js";
+import { doorwayEnabled, doorwayRoute, doorwayTarget } from "./doorway.js";
+import { stringVars, type Env } from "./env.js";
 
 export { BoardServer } from "./server.js";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const { pathname } = new URL(request.url);
+    const url = new URL(request.url);
+    const { pathname } = url;
+    // The doorway extension: board and invite addresses get a "connect your agent" page from the server.
+    if ((request.method === "GET" || request.method === "HEAD") && doorwayEnabled(stringVars(env))) {
+      const target = doorwayTarget(pathname, url.search);
+      if (target) return env.BOARD.get(env.BOARD.idFromName("main")).fetch(new Request(new URL(doorwayRoute(target), url), request));
+    }
     if (!env.ASSETS || isServerPath(pathname) || SERVER_PATHS.has(pathname) || pathname.startsWith("/x/")) {
       return env.BOARD.get(env.BOARD.idFromName("main")).fetch(request);
     }
