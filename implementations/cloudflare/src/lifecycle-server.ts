@@ -5,7 +5,7 @@ import type { AppContext, ExtensionModule, Migration } from "@openmessageboard/c
 import { LIFECYCLE_EXTENSION_ID, checkLinkToken, type BoardSnapshot, type LifecycleSettings, type LinkAction } from "./lifecycle.js";
 
 export const LIFECYCLE_MIGRATION: Migration = {
-  name: "cf_0004_board_lifecycle",
+  name: "cf_0005_board_lifecycle",
   sql: `CREATE TABLE IF NOT EXISTS cf_board_lifecycle (
   board_id TEXT PRIMARY KEY,
   -- The settings this board's lifecycle object was last told about. NULL: it needs a nudge.

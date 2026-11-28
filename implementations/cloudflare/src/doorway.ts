@@ -188,6 +188,30 @@ a{color:var(--accent)}
 footer a{color:inherit}
 `;
 
+/**
+ * Accent colours an owner may pick for their board's pages. A fixed palette, so every choice keeps text readable
+ * in light and dark, and so nothing an owner types ever reaches the stylesheet: the page gets these values, looked
+ * up by name. Each entry: the accent, its hover shade and a soft tint, for light then dark.
+ */
+export const ACCENTS: Readonly<Record<string, { label: string; light: [string, string, string]; dark: [string, string, string] }>> = {
+  blue: { label: "Blue", light: ["#2f5bea", "#2349c7", "#e9effe"], dark: ["#7d9dff", "#9bb4ff", "#212a45"] },
+  violet: { label: "Violet", light: ["#6d3fe0", "#5a31c2", "#efe9fd"], dark: ["#a78bfa", "#bda7fb", "#2a2247"] },
+  pink: { label: "Pink", light: ["#c2317d", "#a52669", "#fde8f2"], dark: ["#f38bbd", "#f6a6cc", "#3d1f2f"] },
+  red: { label: "Red", light: ["#c53030", "#a62626", "#fdeaea"], dark: ["#f58a8a", "#f7a5a5", "#3d2020"] },
+  orange: { label: "Orange", light: ["#b8500f", "#9a420b", "#fdeee2"], dark: ["#f5a26b", "#f7b68b", "#3b2718"] },
+  green: { label: "Green", light: ["#1c7a46", "#16653a", "#e4f4ea"], dark: ["#6fcf97", "#8ddaae", "#1b3526"] },
+  teal: { label: "Teal", light: ["#0f7480", "#0b606a", "#e0f3f5"], dark: ["#5fc8d4", "#82d5de", "#16343a"] },
+  slate: { label: "Slate", light: ["#3d4654", "#2f3743", "#eceef1"], dark: ["#b4bcc9", "#c6ccd6", "#2a2e36"] },
+};
+
+/** The stylesheet lines for a chosen accent, or nothing for the default or an unknown name. */
+export function accentStyle(name: string | null | undefined): string {
+  const a = name && Object.hasOwn(ACCENTS, name) ? ACCENTS[name] : undefined;
+  if (!a) return "";
+  const vars = (v: [string, string, string]) => `--accent:${v[0]};--accent-hover:${v[1]};--accent-soft:${v[2]}`;
+  return `:root{${vars(a.light)}}@media (prefers-color-scheme:dark){:root{${vars(a.dark)}}}`;
+}
+
 /** The project's mark, inline so the page loads nothing else. */
 const MARK =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2f5bea"/><path d="M8 10.5A2.5 2.5 0 0 1 10.5 8h11A2.5 2.5 0 0 1 24 10.5v7a2.5 2.5 0 0 1-2.5 2.5H15l-5 4v-4h.5A2.5 2.5 0 0 1 8 17.5z" fill="#fff"/><circle cx="12.5" cy="14" r="1.5" fill="#2f5bea"/><circle cx="16" cy="14" r="1.5" fill="#2f5bea"/><circle cx="19.5" cy="14" r="1.5" fill="#2f5bea"/></svg>';
@@ -217,7 +241,7 @@ export interface PageMeta {
   image?: string;
 }
 
-function page(meta: PageMeta, host: string, body: string): string {
+function page(meta: PageMeta, host: string, body: string, accent: string | null = null): string {
   const e = escapeHtml;
   return `<!doctype html>
 <html lang="en">
@@ -234,7 +258,7 @@ function page(meta: PageMeta, host: string, body: string): string {
 ${meta.image ? `<meta property="og:image" content="${e(meta.image)}">\n` : ""}<meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="${e(meta.title)}">
 <meta name="twitter:description" content="${e(meta.description)}">
-${meta.image ? `<meta name="twitter:image" content="${e(meta.image)}">\n` : ""}<style>${STYLE}</style>
+${meta.image ? `<meta name="twitter:image" content="${e(meta.image)}">\n` : ""}<style>${STYLE}${accentStyle(accent)}</style>
 </head>
 <body>
 <header class="wrap top"><a class="brand" href="/">${MARK}<span>${e(host)}</span></a><span class="tag">Message boards for people and agents</span></header>
@@ -285,6 +309,8 @@ export interface BoardPresentation {
   title: string;
   description: string | null;
   logoUrl: string | null;
+  /** A name from ACCENTS, or null for the default colour. */
+  accent?: string | null;
 }
 
 export function boardPage(publicUrl: string, target: DoorwayTarget & { kind: "board" }, shown: BoardPresentation | null = null): string {
@@ -302,7 +328,7 @@ ${shown.description ? `<p class="about">${e(shown.description)}</p>\n` : ""}<p c
 <p class="eyebrow">Message board</p>
 <h1>${e(target.label)}</h1>
 <p class="lead">A board on ${e(host(publicUrl))}. Members read and post here through their agent, so there is nothing to read on this page. Paste the prompt below to connect yours.</p>`;
-  return page(meta, host(publicUrl), `${head}\n${connectSection(publicUrl, target)}`);
+  return page(meta, host(publicUrl), `${head}\n${connectSection(publicUrl, target)}`, shown?.accent ?? null);
 }
 
 export function homePage(publicUrl: string): string {
@@ -338,7 +364,8 @@ const ENDED: Record<Exclude<InvitePreviewFields["status"], "active">, string> = 
 };
 const date = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
 
-export function invitePage(publicUrl: string, token: string, preview: InvitePreviewFields | null): string {
+/** `accent` is the colour the board's owner picked, if any: styling only, it adds nothing to what the page says. */
+export function invitePage(publicUrl: string, token: string, preview: InvitePreviewFields | null, accent: string | null = null): string {
   const e = escapeHtml;
   const h = host(publicUrl);
   // Link previews of an invite never carry the board's name: the address may be pasted anywhere.
@@ -368,7 +395,7 @@ export function invitePage(publicUrl: string, token: string, preview: InvitePrev
 <dt>Who can join</dt><dd>${AUDIENCE[preview.audience]}</dd>
 </dl>`;
   if (preview.status !== "active") {
-    return page(meta, h, `${head}\n<section class="panel">\n${facts}\n<p class="note">${ENDED[preview.status]} Ask the board's owner for a new link.</p>\n</section>`);
+    return page(meta, h, `${head}\n<section class="panel">\n${facts}\n<p class="note">${ENDED[preview.status]} Ask the board's owner for a new link.</p>\n</section>`, accent);
   }
   const body = `${head}
 <section class="panel">
@@ -390,7 +417,7 @@ export function invitePage(publicUrl: string, token: string, preview: InvitePrev
 ${promptBlock(connectPrompt(`${publicUrl}/mcp`, { kind: "home" }))}
 <p class="hint">Your agent adds the server, signs you in the same way, and finds the board among your boards. Server for manual setup: <code>${e(`${publicUrl}/mcp`)}</code></p>
 </section>`;
-  return page(meta, h, body);
+  return page(meta, h, body, accent);
 }
 
 /** What the routes need from the core, passed in because the core is loaded dynamically. */
@@ -437,7 +464,7 @@ export function doorwayExtension(deps: DoorwayDeps): ExtensionModule {
         if (!target || target.kind !== "board" || target.by !== by) return c.json({ error: { code: "not_found", message: "Not found" } }, 404);
         return respond(c.req.header("accept"), target, () => boardPage(base, target, shown.forAddress(target, ctx.now())));
       });
-      app.get("/x/doorway/invite/:token", (c) => {
+      app.get("/x/doorway/invite/:token", async (c) => {
         const token = c.req.param("token");
         if (!ID.test(token)) return c.json({ error: { code: "not_found", message: "Not found" } }, 404);
         let preview: InvitePreviewFields | null = null;
@@ -447,7 +474,8 @@ export function doorwayExtension(deps: DoorwayDeps): ExtensionModule {
           preview = null;
         }
         // The text for agents is the same for every token, so fetching it tells an agent nothing about the invite.
-        return respond(c.req.header("accept"), { kind: "invite", token }, () => invitePage(base, token, preview), preview ? 200 : 404);
+        const accent = preview ? await shown.accentForInvite(token) : null;
+        return respond(c.req.header("accept"), { kind: "invite", token }, () => invitePage(base, token, preview, accent), preview ? 200 : 404);
       });
     },
   };

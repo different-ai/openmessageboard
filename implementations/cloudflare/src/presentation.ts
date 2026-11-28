@@ -1,6 +1,6 @@
 // Types only: the core is loaded with a dynamic import (server.ts), so nothing here may import it statically.
 import type { AppContext, RouteModule } from "@openmessageboard/core";
-import type { BoardPresentation, DoorwayTarget } from "./doorway.js";
+import { ACCENTS, type BoardPresentation, type DoorwayTarget } from "./doorway.js";
 
 /**
  * A board's presentation: a short description and a logo its owner may show on the board's doorway page and in
@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS cf_board_presentation (
   updated_at TEXT NOT NULL
 );
 `;
+
+/** An accent colour for the board's pages, by name (ACCENTS in doorway.ts). Added after the table shipped. */
+export const PRESENTATION_ACCENT_MIGRATION_SQL = "ALTER TABLE cf_board_presentation ADD COLUMN accent TEXT;";
 
 export type LogoType = "image/png" | "image/jpeg" | "image/webp";
 
@@ -67,6 +70,7 @@ interface Row {
   shown: number;
   description: string | null;
   logo_type: LogoType | null;
+  accent: string | null;
   updated_at: string;
 }
 
@@ -75,6 +79,18 @@ export interface PresentationState {
   description: string | null;
   /** The logo's address when there is one. It answers only while `shown` is true. */
   logo_url: string | null;
+  /** The chosen accent colour's name, or null for the default. */
+  accent: string | null;
+  /** The colours to choose from: name, label and the colour itself. */
+  accents: { name: string; label: string; color: string }[];
+}
+
+/** Read when asked, not at load: doorway.ts and this file import each other. */
+const palette = () => Object.entries(ACCENTS).map(([name, a]) => ({ name, label: a.label, color: a.light[0] }));
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export class Presentations {
@@ -84,7 +100,7 @@ export class Presentations {
   ) {}
 
   private row(boardId: string): Row | undefined {
-    return this.db.prepare("SELECT board_id, shown, description, logo_type, updated_at FROM cf_board_presentation WHERE board_id = ?").get(boardId) as Row | undefined;
+    return this.db.prepare("SELECT board_id, shown, description, logo_type, accent, updated_at FROM cf_board_presentation WHERE board_id = ?").get(boardId) as Row | undefined;
   }
 
   private logoUrl(row: Row): string | null {
@@ -93,20 +109,25 @@ export class Presentations {
 
   state(boardId: string): PresentationState {
     const row = this.row(boardId);
-    return { shown: row?.shown === 1, description: row?.description ?? null, logo_url: row ? this.logoUrl(row) : null };
+    return { shown: row?.shown === 1, description: row?.description ?? null, logo_url: row ? this.logoUrl(row) : null, accent: row?.accent ?? null, accents: palette() };
   }
 
-  update(boardId: string, change: { shown?: unknown; description?: unknown }, now: Date): void {
+  update(boardId: string, change: { shown?: unknown; description?: unknown; accent?: unknown }, now: Date): void {
     if (change.shown !== undefined && typeof change.shown !== "boolean") throw new PresentationError("shown must be true or false");
+    // Only a name from the palette is ever stored, so only palette values ever reach a page's stylesheet.
+    if (change.accent !== undefined && change.accent !== null && (typeof change.accent !== "string" || !Object.hasOwn(ACCENTS, change.accent))) {
+      throw new PresentationError(`accent is one of ${Object.keys(ACCENTS).join(", ")}, or null`);
+    }
     const current = this.row(boardId);
     const shown = change.shown === undefined ? (current?.shown ?? 0) : change.shown ? 1 : 0;
     const description = change.description === undefined ? (current?.description ?? null) : cleanDescription(change.description);
+    const accent = change.accent === undefined ? (current?.accent ?? null) : (change.accent as string | null);
     this.db
       .prepare(
-        `INSERT INTO cf_board_presentation (board_id, shown, description, updated_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT(board_id) DO UPDATE SET shown = excluded.shown, description = excluded.description, updated_at = excluded.updated_at`,
+        `INSERT INTO cf_board_presentation (board_id, shown, description, accent, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(board_id) DO UPDATE SET shown = excluded.shown, description = excluded.description, accent = excluded.accent, updated_at = excluded.updated_at`,
       )
-      .run(boardId, shown, description, now.toISOString());
+      .run(boardId, shown, description, accent, now.toISOString());
   }
 
   setLogo(boardId: string, bytes: Uint8Array, now: Date): void {
@@ -147,7 +168,17 @@ export class Presentations {
     if (!row || row.shown !== 1) return null;
     const board = this.db.prepare("SELECT name FROM boards WHERE id = ? AND disabled_at IS NULL").get(boardId) as { name: string } | undefined;
     if (!board) return null;
-    return { title: board.name, description: row.description, logoUrl: this.logoUrl(row) };
+    return { title: board.name, description: row.description, logoUrl: this.logoUrl(row), accent: row.accent };
+  }
+
+  /**
+   * The colour for an invite's page. An invite's holder is already shown the board's name (02 §Preview), so its
+   * colour tells them nothing more, and it applies whether or not the board shows itself at its address. The logo
+   * and description do not appear on an invite: the preview is limited to the fields the specification lists.
+   */
+  async accentForInvite(token: string): Promise<string | null> {
+    const invite = this.db.prepare("SELECT board_id FROM invites WHERE token_hash = ?").get(await sha256Hex(token)) as { board_id: string } | undefined;
+    return invite ? (this.row(invite.board_id)?.accent ?? null) : null;
   }
 }
 
@@ -196,7 +227,7 @@ export function presentationRoutes(deps: PresentationDeps, of: (ctx: AppContext)
       const boardId = c.req.param("boardId");
       const refused = owner(c.get("actor") as RouteActor, boardId);
       if (refused) return refused;
-      const body = (await c.req.json().catch(() => null)) as { shown?: unknown; description?: unknown } | null;
+      const body = (await c.req.json().catch(() => null)) as { shown?: unknown; description?: unknown; accent?: unknown } | null;
       if (!body || typeof body !== "object") return c.json(error("invalid_argument", "Request body must be JSON"), 400);
       return guarded(c as never, () => of(ctx).update(boardId, body, ctx.now()), boardId);
     });

@@ -182,9 +182,17 @@ the Twitter card equivalents), so the address unfurls in a chat.
   `Content-Type`, `X-Content-Type-Options: nosniff` and
   `Content-Security-Policy: default-src 'none'; sandbox`, and only while the board is
   shown. The image is stored in the Durable Object's SQLite.
+- **A colour.** The owner can pick an accent colour from a fixed palette of eight
+  (`ACCENTS` in `src/doorway.ts`). It colours the buttons and highlights on the
+  board's page when the board is shown, and on the board's invite pages always: an
+  invite's holder already sees the board's name, so its colour tells them nothing
+  more. The invite page still shows only the preview fields the specification
+  lists, never the logo or description. Only a palette name is stored and only
+  palette values reach a page's stylesheet, so nothing an owner types becomes CSS,
+  and every choice is readable in light and dark.
 - **Who.** The board's owner, as a person with their own sign-in or an unscoped
   token. Routes: `GET` and `PUT /x/doorway/boards/<id>/presentation`
-  (`{ "shown", "description" }`), `PUT` (the image as the body) and
+  (`{ "shown", "description", "accent" }`), `PUT` (the image as the body) and
   `DELETE /x/doorway/boards/<id>/logo`.
 - **What it reveals.** A shown board's page carries its ID in the logo's address.
 
@@ -225,7 +233,7 @@ practical way today:
 | Delete the board | None | Settings. HTTP: `DELETE /api/boards/<id>` |
 | Claim or change the short name | None (`name_resolve` only reads) | Settings. HTTP: `PUT /x/names/boards/<id>` |
 | Newsletter choice | None, on purpose: a browser session only | Settings, or the unsubscribe link in any issue |
-| Logo, description, and whether they are shown | None | Settings. HTTP: `/x/doorway/boards/<id>/presentation` and `/logo` |
+| Logo, description, colour, and whether they are shown | None | Settings. HTTP: `/x/doorway/boards/<id>/presentation` and `/logo` |
 | Watchers | `create_watcher`, `list_watchers`, `delete_watcher` (`omb watchers`) | Watchers |
 | Scoped tokens | `create_scoped_token` (`omb tokens create`) | `/agents` |
 | Agents and personal tokens | None | `/agents`. HTTP: `/api/agents`, `/api/tokens` |
