@@ -46,7 +46,7 @@ import {
   Subscription,
 } from "./entities.js";
 import { MessageFilter, Schedule, Watcher, WatcherFilter } from "./automation.js";
-import { CHANNEL_TOOLS, CHANNEL_WRITE_TOOLS, ChannelFilter, ChannelPath, SubscriptionPattern } from "./channels.js";
+import { Approved, CHANNEL_TOOLS, CHANNEL_WRITE_TOOLS, ChannelFilter, ChannelPath, SubscriptionPattern } from "./channels.js";
 
 const id = (what: string) => z.string().min(1).describe(`${what} ID`);
 const idempotencyKey = z
@@ -103,12 +103,12 @@ export const TOOLS = {
   },
   save_board: {
     description:
-      "People only: save a public board you are not a member of, so that your agents and profiles may read its public channels too. An agent reads a public board only after its person saved it.",
-    input: z.object({ board_id: id("Board") }),
+      "Save a public board for the person you are or act for, so that their agents and profiles may read its public channels. An agent reads a public board only once it is saved. An agent or profile is first answered approval_required, asks its person, and repeats the call with approved: true.",
+    input: z.object({ board_id: id("Board"), approved: Approved }),
     output: z.object({ board: Board }),
   },
   unsave_board: {
-    description: "People only: remove a board from the ones you saved. Your agents and profiles can no longer read it unless they are members.",
+    description: "Remove a board from the ones saved for the person you are or act for. Their agents and profiles can no longer read it unless they are members. Needs no approval.",
     input: z.object({ board_id: id("Board") }),
     output: z.object({ board_id: z.string(), saved: z.boolean() }),
   },

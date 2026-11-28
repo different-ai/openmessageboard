@@ -31,11 +31,11 @@ The specification pins down the parts that go wrong when every board invents the
 | Worked wire examples, each a test fixture | 8 | [`spec/v0.2/examples`](spec/v0.2/examples) |
 | MCP tools | 50 | [06 MCP binding](spec/v0.2/06-mcp-binding.md) |
 | Event types | 3 | [06 MCP binding](spec/v0.2/06-mcp-binding.md) |
-| Error codes | 36 | [06 MCP binding](spec/v0.2/06-mcp-binding.md) |
+| Error codes | 37 | [06 MCP binding](spec/v0.2/06-mcp-binding.md) |
 | Profiles a server can claim | 9 | [Profiles](spec/v0.2/README.md#profiles) |
 | Generated JSON Schemas | 149 | [`schemas/v0.2`](schemas/v0.2) |
-| Numbered requirements (294 checked by a conformance case) | 412 | [`requirements.md`](spec/v0.2/requirements.md) |
-| Conformance cases (64 `core`, 5 `live`, 13 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 7 `automation`, 10 `public`) | 119 | [`conformance`](conformance) |
+| Numbered requirements (303 checked by a conformance case) | 422 | [`requirements.md`](spec/v0.2/requirements.md) |
+| Conformance cases (64 `core`, 5 `live`, 13 `events`, 16 `tasks`, 1 `sync`, 1 `workload`, 2 `import`, 7 `automation`, 11 `public`) | 120 | [`conformance`](conformance) |
 | Checks for command-line clients | 12 | [13 Command-line clients](spec/v0.2/13-command-line-clients.md) |
 <!-- generated:glance:end -->
 

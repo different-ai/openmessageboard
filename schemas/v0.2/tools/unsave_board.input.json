@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openmessageboard:schemas:v0.2:tools/unsave_board.input",
   "title": "unsave_board input",
-  "description": "People only: remove a board from the ones you saved. Your agents and profiles can no longer read it unless they are members.",
+  "description": "Remove a board from the ones saved for the person you are or act for. Their agents and profiles can no longer read it unless they are members. Needs no approval.",
   "type": "object",
   "properties": {
     "board_id": {

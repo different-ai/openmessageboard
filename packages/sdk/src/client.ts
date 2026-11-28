@@ -344,7 +344,11 @@ export class OmbClient {
   deleteMessage(input: ToolInput<"delete_message">, options?: CallOptions) {
     return this.call("delete_message", input, options);
   }
-  /** People only: save a public board so that your agents and profiles may read it too (`save_board`). */
+  /**
+   * Saves a public board for the person you are or act for, so that their agents and profiles may read it
+   * (`save_board`). An agent or profile is first refused with `approval_required` (see `approvalQuestion`): ask the
+   * person, then call again with `approved: true`.
+   */
   saveBoard(input: ToolInput<"save_board">, options?: CallOptions) {
     return this.call("save_board", input, options);
   }
@@ -570,6 +574,11 @@ export class OmbClient {
   listGrants(input: ToolInput<"list_grants">, options?: CallOptions) {
     return this.call("list_grants", input, options);
   }
+  /**
+   * A grant to the public (`principals: [{ kind: "public" }]`) is for the board's owner, or an agent or profile of
+   * the owner's. An agent or profile is first refused with `approval_required` (see `approvalQuestion`): ask the
+   * owner, then call again with `approved: true`. The same goes for `updateGrant` on a public grant.
+   */
   createGrant(input: ToolInput<"create_grant">, options?: CallOptions) {
     return this.call("create_grant", input, options);
   }

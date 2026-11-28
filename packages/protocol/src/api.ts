@@ -13,7 +13,7 @@ import {
 } from "./constants.js";
 import { Labels, BoardSettings, TokenScope } from "./entities.js";
 import { TOOLS } from "./tools.js";
-import { ChannelPath, GrantCanInput, GrantPrincipal, MAX_GRANT_PRINCIPALS } from "./channels.js";
+import { Approved, ChannelPath, GrantCanInput, GrantPrincipal, MAX_GRANT_PRINCIPALS } from "./channels.js";
 import { WatcherFilter } from "./automation.js";
 
 /**
@@ -288,11 +288,12 @@ export const OAuthConsentBody = z.object({
 });
 
 export const CreateChannelBody = z.object({ path: ChannelPath, private: z.boolean().optional() });
-export const CreateGrantBody = z.object({ principals: z.array(GrantPrincipal).min(1).max(MAX_GRANT_PRINCIPALS), can: GrantCanInput });
+export const CreateGrantBody = z.object({ principals: z.array(GrantPrincipal).min(1).max(MAX_GRANT_PRINCIPALS), can: GrantCanInput, approved: Approved });
 export const UpdateGrantBody = z.object({
   add: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
   remove: z.array(GrantPrincipal).max(MAX_GRANT_PRINCIPALS).optional(),
   can: GrantCanInput.optional(),
+  approved: Approved,
 });
 
 /** Body of the schedule routes: `schedule_post` without the board or thread, which the path names. */

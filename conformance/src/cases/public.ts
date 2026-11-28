@@ -1,8 +1,9 @@
 /** public profile: reading without membership where the owner made a public grant (11 §Public access). */
-import type { Board, Change } from "@openmessageboard/protocol";
+import { PROFILE_HEADER, type Board, type Change } from "@openmessageboard/protocol";
 import { check, Failure } from "../errors.ts";
 import type { CaseDef, Ctx } from "../harness.ts";
-import type { McpSession } from "../mcp.ts";
+import type { PrincipalName } from "../identities.ts";
+import { McpSession } from "../mcp.ts";
 import { newKey } from "../util.ts";
 import { mayaOnOwnerBoard, reply } from "./helpers.ts";
 
@@ -40,6 +41,22 @@ function world(ctx: Ctx): Promise<PublicWorld> {
       vault: { threadId: vault.thread.id, channel: `${open}/vault` },
     };
   });
+}
+
+/** A fresh connection for `name` that acts as one of their profiles (closed at the end of the run). */
+async function asProfile(ctx: Ctx, name: PrincipalName, profile: string): Promise<McpSession> {
+  await ctx.discovery();
+  const s = await McpSession.connect(`${name}/${profile}`, ctx.endpoint, ctx.token(name), 15_000, { [PROFILE_HEADER]: profile });
+  ctx.cleanups.push(() => s.close());
+  return s;
+}
+
+/** Checks an `approval_required` answer (06 §Asking the person) and returns its question. */
+function question(e: { details?: Record<string, unknown> | undefined }, what: string): string {
+  const ask = e.details?.ask;
+  check(typeof ask === "string" && ask.length > 0, `${what}: approval_required must carry details.ask, a question for the person`);
+  check(JSON.stringify(e.details?.retry_with) === JSON.stringify({ approved: true }), `${what}: details.retry_with must be {"approved": true}`);
+  return ask as string;
 }
 
 /** Opens `<open>/` to the public, except `<open>/internal/`, for the length of `run`. */
@@ -221,7 +238,7 @@ export const publicCases: CaseDef[] = [
   {
     id: "public.agents-need-saved",
     profile: "public",
-    title: "An agent reads a public board only after its person saved it; saving is for people, and for public boards",
+    title: "An agent reads a public board only once it is saved for its person; a board that is not public has nothing to save",
     covers: ["R11-40", "R11-41", "R11-42", "R11-43", "R11-44", "R11-45"],
     async run(ctx) {
       const w = await world(ctx);
@@ -233,7 +250,6 @@ export const publicCases: CaseDef[] = [
         await agent.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
         await agent.fails("list_threads", { board_id: w.board }, "not_found");
         await agent.fails("start_thread", { board_id: w.board, title: "x", body: "x", idempotency_key: newKey() }, "not_found");
-        await agent.fails("save_board", { board_id: w.board }, "forbidden");
         const saved = await maya.ok("save_board", { board_id: w.board });
         check(saved.board.id === w.board, "save_board returns the board");
         try {
@@ -258,7 +274,7 @@ export const publicCases: CaseDef[] = [
   {
     id: "public.owner-only",
     profile: "public",
-    title: "Only the board's owner makes, changes or revokes a public grant, which gives read or nothing and names the public alone",
+    title: "Only the board's owner, or an agent or profile of the owner, makes, changes or revokes a public grant, which gives read or nothing and names the public alone",
     covers: ["R11-22", "R11-23", "R11-25"],
     async run(ctx) {
       const w = await world(ctx);
@@ -270,6 +286,9 @@ export const publicCases: CaseDef[] = [
       const manage = await owner.ok("create_grant", { board_id: w.board, principals: [{ kind: "member", principal_id: mayaId }], can: { [pattern]: "all" } });
       try {
         await maya.fails("create_grant", { board_id: w.board, principals: [{ kind: "public" }], can: { [pattern]: ["read"] } }, "forbidden");
+        // Saying the person agreed does not change who may: maya, and a profile of hers, are not the owner.
+        const mayaProfile = await asProfile(ctx, "maya", `pub-${ctx.runId}`);
+        for (const s of [maya, mayaProfile]) await s.fails("create_grant", { board_id: w.board, principals: [{ kind: "public" }], can: { [pattern]: ["read"] }, approved: true }, "forbidden");
         await owner.fails("create_grant", { board_id: w.board, principals: [{ kind: "public" }], can: { [pattern]: ["read", "post"] } }, "invalid_argument");
         await owner.fails("create_grant", { board_id: w.board, principals: [{ kind: "public" }], can: { [pattern]: "all" } }, "invalid_argument");
         await owner.fails("create_grant", { board_id: w.board, principals: [{ kind: "public" }, { kind: "everyone" }], can: { [pattern]: ["read"] } }, "invalid_argument");
@@ -282,6 +301,76 @@ export const publicCases: CaseDef[] = [
       } finally {
         await owner.ok("revoke_grant", { grant_id: manage.grant.id }).catch(() => undefined);
       }
+    },
+  },
+  {
+    id: "public.agent-asks-first",
+    profile: "public",
+    title: "An agent or a profile is answered approval_required, and the call goes through once it is repeated with approved: true",
+    covers: ["R06-48", "R06-49", "R06-51", "R11-59", "R11-60", "R11-61", "R11-62", "R11-63", "R11-64"],
+    async run(ctx) {
+      const w = await world(ctx);
+      const owner = await ctx.session("owner");
+      const maya = await ctx.session("maya");
+      const out = await ctx.session("outsider");
+      const agent = await ctx.session("agent"); // maya's agent, on no board
+      if ((await agent.ok("whoami", {})).memberships.some((m) => m.board_id === w.board)) ctx.skip("the agent was added to the owner's board; use a fresh server");
+      const pattern = `${w.open}/news`;
+      const grant = { board_id: w.board, principals: [{ kind: "public" as const }], can: { [pattern]: ["read" as const] } };
+
+      // A public grant, by a profile of the owner: asked first, and nothing changes until the owner agrees.
+      const helper = await asProfile(ctx, "owner", `pub-${ctx.runId}`);
+      const ask = question(await helper.fails("create_grant", grant, "approval_required"), "create_grant by the owner's profile");
+      check(ask.includes(w.board) && ask.includes(pattern), "the question names the board by its address and the patterns");
+      await helper.fails("create_grant", { ...grant, approved: false }, "approval_required");
+      await out.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
+      const made = await helper.ok("create_grant", { ...grant, approved: true });
+      try {
+        check(made.grant.principals.length === 1 && made.grant.principals[0]!.kind === "public", "with approved: true the public grant is made");
+        await out.ok("get_thread", { thread_id: w.news.threadId });
+        // Changing it asks again; revoking does not.
+        const change = { grant_id: made.grant.id, can: { [pattern]: "none" as const } };
+        question(await helper.fails("update_grant", change, "approval_required"), "update_grant by the owner's profile");
+        await out.ok("get_thread", { thread_id: w.news.threadId });
+        await helper.ok("update_grant", { ...change, approved: true });
+        await out.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
+        await helper.ok("revoke_grant", { grant_id: made.grant.id });
+      } finally {
+        await owner.call("revoke_grant", { grant_id: made.grant.id }).catch(() => undefined);
+      }
+      // The owner, with their own credential, is not asked, and approved means nothing there.
+      for (const approved of [undefined, false]) {
+        const own = await owner.ok("create_grant", { ...grant, ...(approved === undefined ? {} : { approved }) });
+        await owner.ok("revoke_grant", { grant_id: own.grant.id });
+      }
+
+      // Saving a board, by an agent: the same question for a public board, a board that is not public, and no board.
+      await maya.ok("unsave_board", { board_id: w.board });
+      const notPublic = await ctx.boardOf("maya");
+      const unknown = `b_unknown_${ctx.runId}`;
+      await opened(ctx, w, async () => {
+        const forPublic = question(await agent.fails("save_board", { board_id: w.board }, "approval_required"), "save_board by an agent");
+        for (const [id, what] of [[notPublic, "a board that is not public"], [unknown, "a board that does not exist"]] as const) {
+          const other = question(await agent.fails("save_board", { board_id: id }, "approval_required"), `save_board for ${what}`);
+          check(other.split(id).join("") === forPublic.split(w.board).join(""), `save_board must answer the same for ${what} as for a public board, apart from the ID`);
+        }
+        await agent.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
+        // With the person's yes: a board they cannot read as public is not found; the public one is saved for them.
+        await agent.fails("save_board", { board_id: notPublic, approved: true }, "not_found");
+        await agent.fails("save_board", { board_id: unknown, approved: true }, "not_found");
+        const saved = await agent.ok("save_board", { board_id: w.board, approved: true });
+        try {
+          check(saved.board.id === w.board, "save_board returns the board");
+          await agent.ok("get_thread", { thread_id: w.news.threadId });
+          check((await maya.ok("whoami", {})).saved_boards.some((b) => b.id === w.board), "the board is saved for the agent's person");
+          // Unsaving needs no approval.
+          const gone = await agent.ok("unsave_board", { board_id: w.board });
+          check(gone.saved === false, "unsave_board by an agent needs no approval");
+          await agent.fails("get_thread", { thread_id: w.news.threadId }, "not_found");
+        } finally {
+          await maya.ok("unsave_board", { board_id: w.board });
+        }
+      });
     },
   },
   {

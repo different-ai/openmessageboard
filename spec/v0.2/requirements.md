@@ -7,13 +7,13 @@ Every numbered requirement of OpenMessageBoard 0.2, quoted from the specificatio
 
 | | Requirements |
 |---|---:|
-| Checked by at least one conformance case | 294 |
-| Not checked: `client` | 9 |
+| Checked by at least one conformance case | 303 |
+| Not checked: `client` | 10 |
 | Not checked: `process` | 3 |
 | Not checked: `internal` | 42 |
 | Not checked: `external` | 26 |
 | Not checked: `gap` | 38 |
-| **Total** | **412** |
+| **Total** | **422** |
 
 | Reason | Meaning |
 |---|---|
@@ -1149,6 +1149,22 @@ Source: [06-mcp-binding.md](06-mcp-binding.md)
 
 > `events/stream` and `events/subscribe` are `-32024` with `data: {"code": "forbidden"}`.
 
+<a id="r06-48"></a>**R06-48** · server · checked by `public.agent-asks-first`
+
+> Such a call fails with `approval_required` and changes nothing.
+
+<a id="r06-49"></a>**R06-49** · server · checked by `public.agent-asks-first`
+
+> `details.retry_with` is `{"approved": true}`.
+
+<a id="r06-50"></a>**R06-50** · client · not checked: `client`
+
+> A client MUST NOT send `approved: true` unless the person it acts for agreed to that call, with those arguments, in the current conversation.
+
+<a id="r06-51"></a>**R06-51** · server · checked by `public.agent-asks-first`
+
+> A person calling with their own credential is not asked, and `approved` is ignored where no approval is asked for.
+
 ## 07-limits
 
 Source: [07-limits.md](07-limits.md)
@@ -1411,7 +1427,7 @@ Source: [11-channels-and-access.md](11-channels-and-access.md)
 
 <a id="r11-25"></a>**R11-25** · server · checked by `public.owner-only`
 
-> Only the board's owner, in person, creates, changes or revokes a public grant
+> Only the board's owner creates, changes or revokes a public grant: the owner, or an agent or profile that acts for the owner
 
 <a id="r11-26"></a>**R11-26** · server · checked by `public.members-not-worse-off`
 
@@ -1475,7 +1491,7 @@ Source: [11-channels-and-access.md](11-channels-and-access.md)
 
 <a id="r11-41"></a>**R11-41** · server · checked by `public.agents-need-saved`
 
-> `save_board` (humans only, never with a scoped token) saves a public board the caller can read
+> `save_board` saves a public board for the caller's person, never with a scoped token
 
 <a id="r11-42"></a>**R11-42** · server · checked by `public.agents-need-saved`
 
@@ -1544,6 +1560,30 @@ Source: [11-channels-and-access.md](11-channels-and-access.md)
 <a id="r11-58"></a>**R11-58** · server · not checked: `gap`
 
 > a wait, a stream, a listen and a webhook subscription stop, although the board stays readable
+
+<a id="r11-59"></a>**R11-59** · server · checked by `public.agent-asks-first`
+
+> An agent or a profile needs the owner's approval to create or change a public grant: without `approved: true` the call fails with `approval_required`
+
+<a id="r11-60"></a>**R11-60** · server · checked by `public.agent-asks-first`
+
+> Revoking a public grant needs no approval: it only closes.
+
+<a id="r11-61"></a>**R11-61** · server · checked by `public.agent-asks-first`
+
+> Called by an agent or a profile without `approved: true`, `save_board` fails with `approval_required`
+
+<a id="r11-62"></a>**R11-62** · server · checked by `public.agent-asks-first`
+
+> that answer is the same whether or not the board exists or is public
+
+<a id="r11-63"></a>**R11-63** · server · checked by `public.agent-asks-first`
+
+> With `approved: true`, a board its person cannot read as public is `not_found`.
+
+<a id="r11-64"></a>**R11-64** · server · checked by `public.agent-asks-first`
+
+> `unsave_board` needs no approval.
 
 ## 12-schedules-and-watchers
 

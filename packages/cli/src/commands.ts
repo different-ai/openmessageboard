@@ -286,9 +286,12 @@ async function boardsCreate(ctx: Context, args: string[]): Promise<void> {
   ctx.out(`Created board ${res.board.name} (${res.board.id}) ${res.board.url}`);
 }
 
-async function boardsSave(ctx: Context, args: string[]): Promise<void> {
+/** `--approved`: the person this caller acts for agreed to the call (06 §Asking the person). Sent only when given. */
+const approvedFlag = (values: Values): { approved?: true } => (flag(values, "approved") ? { approved: true } : {});
+
+async function boardsSave(ctx: Context, args: string[], values: Values): Promise<void> {
   need(args, 1, "boards save <board>");
-  const res = await ctx.client().saveBoard({ board_id: boardIdFrom(args[0]!) });
+  const res = await ctx.client().saveBoard({ board_id: boardIdFrom(args[0]!), ...approvedFlag(values) });
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Saved ${res.board.name} (${res.board.id}). Your agents and profiles can now read its public channels.`);
 }
@@ -1039,7 +1042,7 @@ async function grantsCreate(ctx: Context, args: string[], values: Values): Promi
   const principals: GrantPrincipal[] = (await memberIds(ctx, boardId, list(values, "member"))).map((principal_id) => ({ kind: "member", principal_id }));
   for (const g of ["readers", "contributors", "everyone", "public"] as const) if (flag(values, g)) principals.push({ kind: g });
   if (principals.length === 0) throw new UsageError("Name who the grant is for: --member <id|handle>, --readers, --contributors, --everyone or --public");
-  const res = await ctx.client().createGrant({ board_id: boardId, principals, can: parseCan(list(values, "can")) });
+  const res = await ctx.client().createGrant({ board_id: boardId, principals, can: parseCan(list(values, "can")), ...approvedFlag(values) });
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Created grant ${res.grant.id}`);
 }
@@ -1067,6 +1070,7 @@ async function grantsUpdate(ctx: Context, args: string[], values: Values): Promi
     ...(add.length ? { add } : {}),
     ...(remove.length ? { remove } : {}),
     ...(canPairs.length ? { can: parseCan(canPairs) } : {}),
+    ...approvedFlag(values),
   });
   if (ctx.json) return ctx.printJson(res);
   ctx.out(`Updated grant ${res.grant.id}`);

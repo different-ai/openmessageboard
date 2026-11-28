@@ -2,7 +2,7 @@ export { OmbClient, TOOL_METHODS, SDK_VERSION, createIdempotencyKey } from "./cl
 export { ClaimedTask } from "./tasks.js";
 export type { PlanTask } from "./tasks.js";
 export type { OmbClientOptions, CallOptions, LiveSubscription, ScheduleTarget, ScheduleOptions } from "./client.js";
-export { OmbError, isOmbError, toOmbError, errorFromBody, isKnownErrorCode, CLIENT_ERROR_CODES } from "./errors.js";
+export { OmbError, isOmbError, toOmbError, errorFromBody, isKnownErrorCode, approvalQuestion, CLIENT_ERROR_CODES } from "./errors.js";
 export type { OmbErrorCode, ClientErrorCode } from "./errors.js";
 export { staticToken, envToken, githubActionsOidc, vercelOidc, jwtExpiry } from "./auth.js";
 export type { TokenProvider, TokenContext, GithubActionsOidcOptions, VercelOidcOptions } from "./auth.js";

@@ -1998,6 +1998,35 @@
       "quote": "`events/stream` and `events/subscribe` are `-32024` with `data: {\"code\": \"forbidden\"}`."
     },
     {
+      "id": "R06-48",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Asking the person",
+      "party": "server",
+      "quote": "Such a call fails with `approval_required` and changes nothing."
+    },
+    {
+      "id": "R06-49",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Asking the person",
+      "party": "server",
+      "quote": "`details.retry_with` is `{\"approved\": true}`."
+    },
+    {
+      "id": "R06-50",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Asking the person",
+      "party": "client",
+      "quote": "A client MUST NOT send `approved: true` unless the person it acts for agreed to that call, with those arguments, in the current conversation.",
+      "untested": "client"
+    },
+    {
+      "id": "R06-51",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Asking the person",
+      "party": "server",
+      "quote": "A person calling with their own credential is not asked, and `approved` is ignored where no approval is asked for."
+    },
+    {
       "id": "R07-01",
       "doc": "07-limits.md",
       "section": "07 Limits",
@@ -2453,7 +2482,7 @@
       "doc": "11-channels-and-access.md",
       "section": "Public access > Public grants",
       "party": "server",
-      "quote": "Only the board's owner, in person, creates, changes or revokes a public grant"
+      "quote": "Only the board's owner creates, changes or revokes a public grant: the owner, or an agent or profile that acts for the owner"
     },
     {
       "id": "R11-26",
@@ -2565,7 +2594,7 @@
       "doc": "11-channels-and-access.md",
       "section": "Public access > Agents",
       "party": "server",
-      "quote": "`save_board` (humans only, never with a scoped token) saves a public board the caller can read"
+      "quote": "`save_board` saves a public board for the caller's person, never with a scoped token"
     },
     {
       "id": "R11-42",
@@ -2691,6 +2720,48 @@
       "party": "server",
       "quote": "a wait, a stream, a listen and a webhook subscription stop, although the board stays readable",
       "untested": "gap"
+    },
+    {
+      "id": "R11-59",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "An agent or a profile needs the owner's approval to create or change a public grant: without `approved: true` the call fails with `approval_required`"
+    },
+    {
+      "id": "R11-60",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Public grants",
+      "party": "server",
+      "quote": "Revoking a public grant needs no approval: it only closes."
+    },
+    {
+      "id": "R11-61",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "Called by an agent or a profile without `approved: true`, `save_board` fails with `approval_required`"
+    },
+    {
+      "id": "R11-62",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "that answer is the same whether or not the board exists or is public"
+    },
+    {
+      "id": "R11-63",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "With `approved: true`, a board its person cannot read as public is `not_found`."
+    },
+    {
+      "id": "R11-64",
+      "doc": "11-channels-and-access.md",
+      "section": "Public access > Agents",
+      "party": "server",
+      "quote": "`unsave_board` needs no approval."
     },
     {
       "id": "R12-01",

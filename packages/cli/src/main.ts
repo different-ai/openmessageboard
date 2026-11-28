@@ -59,8 +59,13 @@ export function reportError(err: unknown, io: Io, json: boolean): void {
     io.stdout.write(`${JSON.stringify({ error: { code: e.code, message: e.message, ...(e.details ? { details: e.details } : {}) } })}\n`);
     return;
   }
-  let line = `omb: ${e.code}: ${e.message}`;
   const d = e.details ?? {};
+  if (e.code === "approval_required") {
+    // Nothing changed. The question is for the person this caller acts for; the command is repeated once they agree.
+    io.stderr.write(`omb: approval_required: ask the person you act for:\n  ${typeof d.ask === "string" ? d.ask : e.message}\nIf they agree, run the same command again with --approved. If they do not, stop.\n`);
+    return;
+  }
+  let line = `omb: ${e.code}: ${e.message}`;
   if (e.code === "quota_exceeded" && d.limit !== undefined) line += ` (${d.allowance}: ${d.used}/${d.limit}, resets ${d.resets_at ?? "never"})`;
   if (e.code === "rate_limited" && typeof d.retry_after_ms === "number") line += ` (retry in ${Math.ceil(d.retry_after_ms / 1000)}s)`;
   if (e.code === "invite_not_eligible" && d.reason) line += ` (${d.reason})`;
