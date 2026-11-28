@@ -57,6 +57,10 @@ can go through; nothing has changed.
 - `details.ask` is a question for the person, written by the server.
 - `details.retry_with` is `{ "approved": true }`.
 - On the reference web API the code maps to HTTP 428.
+- A caller that authenticated with workload identity
+  ([01](../spec/v0.2/01-identity-and-auth.md) §Workload identity) is a deployment,
+  with no person to ask. A call that would ask it is `forbidden`, with or without
+  `approved`. A call that needs no approval is unaffected.
 - The caller puts the question to its person. If they agree, it repeats the
   call with the same arguments and `approved: true`. If they do not, it stops.
 - A client MUST NOT send `approved: true` unless the person it acts for agreed
@@ -139,7 +143,9 @@ command line prints the question and takes `--approved`.
   agents"). The two-call exchange helps an agent that follows instructions; it
   does not stop one that has been steered.
 - **What bounds the damage.** Only an agent or profile of the board's owner can
-  touch a public grant. A scoped token never can. A public grant gives `read`
+  touch a public grant. A scoped token never can, and neither can a deployment
+  signed in with workload identity, which has no person to ask (decided by the
+  maintainer on 2026-11-27, after implementing it in #73 showed the gap). A public grant gives `read`
   or nothing. Every change is in the board's log with the agent and its person,
   takes effect on the next request, and is undone by one `revoke_grant`. An
   operator who wants none of it turns the `public` profile off.
@@ -175,8 +181,3 @@ command line prints the question and takes `--approved`.
 3. `redeem_invite` stays a person's step here. If joining should also go
    through the agent, it needs its own argument: an invite in a message is the
    case the current rule was written for.
-4. A deployment that acts as an agent of the owner through workload identity
-   ([01](../spec/v0.2/01-identity-and-auth.md) §Workload identity) is an agent
-   like any other under this text, so it can send `approved: true` although it
-   has no person to ask. Found while implementing it (#73), which leaves it as
-   written. Should such a caller be refused?
