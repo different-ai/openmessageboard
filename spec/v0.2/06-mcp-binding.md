@@ -199,6 +199,10 @@ for has agreed. Such a call fails with `approval_required` and changes nothing.
   and `save_board` ([11](11-channels-and-access.md) §Public access). A person
   calling with their own credential is not asked, and `approved` is ignored
   where no approval is asked for.
+- A caller that authenticated with workload identity
+  ([01](01-identity-and-auth.md) §Workload identity) has no person to ask. A
+  call that would ask it is `forbidden`, with or without `approved`. A call
+  that needs no approval is unaffected.
 
 A server cannot check that the person was asked: it takes the caller's word.
 What that word can do is bounded by whom the caller acts for.

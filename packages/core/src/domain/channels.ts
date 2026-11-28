@@ -17,7 +17,7 @@ import {
 } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
 import { tx } from "../context.js";
-import { OmbError, approvalRequired, forbidden, invalid, notFound } from "../errors.js";
+import { OmbError, approvalRequired, forbidden, invalid, noPersonToAsk, notFound } from "../errors.js";
 import { newId } from "../ids.js";
 import type { HubEvent } from "../live/hub.js";
 import { activeMembership, getBoardRow, getPrincipal, nowIso, requireMember, requireReader } from "./access.js";
@@ -207,7 +207,9 @@ function assertPublicGrant(
   for (const [pattern, mask] of list) {
     if ((mask & ~READ_ONLY_MASK) !== 0) throw invalid(`A public grant gives read or nothing; at ${pattern} it names ${permsOf(mask & ~READ_ONLY_MASK).join(", ")}`);
   }
-  if (caller === "for_owner" && approved !== true) throw approvalRequired(publicGrantAsk(ctx, boardId, access.grants, after(), list));
+  if (caller !== "for_owner") return;
+  if (actor.via === "workload") throw noPersonToAsk();
+  if (approved !== true) throw approvalRequired(publicGrantAsk(ctx, boardId, access.grants, after(), list));
 }
 
 const namesPublic = (principals: GrantPrincipal[]): boolean => principals.some((p) => p.kind === "public");

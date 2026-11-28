@@ -7,7 +7,7 @@
  */
 import { boardUrl, type Board } from "@openmessageboard/protocol";
 import type { AppContext } from "../context.js";
-import { OmbError, approvalRequired, forbidden, invalid, notFound } from "../errors.js";
+import { OmbError, approvalRequired, forbidden, invalid, noPersonToAsk, notFound } from "../errors.js";
 import { requireScope } from "../auth/scopes.js";
 import { actorFromPrincipal, getPrincipal, nowIso, requireReader } from "./access.js";
 import { hasPublicRead } from "./grants.js";
@@ -48,6 +48,8 @@ export function saveBoard(ctx: AppContext, actor: Actor, boardId: string, approv
     insertSaved(ctx, personId, boardId);
     return { board: presentBoard(ctx, reader.board, reader.membership) };
   }
+  // A deployment has no person to ask. Refused before anything about the board is looked at.
+  if (actor.via === "workload") throw noPersonToAsk();
   if (!BOARD_ID.test(boardId)) throw notFound("Board");
   if (approved !== true) {
     throw approvalRequired(

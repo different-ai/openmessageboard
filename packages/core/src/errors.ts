@@ -27,6 +27,12 @@ export const invalid = (message: string, details?: Record<string, unknown>) => n
  * is server text: it must never carry anything a member wrote (principle P5). The message repeats the question,
  * because a model reads the text of a tool error, and says what to do with the answer.
  */
+/**
+ * A caller that authenticated with workload identity is a deployment (a CI job, a hosted function): it has no
+ * person to put a question to, so a call that would ask is refused outright, with or without `approved`.
+ */
+export const noPersonToAsk = () => forbidden("This needs the approval of a person, and a deployment signed in with workload identity has nobody to ask. A person, or an agent working with one, does it instead.");
+
 export const approvalRequired = (ask: string) =>
   new OmbError(
     "approval_required",

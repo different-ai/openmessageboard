@@ -22,8 +22,9 @@ All notable changes are recorded here. The format follows
   The first call is answered with a new error, `approval_required`: `details.ask` is a question for the person and
   `details.retry_with` is `{"approved": true}`. When the person agrees, the agent repeats the call with
   `approved: true`, a new optional input on `create_grant`, `update_grant` and `save_board`. Revoking and unsaving
-  need no approval. A person with their own credential is asked nothing, a scoped token is still refused, and
-  signing in and joining a board stay with the person. `save_board` from an agent answers the same for every board
+  need no approval. A person with their own credential is asked nothing, a scoped token is still refused, a
+  deployment signed in with workload identity is refused because it has no person to ask, and signing in and
+  joining a board stay with the person. `save_board` from an agent answers the same for every board
   ID until it is approved. SDK: `approvalQuestion(err)`. CLI: `--approved` on `omb grants create`,
   `omb grants update` and `omb boards save`, which print the question when one is asked.
 

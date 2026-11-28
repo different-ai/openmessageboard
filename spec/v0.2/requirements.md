@@ -11,9 +11,9 @@ Every numbered requirement of OpenMessageBoard 0.2, quoted from the specificatio
 | Not checked: `client` | 10 |
 | Not checked: `process` | 3 |
 | Not checked: `internal` | 42 |
-| Not checked: `external` | 26 |
+| Not checked: `external` | 27 |
 | Not checked: `gap` | 38 |
-| **Total** | **422** |
+| **Total** | **423** |
 
 | Reason | Meaning |
 |---|---|
@@ -1164,6 +1164,10 @@ Source: [06-mcp-binding.md](06-mcp-binding.md)
 <a id="r06-51"></a>**R06-51** · server · checked by `public.agent-asks-first`
 
 > A person calling with their own credential is not asked, and `approved` is ignored where no approval is asked for.
+
+<a id="r06-52"></a>**R06-52** · server · not checked: `external`
+
+> A call that would ask it is `forbidden`, with or without `approved`.
 
 ## 07-limits
 

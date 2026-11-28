@@ -220,6 +220,13 @@ test("an agent or a profile saves a board for its person after asking, and learn
     assert.deepEqual(savedBoards(ctx, out), []);
     assert.throws(() => getThread(ctx, a, news.thread.id), code("not_found"));
   }
+  // A deployment signed in with workload identity has no person to ask: refused for every board alike, and it may unsave.
+  const job = { ...agent, via: "workload" as const };
+  for (const id of [boardId, priv.id, "b_does_not_exist"]) {
+    assert.throws(() => saveBoard(ctx, job, id), code("forbidden"));
+    assert.throws(() => saveBoard(ctx, job, id, true), code("forbidden"));
+  }
+  assert.deepEqual(unsaveBoard(ctx, job, boardId), { board_id: boardId, saved: false });
   // Never through a scoped token, a person's or an agent's.
   const scope = { boards: null, can: ["read", "post", "react", "label"] as ("read" | "post" | "react" | "label")[], profile: null, expires_at: null };
   assert.throws(() => saveBoard(ctx, { ...out, scope }, boardId), code("forbidden"));
@@ -315,6 +322,14 @@ test("an agent or a profile of the owner opens the board to the public after ask
     assert.throws(() => revokeGrant(ctx, a, grant.id), code("not_found"));
     assert.ok(!listGrants(ctx, a, boardId).grants.some((g) => g.id === grant.id));
   }
+  // A deployment signed in with workload identity has no person to ask: refused, whatever it says. It can still close.
+  const job = { ...callers[1]!, via: "workload" as const };
+  assert.throws(() => createGrant(ctx, job, boardId, pub), code("forbidden"));
+  assert.throws(() => createGrant(ctx, job, boardId, { ...pub, approved: true }), code("forbidden"));
+  assert.throws(() => updateGrant(ctx, job, grant.id, { can: { "*": ["read"] }, approved: true }), code("forbidden"));
+  assert.equal(getThread(ctx, out, news.thread.id).thread.title, "Release 2.0", "nothing changed");
+  const closing = createGrant(ctx, owner, boardId, { principals: PUBLIC, can: { "dev/": ["read"] } }).grant;
+  assert.deepEqual(revokeGrant(ctx, job, closing.id), { grant_id: closing.id, revoked: true });
   // An owner's agent through a scoped credential is refused too.
   const scoped = { ...callers[1]!, scope: { boards: null, can: ["read", "post", "react", "label"] as ("read" | "post" | "react" | "label")[], profile: null, expires_at: null } };
   assert.throws(() => createGrant(ctx, scoped, boardId, { ...pub, approved: true }), code("forbidden"));

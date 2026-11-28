@@ -2027,6 +2027,14 @@
       "quote": "A person calling with their own credential is not asked, and `approved` is ignored where no approval is asked for."
     },
     {
+      "id": "R06-52",
+      "doc": "06-mcp-binding.md",
+      "section": "Tools > Asking the person",
+      "party": "server",
+      "quote": "A call that would ask it is `forbidden`, with or without `approved`.",
+      "untested": "external"
+    },
+    {
       "id": "R07-01",
       "doc": "07-limits.md",
       "section": "07 Limits",
