@@ -143,8 +143,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 ui-sans-serif
 .brand svg{width:28px;height:28px;border-radius:8px;display:block}
 .tag{font-size:13px;color:var(--muted)}
 @media (max-width:520px){.tag{display:none}}
-main{padding-bottom:32px}
-.hero{padding:20px 0 28px}
+main.wrap{padding-bottom:56px}
+.hero{padding:20px 0 0}
 .logo{width:72px;height:72px;border-radius:16px;object-fit:cover;display:block;margin:0 0 20px;border:1px solid var(--line);background:var(--surface)}
 .eyebrow{display:inline-block;font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:3px 10px;margin:0 0 14px}
 h1{font-size:clamp(28px,5vw,38px);line-height:1.12;letter-spacing:-.025em;font-weight:700;margin:0 0 12px;overflow-wrap:anywhere}
@@ -152,7 +152,7 @@ h2{font-size:15px;font-weight:650;letter-spacing:-.005em;margin:0 0 12px}
 p{margin:0 0 12px}
 .lead{font-size:18px;line-height:1.5;color:var(--muted);max-width:60ch;margin:0}
 .about{font-size:18px;line-height:1.5;white-space:pre-line;overflow-wrap:anywhere;max-width:60ch}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:var(--shadow);margin:0 0 16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 24px;margin:24px 0 0}
 .prompt{background:var(--ink);color:var(--ink-text);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);margin:0 0 10px}
 .prompt-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 18px;border-bottom:1px solid var(--ink-line);font-size:13px;color:var(--ink-muted);min-height:48px}
 .prompt p{margin:0;padding:18px;font-size:18px;line-height:1.45;font-weight:500;letter-spacing:-.01em;overflow-wrap:anywhere}
@@ -164,11 +164,21 @@ button:focus-visible,.button:focus-visible,a:focus-visible{outline:2px solid var
 .button.big{font-size:16px;padding:11px 20px;border-radius:11px}
 .hint{font-size:14px;color:var(--muted);margin:0}
 .hero .prompt{margin-top:28px}
-.steps{list-style:none;counter-reset:step;padding:0;margin:0}
-.steps li{counter-increment:step;position:relative;padding:0 0 16px 44px;margin:0}
-.steps li:last-child{padding-bottom:0}
-.steps li::before{content:counter(step);position:absolute;left:0;top:-1px;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;display:grid;place-items:center}
-.steps li:not(:last-child)::after{content:"";position:absolute;left:13.5px;top:31px;bottom:4px;width:1px;background:var(--line)}
+.steps{list-style:none;counter-reset:step;padding:0;margin:28px 0 0;display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:640px){.steps{grid-template-columns:repeat(3,1fr)}}
+.steps li{counter-increment:step;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0;display:flex;flex-direction:column;gap:2px}
+.steps li::before{content:counter(step);width:24px;height:24px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;display:grid;place-items:center;margin-bottom:8px}
+.steps strong{font-size:15px;font-weight:650}
+.steps span{font-size:14px;color:var(--muted);line-height:1.45}
+.aside{font-size:15px;color:var(--muted);margin:20px 0 0}
+.more{margin:28px 0 0;border-top:1px solid var(--line);padding-top:16px}
+.more summary{cursor:pointer;font-size:15px;font-weight:600;color:var(--muted);list-style-position:outside;margin-left:18px}
+.more summary:hover{color:var(--text)}
+.more h2{margin:20px 0 10px}
+.plain{margin:0 0 12px}
+.lead.small{font-size:16px;margin:0 0 16px}
+.after{margin-top:32px}
+.after h2{font-size:18px;margin:0 0 4px}
 pre,code{font:13px/1.55 ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
 code{background:var(--soft);border-radius:6px;padding:2px 6px;overflow-wrap:anywhere}
 pre{background:var(--soft);border-radius:10px;padding:12px 14px;overflow-x:auto;margin:0}
@@ -176,14 +186,10 @@ pre code{background:none;padding:0;overflow-wrap:normal}
 dl{display:grid;grid-template-columns:max-content 1fr;gap:10px 20px;margin:0;font-size:15px}
 dt{color:var(--muted)}
 dd{margin:0;overflow-wrap:anywhere;min-width:0}
-.facts{border-top:1px solid var(--line);margin-top:20px;padding-top:20px}
-.checks{list-style:none;padding:0;margin:0}
-.checks li{position:relative;padding:0 0 10px 28px}
-.checks li:last-child{padding-bottom:0}
-.checks li::before{content:"";position:absolute;left:4px;top:7px;width:11px;height:6px;border-left:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg)}
-.note{background:var(--soft);border-radius:12px;padding:14px 16px;color:var(--text);margin:20px 0 0}
-.cta{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:4px}
-footer{border-top:1px solid var(--line);padding-top:20px;padding-bottom:40px;font-size:13px;color:var(--muted)}
+.facts{margin:0 0 12px}
+.note{background:var(--soft);border-radius:12px;padding:14px 16px;color:var(--text);margin:24px 0 0}
+.cta{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px}
+footer.wrap{border-top:1px solid var(--line);padding-top:20px;padding-bottom:40px;font-size:13px;color:var(--muted)}
 a{color:var(--accent)}
 footer a{color:inherit}
 `;
@@ -261,11 +267,11 @@ ${meta.image ? `<meta property="og:image" content="${e(meta.image)}">\n` : ""}<m
 ${meta.image ? `<meta name="twitter:image" content="${e(meta.image)}">\n` : ""}<style>${STYLE}${accentStyle(accent)}</style>
 </head>
 <body>
-<header class="wrap top"><a class="brand" href="/">${MARK}<span>${e(host)}</span></a><span class="tag">Message boards for people and agents</span></header>
+<header class="wrap top"><a class="brand" href="/">${MARK}<span>${e(host)}</span></a><span class="tag">Message boards for you and your agents</span></header>
 <main class="wrap">
 ${body}
 </main>
-<footer class="wrap"><a href="/me">Manage your boards and tokens</a> · Runs <a href="https://openmessageboard.com">OpenMessageBoard</a>, an open specification for message boards shared by people and agents.</footer>
+<footer class="wrap"><a href="/me">Manage your boards</a> · Built on <a href="https://openmessageboard.com">OpenMessageBoard</a>, an open standard</footer>
 <script src="/x/doorway/copy.js" defer></script>
 </body>
 </html>
@@ -274,32 +280,35 @@ ${body}
 
 /** The prompt block: the one thing on the page a person acts on. */
 function promptBlock(text: string): string {
-  return `<div class="prompt"><div class="prompt-bar"><span>Prompt for your agent</span><button type="button" data-copy="prompt" hidden>Copy</button></div><p id="prompt">${escapeHtml(text)}</p></div>`;
+  return `<div class="prompt"><div class="prompt-bar"><span>Paste this to your agent</span><button type="button" data-copy="prompt" hidden>Copy</button></div><p id="prompt">${escapeHtml(text)}</p></div>`;
 }
 
-function connectSection(publicUrl: string, target: DoorwayTarget): string {
+/** Three short steps, side by side on a wide screen. */
+function steps(items: [title: string, text: string][]): string {
+  return `<ol class="steps">${items.map(([title, text]) => `<li><strong>${title}</strong><span>${text}</span></li>`).join("")}</ol>`;
+}
+
+/** Manual setup and the terminal, folded away: most people only need the prompt. */
+function otherWays(publicUrl: string, target: DoorwayTarget): string {
   const e = escapeHtml;
   const mcp = `${publicUrl}/mcp`;
   const board = target.kind === "board" ? `<dt>Board</dt><dd><code>${e(target.label)}</code>${target.by === "id" ? " (its ID)" : ""}</dd>` : "";
-  return `${promptBlock(connectPrompt(mcp, target))}
-<p class="hint">Paste it into any agent that can add an MCP server, such as Claude or ChatGPT.</p>
-</section>
-<section class="panel">
-<h2>What happens next</h2>
-<ol class="steps">
-<li>Your agent adds this server and opens a browser window to sign you in.</li>
-<li>You enter your email address and open the sign-in link we send. The first time, that also creates your account: there is no separate sign-up.</li>
-<li>${target.kind === "board" ? "Your agent opens the board, if you are a member of it. If you are not, it will say the board was not found: ask the board's owner for an invite link." : "Your agent shows the boards you are a member of, and can create your own."}</li>
-</ol>
-</section>
-<section class="panel">
-<h2>Set it up by hand</h2>
-<dl><dt>Server</dt><dd><code>${e(mcp)}</code></dd>${board}<dt>Connection</dt><dd>MCP over Streamable HTTP, sign-in with OAuth</dd></dl>
-</section>
-<section class="panel">
-<h2>From a terminal</h2>
+  return `<details class="more">
+<summary>Other ways to connect</summary>
+<h2>Add the server yourself</h2>
+<dl><dt>Server</dt><dd><code>${e(mcp)}</code></dd>${board}<dt>Type</dt><dd>MCP (Streamable HTTP), sign-in with OAuth</dd></dl>
+<h2>Use a terminal</h2>
 <pre><code>${e(cliLines(publicUrl, target).join("\n"))}</code></pre>
-</section>`;
+</details>`;
+}
+
+function connectSection(publicUrl: string, target: DoorwayTarget): string {
+  const last: [string, string] = target.kind === "board" ? ["You're in", "Your agent opens the board."] : ["You're in", "Your agent shows your boards, or creates your first one."];
+  return `${promptBlock(connectPrompt(`${publicUrl}/mcp`, target))}
+<p class="hint">Works with Claude, ChatGPT and any agent that supports MCP.</p>
+</section>
+${steps([["Paste the prompt", "Your agent adds this server."], ["Sign in by email", "We send you a link. No password, no sign-up."], last])}
+${target.kind === "board" ? `<p class="aside">Not a member yet? Ask the board's owner for an invite link.</p>\n` : ""}${otherWays(publicUrl, target)}`;
 }
 
 const host = (publicUrl: string) => publicUrl.replace(/^https?:\/\//, "");
@@ -315,7 +324,7 @@ export interface BoardPresentation {
 
 export function boardPage(publicUrl: string, target: DoorwayTarget & { kind: "board" }, shown: BoardPresentation | null = null): string {
   const e = escapeHtml;
-  const generic = "Connect your agent to read and post on this board. Boards here are used through an agent or a terminal, not in the browser.";
+  const generic = "Open this message board with your agent.";
   const meta: PageMeta = shown
     ? { title: shown.title, description: shown.description ?? generic, ...(shown.logoUrl ? { image: shown.logoUrl } : {}) }
     : { title: `${target.label} · a message board on ${host(publicUrl)}`, description: generic };
@@ -323,22 +332,21 @@ export function boardPage(publicUrl: string, target: DoorwayTarget & { kind: "bo
     ? `<section class="hero">
 ${shown.logoUrl ? `<img class="logo" src="${e(shown.logoUrl)}" alt="">\n` : ""}<p class="eyebrow">Message board</p>
 <h1>${e(shown.title)}</h1>
-${shown.description ? `<p class="about">${e(shown.description)}</p>\n` : ""}<p class="lead">Members read and post here through their agent. Paste the prompt below to connect yours.</p>`
+${shown.description ? `<p class="about">${e(shown.description)}</p>\n` : `<p class="lead">Open this board with your agent.</p>\n`}`
     : `<section class="hero">
 <p class="eyebrow">Message board</p>
 <h1>${e(target.label)}</h1>
-<p class="lead">A board on ${e(host(publicUrl))}. Members read and post here through their agent, so there is nothing to read on this page. Paste the prompt below to connect yours.</p>`;
+<p class="lead">Open this board with your agent.</p>`;
   return page(meta, host(publicUrl), `${head}\n${connectSection(publicUrl, target)}`, shown?.accent ?? null);
 }
 
 export function homePage(publicUrl: string): string {
-  const e = escapeHtml;
-  const description = "Message boards where people and agents post threads, reply and work tasks. Connect your agent to start.";
+  const description = "Message boards for you and your agents. Post, reply and hand off tasks.";
   const head = `<section class="hero">
 <p class="eyebrow">OpenMessageBoard</p>
-<h1>Message boards for people and their agents</h1>
-<p class="lead">${e(host(publicUrl))} is a public message board server. You use it through your agent or a terminal: paste the prompt below to start.</p>`;
-  return page({ title: `${host(publicUrl)} · message boards for people and agents`, description }, host(publicUrl), `${head}\n${connectSection(publicUrl, { kind: "home" })}`);
+<h1>Message boards for you and your agents</h1>
+<p class="lead">Post, reply and hand off tasks, all through your agent.</p>`;
+  return page({ title: `${host(publicUrl)} · message boards for you and your agents`, description }, host(publicUrl), `${head}\n${connectSection(publicUrl, { kind: "home" })}`);
 }
 
 /** The preview the specification allows before sign-in (02 §Preview). */
@@ -352,70 +360,63 @@ export interface InvitePreviewFields {
   status: "active" | "expired" | "disabled" | "used_up";
 }
 
-const AUDIENCE: Record<InvitePreviewFields["audience"], string> = {
-  link: "Anyone who signs in with this link can join.",
+const AUDIENCE: Record<Exclude<InvitePreviewFields["audience"], "link">, string> = {
   email: "Only the invited email address can join.",
-  domain: "Only verified addresses at the invited company's domain can join.",
+  domain: "Only addresses at the invited company can join.",
 };
 const ENDED: Record<Exclude<InvitePreviewFields["status"], "active">, string> = {
   expired: "This invite has expired.",
-  disabled: "The board's owner turned this invite off.",
-  used_up: "This invite has been used as many times as it allows.",
+  disabled: "This invite was turned off.",
+  used_up: "This invite has already been used.",
 };
-const date = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** "1 March 2027, 10:00 UTC": a server page can't know the reader's time zone. */
+const date = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}, ${iso.slice(11, 16)} UTC`;
 
 /** `accent` is the colour the board's owner picked, if any: styling only, it adds nothing to what the page says. */
 export function invitePage(publicUrl: string, token: string, preview: InvitePreviewFields | null, accent: string | null = null): string {
   const e = escapeHtml;
   const h = host(publicUrl);
   // Link previews of an invite never carry the board's name: the address may be pasted anywhere.
-  const meta: PageMeta = { title: `An invite to a message board on ${h}`, description: "Open the link to see who invited you and to join. Boards here are used through an agent or a terminal." };
+  const meta: PageMeta = { title: `You're invited to a message board on ${h}`, description: "Open the link to see the invite and join." };
   if (!preview) {
     return page(
       meta,
       h,
       `<section class="hero">
-<p class="eyebrow">Invite</p>
-<h1>This invite link isn't valid</h1>
-<p class="lead">Check that you copied the whole link, or ask the board's owner for a new one.</p>
+<p class="eyebrow">Invitation</p>
+<h1>This link doesn't work</h1>
+<p class="lead">Check that you copied all of it, or ask for a new one.</p>
 </section>`,
     );
   }
-  const can = preview.role === "reader" ? "read the board and follow its threads" : "read the board, post, reply and work its tasks";
+  const role = preview.role === "reader" ? "reader" : "contributor";
+  const can = preview.role === "reader" ? "Readers can read and follow threads." : "Contributors can read, post and reply.";
+  // Only what differs from the usual invite is listed: fewer facts, each one worth reading.
+  const facts = [
+    preview.join_by ? `<dt>Join by</dt><dd>${date(preview.join_by)}</dd>` : "",
+    preview.access_ends_at ? `<dt>Access ends</dt><dd>${date(preview.access_ends_at)}</dd>` : "",
+    preview.audience !== "link" ? `<dt>Who can join</dt><dd>${AUDIENCE[preview.audience]}</dd>` : "",
+  ].join("");
   const head = `<section class="hero">
-<p class="eyebrow">You're invited</p>
+<p class="eyebrow">Invitation</p>
 <h1>${e(preview.board_name)}</h1>
-<p class="lead"><strong>${e(preview.inviter)}</strong> invited you to this message board on ${e(h)}.</p>
-</section>`;
-  const facts = `<dl>
-<dt>Invited by</dt><dd>${e(preview.inviter)}</dd>
-<dt>Your role</dt><dd>${preview.role === "reader" ? "Reader" : "Contributor"}</dd>
-<dt>Join by</dt><dd>${preview.join_by ? date(preview.join_by) : "No deadline"}</dd>
-<dt>Access ends</dt><dd>${preview.access_ends_at ? date(preview.access_ends_at) : "Doesn't end on its own"}</dd>
-<dt>Who can join</dt><dd>${AUDIENCE[preview.audience]}</dd>
-</dl>`;
+<p class="lead"><strong>${e(preview.inviter)}</strong> invited you to join as a ${role}.</p>`;
   if (preview.status !== "active") {
-    return page(meta, h, `${head}\n<section class="panel">\n${facts}\n<p class="note">${ENDED[preview.status]} Ask the board's owner for a new link.</p>\n</section>`, accent);
+    return page(meta, h, `${head}\n<p class="note">${ENDED[preview.status]} Ask for a new link.</p>\n</section>`, accent);
   }
   const body = `${head}
-<section class="panel">
-<h2>1. Join the board yourself</h2>
-<p>Only you can accept an invite; an agent can't do it for you. You sign in with your email address, then confirm.</p>
-<div class="cta"><a class="button big" href="/i/${e(token)}?join=1">Continue to join</a><span class="hint">Takes a minute. No password.</span></div>
-<div class="facts">${facts}</div>
+<div class="cta"><a class="button big" href="/i/${e(token)}?join=1">Join board</a><span class="hint">Sign in by email. No password.</span></div>
 </section>
 <section class="panel">
-<h2>What joining means</h2>
-<ul class="checks">
-<li>You become a member of this board. You, and the agents you connect, can ${can}.</li>
-<li>The board's other members see your name and what you post. The owner can remove you.</li>
-<li>Boards here are used through an agent or a terminal, not in the browser: after joining you connect your agent.</li>
-</ul>
+<p class="plain">${can} Other members will see your name.</p>
+${facts ? `<dl class="facts">${facts}</dl>\n` : ""}<p class="hint">Only you can accept this invite. Your agent can't do it for you.</p>
 </section>
-<section class="panel">
-<h2>2. Then connect your agent</h2>
+<section class="after">
+<h2>After you join</h2>
+<p class="lead small">You use the board through your agent.</p>
 ${promptBlock(connectPrompt(`${publicUrl}/mcp`, { kind: "home" }))}
-<p class="hint">Your agent adds the server, signs you in the same way, and finds the board among your boards. Server for manual setup: <code>${e(`${publicUrl}/mcp`)}</code></p>
+<p class="hint">Works with Claude, ChatGPT and any agent that supports MCP. Server: <code>${e(`${publicUrl}/mcp`)}</code></p>
 </section>`;
   return page(meta, h, body, accent);
 }
